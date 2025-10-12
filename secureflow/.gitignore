@@ -1,8 +1,7 @@
 # Dependencies
 node_modules/
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+
 
 # Hardhat files
 cache/
@@ -12,10 +11,7 @@ typechain-types/
 
 # Environment variables
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+
 
 # IDE files
 .idea/
@@ -48,13 +44,8 @@ coverage.json
 .eslintcache
 
 # Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-!.vscode/launch.json
-!.vscode/tasks.json
-!.vscode/keybindings.json
-!.vscode/snippets/
-!.vscode/settings.json
+.vscode
+
 
 # Solidity
 *.abi
