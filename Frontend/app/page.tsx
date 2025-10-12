@@ -1,26 +1,26 @@
-"use client"
+"use client";
 
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import Link from "next/link"
-import { ArrowRight, Shield, CheckCircle2, TrendingUp } from "lucide-react"
-import { useEffect, useState } from "react"
-import { useWeb3 } from "@/contexts/web3-context"
-import { motion } from "framer-motion"
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import Link from "next/link";
+import { ArrowRight, Shield, CheckCircle2, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useWeb3 } from "@/contexts/web3-context";
+import { motion } from "framer-motion";
 
 export default function HomePage() {
-  const { wallet, getContract } = useWeb3()
+  const { wallet, getContract } = useWeb3();
   const [stats, setStats] = useState({
     activeEscrows: 0,
     totalVolume: "0",
     completedEscrows: 0,
-  })
+  });
 
   useEffect(() => {
     if (wallet.isConnected) {
-      fetchStats()
+      fetchStats();
     }
-  }, [wallet.isConnected])
+  }, [wallet.isConnected]);
 
   const fetchStats = async () => {
     try {
@@ -29,11 +29,11 @@ export default function HomePage() {
         activeEscrows: 127,
         totalVolume: "2,450,000",
         completedEscrows: 89,
-      })
+      });
     } catch (error) {
-      console.error("[v0] Error fetching stats:", error)
+      console.error("[v0] Error fetching stats:", error);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen">
@@ -41,7 +41,7 @@ export default function HomePage() {
       <section className="relative overflow-hidden gradient-mesh">
         <div className="absolute inset-0 bg-gradient-to-b from-background/50 to-background" />
 
-        <div className="container relative mx-auto px-4 py-24 md:py-32">
+        <div className="container relative mx-auto px-4 md:py-24 py-16 md:py-32">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -50,7 +50,9 @@ export default function HomePage() {
           >
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass border border-primary/20 mb-6">
               <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-sm font-medium">Powered by Monad Testnet</span>
+              <span className="text-sm font-medium">
+                Powered by Monad Testnet
+              </span>
             </div>
 
             <h1 className="text-5xl md:text-7xl font-bold mb-6 text-balance leading-tight">
@@ -61,8 +63,8 @@ export default function HomePage() {
             </h1>
 
             <p className="text-xl md:text-2xl text-muted-foreground mb-8 text-pretty max-w-2xl mx-auto leading-relaxed">
-              Secure escrow smart contracts for freelancers and clients. Release payments based on verified milestones
-              with complete transparency.
+              Secure escrow smart contracts for freelancers and clients. Release
+              payments based on verified milestones with complete transparency.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -73,7 +75,11 @@ export default function HomePage() {
                 </Button>
               </Link>
               <Link href="/dashboard">
-                <Button size="lg" variant="outline" className="gap-2 text-lg px-8 bg-transparent">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="gap-2 text-lg px-8 bg-transparent"
+                >
                   View Dashboard
                 </Button>
               </Link>
@@ -91,34 +97,48 @@ export default function HomePage() {
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mb-4">
                 <TrendingUp className="h-6 w-6 text-primary" />
               </div>
-              <div className="text-4xl font-bold mb-2">{stats.activeEscrows}</div>
-              <div className="text-sm text-muted-foreground">Active Escrows</div>
+              <div className="text-4xl font-bold mb-2">
+                {stats.activeEscrows}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Active Escrows
+              </div>
             </Card>
 
             <Card className="glass border-accent/20 p-6 text-center glow-accent">
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-accent/10 mb-4">
                 <Shield className="h-6 w-6 text-accent" />
               </div>
-              <div className="text-4xl font-bold mb-2">${stats.totalVolume}</div>
-              <div className="text-sm text-muted-foreground">Total Volume Secured</div>
+              <div className="text-4xl font-bold mb-2">
+                ${stats.totalVolume}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Total Volume Secured
+              </div>
             </Card>
 
             <Card className="glass border-primary/20 p-6 text-center">
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mb-4">
                 <CheckCircle2 className="h-6 w-6 text-primary" />
               </div>
-              <div className="text-4xl font-bold mb-2">{stats.completedEscrows}</div>
-              <div className="text-sm text-muted-foreground">Completed Projects</div>
+              <div className="text-4xl font-bold mb-2">
+                {stats.completedEscrows}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Completed Projects
+              </div>
             </Card>
           </motion.div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section className="py-24 bg-muted/30">
+      <section className="md:py-24 py-16 bg-muted/30">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-balance">How SecureFlow Works</h2>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-balance">
+              How SecureFlow Works
+            </h2>
             <p className="text-xl text-muted-foreground text-pretty max-w-2xl mx-auto">
               Simple, secure, and transparent escrow for the Web3 era
             </p>
@@ -137,8 +157,9 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-2xl font-bold mb-3">Create Escrow</h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  Set up your project with milestones, amounts, and deadlines. Funds are locked in the smart contract
-                  until conditions are met.
+                  Set up your project with milestones, amounts, and deadlines.
+                  Funds are locked in the smart contract until conditions are
+                  met.
                 </p>
               </Card>
             </motion.div>
@@ -155,8 +176,8 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-2xl font-bold mb-3">Track Progress</h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  Freelancers submit completed milestones for review. Both parties can track progress in real-time on
-                  the blockchain.
+                  Freelancers submit completed milestones for review. Both
+                  parties can track progress in real-time on the blockchain.
                 </p>
               </Card>
             </motion.div>
@@ -173,7 +194,8 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-2xl font-bold mb-3">Release Funds</h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  Approve milestones to automatically release payments. Dispute resolution available if needed.
+                  Approve milestones to automatically release payments. Dispute
+                  resolution available if needed.
                 </p>
               </Card>
             </motion.div>
@@ -182,14 +204,17 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 relative overflow-hidden">
+      <section className="md:py-24 py-16 relative overflow-hidden">
         <div className="absolute inset-0 gradient-mesh opacity-50" />
 
         <div className="container relative mx-auto px-4">
           <Card className="glass border-primary/20 p-12 max-w-4xl mx-auto text-center glow-primary">
-            <h2 className="text-4xl md:text-5xl font-bold mb-6 text-balance">Ready to secure your next project?</h2>
+            <h2 className="text-4xl md:text-5xl font-bold mb-6 text-balance">
+              Ready to secure your next project?
+            </h2>
             <p className="text-xl text-muted-foreground mb-8 text-pretty max-w-2xl mx-auto">
-              Join hundreds of freelancers and clients using SecureFlow for trustless payments
+              Join hundreds of freelancers and clients using SecureFlow for
+              trustless payments
             </p>
             <Link href="/create">
               <Button size="lg" className="gap-2 text-lg px-8">
@@ -201,5 +226,5 @@ export default function HomePage() {
         </div>
       </section>
     </div>
-  )
+  );
 }
