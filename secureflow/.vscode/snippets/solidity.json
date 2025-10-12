@@ -1,0 +1,96 @@
+{
+  "Contract Template": {
+    "prefix": "contract",
+    "body": [
+      "// SPDX-License-Identifier: MIT",
+      "pragma solidity ^0.8.19;",
+      "",
+      "/**",
+      " * @title ${1:ContractName}",
+      " * @dev ${2:Contract description}",
+      " * @author ${3:Author}",
+      " */",
+      "contract ${1:ContractName} {",
+      "    $0",
+      "}"
+    ],
+    "description": "Create a new Solidity contract"
+  },
+  "Function Template": {
+    "prefix": "function",
+    "body": [
+      "/**",
+      " * @dev ${1:Function description}",
+      " */",
+      "function ${2:functionName}(${3:parameters}) external ${4:modifiers} {",
+      "    $0",
+      "}"
+    ],
+    "description": "Create a new function"
+  },
+  "Event Template": {
+    "prefix": "event",
+    "body": [
+      "event ${1:EventName}(",
+      "    ${2:parameters}",
+      ");"
+    ],
+    "description": "Create a new event"
+  },
+  "Modifier Template": {
+    "prefix": "modifier",
+    "body": [
+      "modifier ${1:modifierName}(${2:parameters}) {",
+      "    require(${3:condition}, \"${4:error message}\");",
+      "    _;",
+      "}"
+    ],
+    "description": "Create a new modifier"
+  },
+  "Struct Template": {
+    "prefix": "struct",
+    "body": [
+      "struct ${1:StructName} {",
+      "    ${2:type} ${3:fieldName};",
+      "    $0",
+      "}"
+    ],
+    "description": "Create a new struct"
+  },
+  "Import OpenZeppelin": {
+    "prefix": "import",
+    "body": [
+      "import \"@openzeppelin/contracts/${1:path}\";"
+    ],
+    "description": "Import OpenZeppelin contract"
+  },
+  "SafeMath Usage": {
+    "prefix": "safe",
+    "body": [
+      "using SafeMath for uint256;"
+    ],
+    "description": "Add SafeMath usage"
+  },
+  "ReentrancyGuard": {
+    "prefix": "reentrancy",
+    "body": [
+      "import \"@openzeppelin/contracts/security/ReentrancyGuard.sol\";",
+      "",
+      "contract ${1:ContractName} is ReentrancyGuard {",
+      "    $0",
+      "}"
+    ],
+    "description": "Create contract with ReentrancyGuard"
+  },
+  "Ownable": {
+    "prefix": "ownable",
+    "body": [
+      "import \"@openzeppelin/contracts/access/Ownable.sol\";",
+      "",
+      "contract ${1:ContractName} is Ownable {",
+      "    $0",
+      "}"
+    ],
+    "description": "Create contract with Ownable"
+  }
+]

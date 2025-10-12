@@ -1,0 +1,16 @@
+{
+  "recommendations": [
+    "JuanBlanco.solidity",
+    "zhuangtongfa.Material-theme",
+    "PKief.material-icon-theme",
+    "ms-vscode.vscode-json",
+    "bradlc.vscode-tailwindcss",
+    "esbenp.prettier-vscode",
+    "ms-vscode.vscode-typescript-next",
+    "formulahendry.auto-rename-tag",
+    "christian-kohler.path-intellisense",
+    "ms-vscode.vscode-eslint",
+    "hardhat.hardhat-solidity",
+    "tintinweb.solidity-visual-auditor"
+  ]
+}

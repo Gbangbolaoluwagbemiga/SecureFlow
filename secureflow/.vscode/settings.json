@@ -1,0 +1,166 @@
+{
+  "editor.theme": "One Dark Pro",
+  "editor.fontSize": 14,
+  "editor.fontFamily": "'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace",
+  "editor.fontLigatures": true,
+  "editor.tabSize": 4,
+  "editor.insertSpaces": false,
+  "editor.detectIndentation": false,
+  "editor.wordWrap": "on",
+  "editor.minimap.enabled": true,
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.bracketPairs": true,
+  "editor.semanticHighlighting.enabled": true,
+  "editor.tokenColorCustomizations": {
+    "textMateRules": [
+      {
+        "scope": [
+          "keyword.control.solidity",
+          "keyword.other.solidity",
+          "keyword.operator.solidity",
+          "keyword.control",
+          "keyword.other",
+          "keyword.operator"
+        ],
+        "settings": {
+          "foreground": "#FF6B9D",
+          "fontStyle": "bold"
+        }
+      },
+      {
+        "scope": ["storage.type.solidity", "storage.modifier.solidity"],
+        "settings": {
+          "foreground": "#4ECDC4",
+          "fontStyle": "bold"
+        }
+      },
+      {
+        "scope": [
+          "entity.name.function.solidity",
+          "entity.name.function.constructor.solidity",
+          "entity.name.function.fallback.solidity",
+          "entity.name.function.receive.solidity",
+          "entity.name.function",
+          "meta.function-call"
+        ],
+        "settings": {
+          "foreground": "#45B7D1",
+          "fontStyle": "bold"
+        }
+      },
+      {
+        "scope": [
+          "variable.other.solidity",
+          "variable.parameter.solidity",
+          "variable.language.solidity",
+          "variable.other",
+          "variable.parameter",
+          "variable.language"
+        ],
+        "settings": {
+          "foreground": "#F7DC6F",
+          "fontStyle": "normal"
+        }
+      },
+      {
+        "scope": [
+          "string.quoted.solidity",
+          "string.quoted.double.solidity",
+          "string.quoted.single.solidity"
+        ],
+        "settings": {
+          "foreground": "#58D68D",
+          "fontStyle": "normal"
+        }
+      },
+      {
+        "scope": [
+          "comment.solidity",
+          "comment.line.double-slash.solidity",
+          "comment.block.solidity"
+        ],
+        "settings": {
+          "foreground": "#85929E",
+          "fontStyle": "italic"
+        }
+      },
+      {
+        "scope": ["constant.numeric.solidity", "constant.language.solidity"],
+        "settings": {
+          "foreground": "#F39C12",
+          "fontStyle": "bold"
+        }
+      },
+      {
+        "scope": [
+          "punctuation.definition.comment.solidity",
+          "punctuation.definition.string.solidity"
+        ],
+        "settings": {
+          "foreground": "#85929E"
+        }
+      },
+      {
+        "scope": [
+          "entity.name.type.solidity",
+          "entity.name.class.solidity",
+          "entity.name.interface.solidity",
+          "entity.name.struct.solidity",
+          "entity.name.enum.solidity"
+        ],
+        "settings": {
+          "foreground": "#BB8FCE",
+          "fontStyle": "bold"
+        }
+      },
+      {
+        "scope": ["support.type.solidity", "support.function.solidity"],
+        "settings": {
+          "foreground": "#85C1E9",
+          "fontStyle": "normal"
+        }
+      },
+      {
+        "scope": [
+          "meta.function.solidity",
+          "meta.function.parameters.solidity"
+        ],
+        "settings": {
+          "foreground": "#D5DBDB"
+        }
+      }
+    ]
+  },
+  "workbench.colorTheme": "One Dark Pro",
+  "editor.background": "#1e1e1e",
+  "editor.foreground": "#d4d4d4",
+  "workbench.iconTheme": "material-icon-theme",
+  "solidity.defaultCompiler": "remote",
+  "solidity.compileUsingRemoteVersion": "v0.8.19+commit.7dd6d404",
+  "solidity.packageDefaultDependenciesContractsDirectory": "contracts",
+  "solidity.packageDefaultDependenciesDirectory": "node_modules",
+  "files.associations": {
+    "*.sol": "solidity"
+  },
+  "editor.languageDetection": true,
+  "solidity.enableLocalNodeCompiler": false,
+  "solidity.enableRemoteCompiler": true,
+  "solidity.enabledAsYouTypeCompilationErrorCheck": true,
+  "solidity.validationDelay": 1000,
+  "solidity.trace": {
+    "server": "verbose"
+  },
+  "solidity.linter": "solhint",
+  "solidity.formatter": "prettier",
+  "emmet.includeLanguages": {
+    "solidity": "html"
+  },
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "editor.suggest.insertMode": "replace",
+  "editor.acceptSuggestionOnCommitCharacter": false,
+  "editor.acceptSuggestionOnEnter": "on",
+  "editor.suggestSelection": "first",
+  "vsintellicode.modify.editor.suggestSelection": "automaticallyOverrodeDefaultValue"
+}

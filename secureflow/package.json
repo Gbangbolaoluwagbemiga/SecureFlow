@@ -1,0 +1,41 @@
+{
+  "name": "secureflow",
+  "version": "1.0.0",
+  "description": "Milestone-based escrow platform with MetaMask Smart Accounts delegation",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:verbose": "hardhat test --verbose",
+    "test:gas": "REPORT_GAS=true hardhat test",
+    "deploy": "hardhat run scripts/deploy.js --network monad",
+    "deploy:token": "hardhat run scripts/deploy-token.js --network monad",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "format": "prettier --write \"contracts/**/*.sol\"",
+    "format:check": "prettier --check \"contracts/**/*.sol\"",
+    "lint": "solhint \"contracts/**/*.sol\"",
+    "lint:fix": "solhint \"contracts/**/*.sol\" --fix",
+    "coverage": "hardhat coverage",
+    "clean": "hardhat clean",
+    "node": "hardhat node",
+    "verify": "hardhat verify"
+  },
+  "keywords": [
+    "blockchain",
+    "escrow",
+    "milestone",
+    "defi",
+    "hackathon"
+  ],
+  "author": "Oluwagbemiga",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
+    "@openzeppelin/contracts": "^4.9.0",
+    "hardhat": "^2.17.0",
+    "prettier": "^3.0.0",
+    "prettier-plugin-solidity": "^1.1.0",
+    "solhint": "^4.5.4"
+  }
+}
