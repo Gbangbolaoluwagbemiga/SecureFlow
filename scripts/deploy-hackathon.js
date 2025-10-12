@@ -1,9 +1,8 @@
 const { ethers } = require("hardhat");
-const fs = require("fs");
-const path = require("path");
 
 async function main() {
-  console.log("🚀 Deploying SecureFlow and updating all files...");
+  console.log("🏆 Deploying SecureFlow for Hackathon Demo...");
+  console.log("💰 NO FEES - Pure value demonstration!");
 
   const [deployer] = await ethers.getSigners();
   console.log("Deploying with account:", deployer.address);
@@ -11,19 +10,20 @@ async function main() {
   const balance = await deployer.provider.getBalance(deployer.address);
   console.log("Account balance:", ethers.formatEther(balance), "MON");
 
-  if (balance < ethers.parseEther("0.1")) {
+  if (balance < ethers.parseEther("0.05")) {
     console.log("❌ Insufficient balance! Please get more MON tokens from:");
     console.log("🔗 https://testnet-faucet.monad.xyz/");
     console.log("📍 Your address:", deployer.address);
     return;
   }
 
-  console.log("\n🔒 Deploying SecureFlow...");
+  console.log("\n🔒 Deploying SecureFlow (Hackathon Optimized)...");
   const SecureFlow = await ethers.getContractFactory("SecureFlow");
 
+  // Hackathon optimization: NO FEES!
   const monadToken = ethers.ZeroAddress;
   const feeCollector = deployer.address;
-  const platformFeeBP = 0; // 0% for hackathon demo - no fees!
+  const platformFeeBP = 0; // 0% fees for demo
 
   const secureFlow = await SecureFlow.deploy(
     monadToken,
@@ -35,10 +35,16 @@ async function main() {
   const secureFlowAddress = await secureFlow.getAddress();
   console.log("✅ SecureFlow deployed to:", secureFlowAddress);
 
-  console.log("\n⚙️ Setting up contract...");
+  console.log("\n⚙️ Setting up for hackathon demo...");
+
+  // Authorize deployer as arbiter
   const authTx = await secureFlow.authorizeArbiter(deployer.address);
   await authTx.wait();
   console.log("✅ Authorized deployer as arbiter");
+
+  // Whitelist a test ERC20 token (if you have one)
+  // This is optional - native MON is always supported
+  console.log("✅ Native MON support enabled (no whitelist needed)");
 
   const deploymentInfo = {
     secureFlow: secureFlowAddress,
@@ -46,28 +52,34 @@ async function main() {
     chainId: 10143,
     explorer: "https://testnet-explorer.monad.xyz",
     deploymentDate: new Date().toISOString(),
+    hackathonOptimized: true,
+    feesDisabled: true,
     contracts: {
       SecureFlow: {
         address: secureFlowAddress,
-        description:
-          "Advanced milestone-based escrow platform with native MON support",
+        description: "Hackathon-optimized escrow platform - NO FEES!",
         features: [
-          "Native MON support",
-          "ERC20 permit support (EIP-2612)",
-          "Platform fees with fee collector",
-          "Arbiter authorization system",
-          "Token whitelisting",
-          "Emergency refund mechanisms",
-          "Deadline extension",
-          "Enhanced dispute resolution",
-          "SafeERC20 transfers",
-          "Pausable functionality",
+          "🚀 NO PLATFORM FEES - Pure value demo",
+          "💰 Native MON support",
+          "🔒 Advanced security features",
+          "⚖️ Dispute resolution",
+          "📊 Milestone tracking",
+          "🛡️ Safe token handling",
+          "⏰ Deadline management",
+          "🔄 Emergency functions",
+        ],
+        hackathonNotes: [
+          "Fees disabled for demo - focus on user experience",
+          "All security features enabled",
+          "Ready for production after hackathon",
+          "Revenue model: 0.5-1% fees post-launch",
         ],
       },
     },
   };
 
-  console.log("\n💾 Saving deployment info...");
+  console.log("\n💾 Saving hackathon deployment info...");
+  const fs = require("fs");
   fs.writeFileSync(
     "deployed-addresses.json",
     JSON.stringify(deploymentInfo, null, 2),
@@ -83,7 +95,7 @@ async function main() {
   fs.writeFileSync("contracts-abi.json", JSON.stringify(abiInfo, null, 2));
   console.log("✅ contracts-abi.json updated");
 
-  console.log("\n🔄 Updating frontend files...");
+  console.log("\n🔄 Updating frontend for hackathon demo...");
 
   // Update frontend config
   const frontendConfigPath = "Frontend/lib/web3/config.ts";
@@ -104,69 +116,51 @@ export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export const CONTRACTS = {
   SECUREFLOW_ESCROW: "${secureFlowAddress}",
-  MOCK_ERC20: "0x0000000000000000000000000000000000000000", // No mock token in production
+  MOCK_ERC20: "0x0000000000000000000000000000000000000000", // No mock token needed
+};
+
+// Hackathon Demo Configuration
+export const HACKATHON_CONFIG = {
+  feesDisabled: true,
+  platformFeeBP: 0,
+  demoMode: true,
+  testnetOnly: true
 };
 `;
     fs.writeFileSync(frontendConfigPath, configContent);
-    console.log("✅ Frontend config updated");
+    console.log("✅ Frontend config updated for hackathon");
   }
 
-  // Copy ABI to frontend
-  const frontendAbiPath = "Frontend/lib/web3/abis.ts";
-  if (fs.existsSync(frontendAbiPath)) {
-    const abiContent = `export const SECUREFLOW_ABI = ${JSON.stringify(JSON.parse(secureFlowABI), null, 2)} as const;
-
-export const ERC20_ABI = [
-  {
-    inputs: [{ internalType: "address", name: "account", type: "address" }],
-    name: "balanceOf",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [
-      { internalType: "address", name: "spender", type: "address" },
-      { internalType: "uint256", name: "amount", type: "uint256" },
-    ],
-    name: "approve",
-    outputs: [{ internalType: "bool", name: "", type: "bool" }],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [
-      { internalType: "address", name: "owner", type: "address" },
-      { internalType: "address", name: "spender", type: "address" },
-    ],
-    name: "allowance",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-] as const;
-`;
-    fs.writeFileSync(frontendAbiPath, abiContent);
-    console.log("✅ Frontend ABI updated");
-  }
-
-  console.log("\n📋 Contract Information:");
-  console.log("Monad Token:", await secureFlow.monadToken());
+  console.log("\n📊 Contract Information:");
+  console.log("Owner:", await secureFlow.owner());
   console.log("Fee Collector:", await secureFlow.feeCollector());
-  console.log("Platform Fee BP:", await secureFlow.platformFeeBP());
+  console.log(
+    "Platform Fee BP:",
+    await secureFlow.platformFeeBP(),
+    "(0% - NO FEES!)",
+  );
   console.log("Next Escrow ID:", await secureFlow.nextEscrowId());
+  console.log("Paused:", await secureFlow.paused());
 
-  console.log("\n🎉 Deployment and updates completed successfully!");
-  console.log("\n📝 Next steps:");
-  console.log("1. Verify contract on Monad Explorer");
-  console.log("2. Test the new features in your frontend");
-  console.log("3. Whitelist any ERC20 tokens you want to support");
-  console.log("4. Update your documentation with the new contract address");
+  console.log("\n🎉 Hackathon deployment completed successfully!");
+  console.log("\n🏆 HACKATHON DEMO READY!");
+  console.log("\n📝 Demo Features:");
+  console.log("✅ NO PLATFORM FEES - Pure value demonstration");
+  console.log("✅ Native MON support - Use testnet MON tokens");
+  console.log("✅ Advanced security - All production features");
+  console.log("✅ Dispute resolution - Fair arbitration system");
+  console.log("✅ Milestone tracking - Complete project lifecycle");
 
   console.log("\n🔗 Contract Explorer:");
   console.log(
     `https://testnet-explorer.monad.xyz/address/${secureFlowAddress}`,
   );
+
+  console.log("\n💡 Hackathon Strategy:");
+  console.log("🎯 Focus on user experience - no fee friction");
+  console.log("📈 Show real TVL and usage - not revenue");
+  console.log("🚀 Demonstrate value - monetization comes later");
+  console.log("🏆 Win with features - not fees!");
 }
 
 main()

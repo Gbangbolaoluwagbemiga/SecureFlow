@@ -14,7 +14,7 @@ async function main() {
 
   const monadToken = ethers.ZeroAddress;
   const feeCollector = deployer.address;
-  const platformFeeBP = 250;
+  const platformFeeBP = 0; // 0% for hackathon demo - no fees!
 
   console.log("Deploying contract...");
   const secureFlow = await SecureFlow.deploy(

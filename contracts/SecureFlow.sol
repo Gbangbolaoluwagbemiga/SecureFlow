@@ -171,7 +171,7 @@ contract SecureFlow is ReentrancyGuard, Ownable, Pausable {
         platformFeeBP = _platformFeeBP;
         nextEscrowId = 1;
 
-        if (_monadToken != address(0)) {
+        if (_monadToken != address(0) && !whitelistedTokens[_monadToken]) {
             whitelistedTokens[_monadToken] = true;
             emit TokenWhitelisted(_monadToken);
         }
@@ -270,8 +270,18 @@ contract SecureFlow is ReentrancyGuard, Ownable, Pausable {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external nonReentrant whenNotPaused onlyWhitelistedToken(token) onlyAuthorizedArbiter(arbiter) returns (uint256) {
+    ) external nonReentrant whenNotPaused onlyWhitelistedToken(token) returns (uint256) {
         require(token != address(0), "SecureFlow: Use createEscrowNative for native");
+        require(authorizedArbiters[arbiter], "SecureFlow: Arbiter not authorized");
+        
+        // Calculate expected permit value
+        uint256 totalAmount = 0;
+        for (uint256 i = 0; i < milestoneAmounts.length; ++i) {
+            totalAmount += milestoneAmounts[i];
+        }
+        uint256 expectedPermitValue = totalAmount + _calculateFee(totalAmount);
+        require(permitValue >= expectedPermitValue, "SecureFlow: Permit value too low");
+        
         IERC20Permit(token).permit(depositor, address(this), permitValue, permitDeadline, v, r, s);
         return _createEscrowInternal(
             depositor,
@@ -624,6 +634,27 @@ contract SecureFlow is ReentrancyGuard, Ownable, Pausable {
             list[i] = milestones[escrowId][i];
         }
         return list;
+    }
+
+    function getUserEscrows(address user) external view returns (uint256[] memory) {
+        return userEscrows[user];
+    }
+
+    function canDisputeMilestone(
+        uint256 escrowId,
+        uint256 milestoneIndex
+    ) external view validEscrow(escrowId) returns (bool) {
+        EscrowData storage e = escrows[escrowId];
+        if (milestoneIndex >= e.milestoneCount) return false;
+        
+        Milestone storage m = milestones[escrowId][milestoneIndex];
+        if (m.status != MilestoneStatus.Submitted) return false;
+        
+        return block.timestamp <= m.submittedAt + DISPUTE_PERIOD;
+    }
+
+    function getWithdrawableFees(address token) external view returns (uint256) {
+        return totalFeesByToken[token];
     }
 
     function pause() external onlyOwner {
