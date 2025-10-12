@@ -74,7 +74,7 @@ async function main() {
   );
   console.log("✅ deployed-addresses.json updated");
 
-  const secureFlowABI = await secureFlow.interface.format("json");
+  const secureFlowABI = secureFlow.interface.format("json");
   const abiInfo = {
     SecureFlow: JSON.parse(secureFlowABI),
     deploymentInfo: deploymentInfo,
