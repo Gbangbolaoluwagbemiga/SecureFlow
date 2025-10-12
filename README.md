@@ -88,12 +88,6 @@ npm run deploy
 
 ## 🎯 Hackathon Requirements
 
-### ✅ Consumer Application Track
-
-- **Clear user interface** - Easy to understand
-- **Real utility** - Solves freelancer payment problems
-- **Beautiful design** - Professional look and feel
-
 ### ✅ MetaMask Smart Accounts Integration
 
 - **Delegation support** - Agents can act on behalf
@@ -105,12 +99,6 @@ npm run deploy
 - **Real-time indexing** - All events tracked
 - **Fast queries** - Portfolio and transaction data
 - **Analytics dashboard** - User insights
-
-## 💰 Prize Potential
-
-- **Main Prize:** $1,500 (Consumer Application)
-- **Envio Bonus:** $3,000
-- **Total:** $4,500
 
 ## 🚀 Quick Start
 
@@ -147,4 +135,4 @@ MIT License - see LICENSE file for details
 
 ## 👨‍💻 Author
 
-**Oluwagbemiga** - Hackathon Winner 🏆
+**Oluwagbemiga** 🏆
