@@ -215,26 +215,37 @@ export default function CreateEscrowPage() {
       if (formData.token === ZERO_ADDRESS) {
         // Use createEscrowNative for native MON tokens
         const totalAmountWei = BigInt(formData.totalAmount) * BigInt(10 ** 18);
+        const arbiters = ["0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41"]; // Default arbiter
+        const requiredConfirmations = 1;
+        
         txHash = await escrowContract.send(
           "createEscrowNative",
           totalAmountWei.toString(), // Send native value
           beneficiaryAddress,
+          arbiters,
+          requiredConfirmations,
           milestoneAmounts,
           milestoneDescriptions,
           formData.duration,
-          formData.projectDescription,
+          formData.projectDescription, // projectTitle
+          formData.projectDescription, // projectDescription
         );
       } else {
         // Use createEscrow for ERC20 tokens
+        const arbiters = ["0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41"]; // Default arbiter
+        const requiredConfirmations = 1;
+        
         txHash = await escrowContract.send(
           "createEscrow",
           beneficiaryAddress,
-          formData.token,
-          formData.totalAmount,
+          arbiters,
+          requiredConfirmations,
           milestoneAmounts,
           milestoneDescriptions,
+          formData.token,
           formData.duration,
-          formData.projectDescription,
+          formData.projectDescription, // projectTitle
+          formData.projectDescription, // projectDescription
         );
       }
 
