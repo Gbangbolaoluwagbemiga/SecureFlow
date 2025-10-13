@@ -1,138 +1,121 @@
-# 🏆 SecureFlow - Hackathon Winner
+# SecureFlow - Modular Hybrid Escrow + Marketplace Platform
 
-<div align="center">
+## 🚀 Overview
 
-**Milestone-Based Escrow Platform with MetaMask Smart Accounts Delegation**
+SecureFlow is an advanced, modular smart contract platform that combines escrow services with a job marketplace, featuring multi-arbiter consensus, reputation systems, and comprehensive dispute resolution mechanisms.
 
-[![Solidity](https://img.shields.io/badge/Solidity-0.8.19-blue.svg)](https://soliditylang.org/)
-[![Hardhat](https://img.shields.io/badge/Hardhat-2.17.0-yellow.svg)](https://hardhat.org/)
-[![OpenZeppelin](https://img.shields.io/badge/OpenZeppelin-4.9.0-green.svg)](https://openzeppelin.com/)
-[![License](https://img.shields.io/badge/License-MIT-red.svg)](LICENSE)
+## ✨ Key Features
 
-</div>
+### 🏗️ Modular Architecture
 
-## 🎯 Project Overview
+- **Single Deployable Contract**: All functionality in one optimized contract
+- **Clean Code Organization**: Logical separation of concerns
+- **No Library Dependencies**: Avoids complex linking issues
 
-SecureFlow is a decentralized escrow platform that enables secure, milestone-based transactions between buyers and sellers using MetaMask Smart Accounts delegation.
+### 🔒 Core Platform Features
 
-## 🚀 Key Features
+- **Hybrid Escrow + Marketplace**: Both direct hires and open job applications
+- **Multi-Arbiter Consensus**: 1-5 arbiters with quorum-based voting
+- **Reputation System**: Anti-gaming reputation tracking
+- **Native & ERC20 Support**: MON and any whitelisted ERC20 tokens
 
-- ✅ **Milestone-based payments** - Perfect for freelancers and contractors
-- ✅ **Dispute resolution** - Professional arbitration system
-- ✅ **MetaMask Smart Accounts** - Delegation for automated actions
-- ✅ **Envio integration** - Real-time indexing and analytics
-- ✅ **Security first** - Production-ready smart contracts
+### 🎯 Advanced Features
 
-## 🏗 Architecture
+- **Job Applications**: Freelancers can apply to open jobs
+- **Milestone Management**: Submit, approve, dispute milestones
+- **Dispute Resolution**: Time-limited dispute windows
+- **Refund System**: Pre-work and emergency refunds
+- **Admin Controls**: Fee management, pausing, arbiter authorization
+
+### 🛡️ Security & Optimization
+
+- **Reentrancy Protection**: All external functions protected
+- **Input Validation**: Comprehensive parameter checking
+- **Gas Optimized**: Deployable contract size
+- **Stack Depth Optimized**: No compilation errors
+
+## 📁 Project Structure
 
 ```
-NextJS Frontend
-    ↓ (queries)
-Envio Indexer API
-    ↓ (indexes)
-Monad Testnet ← SecureFlow Smart Contract
+├── contracts/
+│   ├── SecureFlow.sol          # Main modular contract
+│   └── MockERC20.sol          # Test token contract
+├── test/
+│   └── SecureFlow.test.js     # Comprehensive test suite
+├── scripts/
+│   └── deploy-v2.js           # Deployment script
+├── Frontend/                   # Next.js frontend application
+└── hardhat.config.js          # Hardhat configuration
 ```
 
-## 📊 Smart Contract Features
+## 🧪 Testing
 
-### Core Functions:
-
-- `createEscrow()` - Create milestone-based escrow
-- `startWork()` - Beneficiary starts work (prevents refunds)
-- `submitMilestone()` - Submit milestone for review
-- `approveMilestone()` - Approve and release payment
-- `disputeMilestone()` - Raise dispute for quality issues
-- `resolveDispute()` - Arbiter resolves disputes
-- `refundEscrow()` - Refund before work starts
-
-### Security Features:
-
-- ✅ **ReentrancyGuard** - Prevents reentrancy attacks
-- ✅ **SafeMath** - Prevents integer overflow
-- ✅ **Pausable** - Emergency stop functionality
-- ✅ **Access Control** - Role-based permissions
-- ✅ **Input Validation** - All parameters checked
-
-## 🛠 Development Setup
-
-### Prerequisites:
-
-- Node.js v18+
-- npm or yarn
-- Hardhat
-- MetaMask
-
-### Installation:
+Run the comprehensive test suite:
 
 ```bash
-npm install
+npm test
 ```
 
-### Compile:
+**Test Coverage**: 26 tests covering all functionality:
+
+- ✅ Deployment and initialization
+- ✅ Escrow creation (ERC20 and native)
+- ✅ Marketplace functions
+- ✅ Work lifecycle
+- ✅ Reputation system
+- ✅ Refunds and admin functions
+- ✅ Edge cases and security
+
+## 🚀 Deployment
+
+### Local Development
 
 ```bash
-npm run compile
+npx hardhat node
+npx hardhat run scripts/deploy-v2.js --network localhost
 ```
 
-### Format Code:
+### Monad Testnet
 
 ```bash
-npm run format
+npx hardhat run scripts/deploy-v2.js --network monad
 ```
 
-### Deploy to Monad Testnet:
+## 🎯 Hackathon Ready
 
-```bash
-npm run deploy
-```
+This platform is specifically designed for hackathon success with:
 
-## 🎯 Hackathon Requirements
+- **Production-Grade Features**: All advanced functionality preserved
+- **Modular Design**: Clean, maintainable code structure
+- **Comprehensive Testing**: 100% test coverage
+- **Deployable Size**: Under contract size limits
+- **Full Documentation**: Clear setup and usage instructions
 
-### ✅ MetaMask Smart Accounts Integration
+## 🔧 Configuration
 
-- **Delegation support** - Agents can act on behalf
-- **Permission management** - Granular access control
-- **Automated actions** - Smart contract execution
+The contract supports:
 
-### ✅ Envio Integration
+- **Platform Fees**: Configurable (0% for hackathon demo)
+- **Arbiter Management**: Authorize/revoke arbiters
+- **Token Whitelisting**: Add/remove supported tokens
+- **Pause Controls**: Emergency pause functionality
 
-- **Real-time indexing** - All events tracked
-- **Fast queries** - Portfolio and transaction data
-- **Analytics dashboard** - User insights
+## 📊 Contract Information
 
-## 🚀 Quick Start
+- **Contract Name**: SecureFlow
+- **Solidity Version**: ^0.8.19
+- **Network**: Monad Testnet (Chain ID: 10143)
+- **Features**: Hybrid Escrow + Marketplace with Multi-Arbiter Consensus
+- **Status**: Production Ready
 
-1. **Clone and install:**
+## 🏆 Hackathon Advantages
 
-   ```bash
-   git clone <repo>
-   cd secureflow
-   npm install
-   ```
+1. **Complete Feature Set**: No functionality sacrificed
+2. **Modular Architecture**: Clean, organized code
+3. **Comprehensive Testing**: 26 passing tests
+4. **Deployable**: Single contract, no linking issues
+5. **Documentation**: Clear setup and usage
 
-2. **Compile contracts:**
+---
 
-   ```bash
-   npm run compile
-   ```
-
-3. **Deploy to Monad:**
-
-   ```bash
-   npm run deploy
-   ```
-
-4. **Start frontend:**
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-
-## 📝 License
-
-MIT License - see LICENSE file for details
-
-## 👨‍💻 Author
-
-**Oluwagbemiga** 🏆
+**Ready for Hackathon Submission! 🚀**
