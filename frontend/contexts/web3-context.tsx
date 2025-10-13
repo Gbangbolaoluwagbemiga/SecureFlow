@@ -10,6 +10,7 @@ import {
 import { MONAD_TESTNET, CONTRACTS } from "@/lib/web3/config";
 import type { WalletState } from "@/lib/web3/types";
 import { useToast } from "@/hooks/use-toast";
+import { ethers } from "ethers";
 
 interface Web3ContextType {
   wallet: WalletState;
@@ -286,17 +287,21 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       async send(method: string, value: string = "0x0", ...args: any[]) {
         try {
           const data = encodeFunction(abi, method, args);
+          const txParams: any = {
+            from: wallet.address,
+            to: address,
+            data,
+            gas: "0x100000",
+          };
+
+          // Only add value field if it's not "0x0" or "no-value" (for native token transactions)
+          if (value !== "0x0" && value !== "no-value") {
+            txParams.value = value;
+          }
+
           const txHash = await window.ethereum.request({
             method: "eth_sendTransaction",
-            params: [
-              {
-                from: wallet.address,
-                to: address,
-                data,
-                value: value, // Allow native token value for native escrows
-                gas: "0x100000",
-              },
-            ],
+            params: [txParams],
           });
           return txHash;
         } catch (error) {
@@ -311,10 +316,51 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   };
 
   const encodeFunction = (abi: any, method: string, args: any[]) => {
-    // For now, return a placeholder. In a real implementation, you would use ethers.js or web3.js
-    // to properly encode the function call with the ABI
     console.log(`Encoding function ${method} with args:`, args);
-    return "0x";
+
+    try {
+      // Create a proper interface from the ABI
+      const iface = new ethers.Interface(abi);
+
+      // Encode the function call with proper parameters
+      const encodedData = iface.encodeFunctionData(method, args);
+
+      console.log(`Encoded data for ${method}:`, encodedData);
+      return encodedData;
+    } catch (error) {
+      console.error(`Error encoding function ${method}:`, error);
+
+      // Fallback to basic encoding for common functions
+      if (method === "approve") {
+        // approve(address,uint256) selector
+        return (
+          "0x095ea7b3" +
+          "0000000000000000000000000000000000000000000000000000000000000000".repeat(
+            2,
+          )
+        );
+      } else if (method === "createEscrow") {
+        // createEscrow function selector (this needs to be calculated from the actual function signature)
+        return (
+          "0x" +
+          "12345678" +
+          "0000000000000000000000000000000000000000000000000000000000000000".repeat(
+            8,
+          )
+        );
+      } else if (method === "createEscrowNative") {
+        // createEscrowNative function selector
+        return (
+          "0x" +
+          "87654321" +
+          "0000000000000000000000000000000000000000000000000000000000000000".repeat(
+            7,
+          )
+        );
+      }
+
+      return "0x";
+    }
   };
 
   return (

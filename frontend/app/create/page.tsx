@@ -183,10 +183,14 @@ export default function CreateEscrowPage() {
     try {
       if (formData.token !== ZERO_ADDRESS) {
         const tokenContract = getContract(formData.token, ERC20_ABI);
+        const totalAmountInWei = (
+          BigInt(formData.totalAmount) * BigInt(10 ** 18)
+        ).toString();
         const approvalTx = await tokenContract.send(
           "approve",
+          "no-value", // No native value for ERC20 approval
           CONTRACTS.SECUREFLOW_ESCROW,
-          formData.totalAmount,
+          totalAmountInWei,
         );
 
         toast({
@@ -214,38 +218,45 @@ export default function CreateEscrowPage() {
 
       if (formData.token === ZERO_ADDRESS) {
         // Use createEscrowNative for native MON tokens
-        const totalAmountWei = BigInt(formData.totalAmount) * BigInt(10 ** 18);
+        const totalAmountInWei =
+          "0x" + (BigInt(formData.totalAmount) * BigInt(10 ** 18)).toString(16);
         const arbiters = ["0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41"]; // Default arbiter
         const requiredConfirmations = 1;
-        
+
         txHash = await escrowContract.send(
           "createEscrowNative",
-          totalAmountWei.toString(), // Send native value
-          beneficiaryAddress,
-          arbiters,
-          requiredConfirmations,
-          milestoneAmounts,
-          milestoneDescriptions,
-          formData.duration,
-          formData.projectDescription, // projectTitle
-          formData.projectDescription, // projectDescription
+          totalAmountInWei, // msg.value in wei (hex format)
+          beneficiaryAddress, // beneficiary parameter
+          arbiters, // arbiters parameter
+          requiredConfirmations, // requiredConfirmations parameter
+          milestoneAmounts, // milestoneAmounts parameter
+          milestoneDescriptions, // milestoneDescriptions parameter
+          formData.duration, // duration parameter
+          formData.projectDescription, // projectTitle parameter
+          formData.projectDescription, // projectDescription parameter
         );
       } else {
         // Use createEscrow for ERC20 tokens
         const arbiters = ["0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41"]; // Default arbiter
         const requiredConfirmations = 1;
-        
+
+        // Convert milestone amounts to wei for ERC20 tokens
+        const milestoneAmountsInWei = formData.milestones.map((m) =>
+          (BigInt(m.amount) * BigInt(10 ** 18)).toString(),
+        );
+
         txHash = await escrowContract.send(
           "createEscrow",
-          beneficiaryAddress,
-          arbiters,
-          requiredConfirmations,
-          milestoneAmounts,
-          milestoneDescriptions,
-          formData.token,
-          formData.duration,
-          formData.projectDescription, // projectTitle
-          formData.projectDescription, // projectDescription
+          "no-value", // No msg.value for ERC20
+          beneficiaryAddress, // beneficiary parameter
+          arbiters, // arbiters parameter
+          requiredConfirmations, // requiredConfirmations parameter
+          milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
+          milestoneDescriptions, // milestoneDescriptions parameter
+          formData.token, // token parameter
+          formData.duration, // duration parameter
+          formData.projectDescription, // projectTitle parameter
+          formData.projectDescription, // projectDescription parameter
         );
       }
 
