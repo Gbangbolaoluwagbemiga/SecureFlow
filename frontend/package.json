@@ -1,5 +1,5 @@
 {
-  "name": "my-v0-project",
+  "name": "secureflow-frontend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -48,7 +48,6 @@
     "@typechain/hardhat": "latest",
     "@types/chai": "latest",
     "@types/mocha": "latest",
-    "@vercel/analytics": "latest",
     "autoprefixer": "^10.4.20",
     "chai": "latest",
     "class-variance-authority": "^0.7.1",

@@ -1,16 +1,16 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { useWeb3 } from "@/contexts/web3-context"
-import { useToast } from "@/hooks/use-toast"
-import { CONTRACTS } from "@/lib/web3/config"
-import type { Escrow } from "@/lib/web3/types"
-import { motion } from "framer-motion"
-import { Briefcase, Clock, DollarSign, Search, Wallet } from "lucide-react"
-import { Input } from "@/components/ui/input"
+import { useState, useEffect } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useWeb3 } from "@/contexts/web3-context";
+import { useToast } from "@/hooks/use-toast";
+import { CONTRACTS } from "@/lib/web3/config";
+import type { Escrow } from "@/lib/web3/types";
+import { motion } from "framer-motion";
+import { Briefcase, Clock, DollarSign, Search, Wallet } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -19,27 +19,27 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function JobsPage() {
-  const { wallet } = useWeb3()
-  const { toast } = useToast()
-  const [jobs, setJobs] = useState<Escrow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedJob, setSelectedJob] = useState<Escrow | null>(null)
-  const [coverLetter, setCoverLetter] = useState("")
-  const [proposedTimeline, setProposedTimeline] = useState("")
-  const [applying, setApplying] = useState(false)
+  const { wallet } = useWeb3();
+  const { toast } = useToast();
+  const [jobs, setJobs] = useState<Escrow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedJob, setSelectedJob] = useState<Escrow | null>(null);
+  const [coverLetter, setCoverLetter] = useState("");
+  const [proposedTimeline, setProposedTimeline] = useState("");
+  const [applying, setApplying] = useState(false);
 
   useEffect(() => {
-    fetchOpenJobs()
-  }, [])
+    fetchOpenJobs();
+  }, []);
 
   const fetchOpenJobs = async () => {
-    setLoading(true)
+    setLoading(true);
     try {
       // Mock data - open jobs without assigned freelancers
       const mockJobs: Escrow[] = [
@@ -57,9 +57,21 @@ export default function JobsPage() {
             "Build a modern e-commerce website with React and Node.js. Need full-stack developer with experience in payment integrations.",
           isOpenJob: true,
           milestones: [
-            { description: "Frontend UI/UX design and implementation", amount: "2000", status: "pending" },
-            { description: "Backend API and database setup", amount: "2000", status: "pending" },
-            { description: "Payment integration and testing", amount: "1000", status: "pending" },
+            {
+              description: "Frontend UI/UX design and implementation",
+              amount: "2000",
+              status: "pending",
+            },
+            {
+              description: "Backend API and database setup",
+              amount: "2000",
+              status: "pending",
+            },
+            {
+              description: "Payment integration and testing",
+              amount: "1000",
+              status: "pending",
+            },
           ],
           applications: [],
         },
@@ -77,8 +89,16 @@ export default function JobsPage() {
             "Smart contract audit for DeFi protocol. Looking for experienced Solidity auditor with proven track record.",
           isOpenJob: true,
           milestones: [
-            { description: "Initial code review and vulnerability assessment", amount: "1500", status: "pending" },
-            { description: "Detailed audit report and recommendations", amount: "1500", status: "pending" },
+            {
+              description: "Initial code review and vulnerability assessment",
+              amount: "1500",
+              status: "pending",
+            },
+            {
+              description: "Detailed audit report and recommendations",
+              amount: "1500",
+              status: "pending",
+            },
           ],
           applications: [],
         },
@@ -96,68 +116,85 @@ export default function JobsPage() {
             "Mobile app development for iOS and Android. Social media platform with real-time messaging and content sharing.",
           isOpenJob: true,
           milestones: [
-            { description: "UI/UX design and prototyping", amount: "2000", status: "pending" },
-            { description: "Core features development", amount: "4000", status: "pending" },
-            { description: "Testing, deployment, and app store submission", amount: "2000", status: "pending" },
+            {
+              description: "UI/UX design and prototyping",
+              amount: "2000",
+              status: "pending",
+            },
+            {
+              description: "Core features development",
+              amount: "4000",
+              status: "pending",
+            },
+            {
+              description: "Testing, deployment, and app store submission",
+              amount: "2000",
+              status: "pending",
+            },
           ],
           applications: [],
         },
-      ]
+      ];
 
-      setJobs(mockJobs)
+      setJobs(mockJobs);
     } catch (error) {
-      console.error("[v0] Error fetching jobs:", error)
+      console.error("Error fetching jobs:", error);
       toast({
         title: "Failed to load jobs",
         description: "Could not fetch available jobs from the blockchain",
         variant: "destructive",
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleApply = async () => {
-    if (!selectedJob || !wallet.isConnected) return
+    if (!selectedJob || !wallet.isConnected) return;
 
-    setApplying(true)
+    setApplying(true);
     try {
       // In a real implementation, this would call the smart contract
-      console.log("[v0] Applying to job:", {
+      console.log("Applying to job:", {
         jobId: selectedJob.id,
         freelancer: wallet.address,
         coverLetter,
         proposedTimeline,
-      })
+      });
 
       // Simulate blockchain transaction
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       toast({
         title: "Application Submitted!",
-        description: "The client will review your application and get back to you.",
-      })
+        description:
+          "The client will review your application and get back to you.",
+      });
 
-      setCoverLetter("")
-      setProposedTimeline("")
-      setSelectedJob(null)
+      setCoverLetter("");
+      setProposedTimeline("");
+      setSelectedJob(null);
     } catch (error) {
-      console.error("[v0] Error applying to job:", error)
+      console.error("Error applying to job:", error);
       toast({
         title: "Application Failed",
         description: "Could not submit your application. Please try again.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setApplying(false)
+      setApplying(false);
     }
-  }
+  };
 
   const filteredJobs = jobs.filter(
     (job) =>
-      job.projectDescription?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.milestones.some((m) => m.description.toLowerCase().includes(searchQuery.toLowerCase())),
-  )
+      job.projectDescription
+        ?.toLowerCase()
+        .includes(searchQuery.toLowerCase()) ||
+      job.milestones.some((m) =>
+        m.description.toLowerCase().includes(searchQuery.toLowerCase()),
+      ),
+  );
 
   if (!wallet.isConnected) {
     return (
@@ -165,10 +202,12 @@ export default function JobsPage() {
         <Card className="glass border-primary/20 p-12 text-center max-w-md">
           <Wallet className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
           <h2 className="text-2xl font-bold mb-2">Wallet Not Connected</h2>
-          <p className="text-muted-foreground mb-6">Please connect your wallet to browse available jobs</p>
+          <p className="text-muted-foreground mb-6">
+            Please connect your wallet to browse available jobs
+          </p>
         </Card>
       </div>
-    )
+    );
   }
 
   if (loading) {
@@ -179,16 +218,22 @@ export default function JobsPage() {
           <p className="text-muted-foreground">Loading available jobs...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
     <div className="min-h-screen py-12">
       <div className="container mx-auto px-4">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
           <div className="mb-8">
             <h1 className="text-4xl md:text-5xl font-bold mb-2">Browse Jobs</h1>
-            <p className="text-xl text-muted-foreground">Find and apply to open escrow projects</p>
+            <p className="text-xl text-muted-foreground">
+              Find and apply to open escrow projects
+            </p>
           </div>
 
           {/* Search Bar */}
@@ -209,7 +254,9 @@ export default function JobsPage() {
             <Card className="glass border-primary/20 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Available Jobs</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Available Jobs
+                  </p>
                   <p className="text-3xl font-bold">{jobs.length}</p>
                 </div>
                 <Briefcase className="h-10 w-10 text-primary opacity-50" />
@@ -219,9 +266,16 @@ export default function JobsPage() {
             <Card className="glass border-accent/20 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Total Value</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Total Value
+                  </p>
                   <p className="text-3xl font-bold">
-                    {jobs.reduce((sum, job) => sum + Number.parseFloat(job.totalAmount), 0).toFixed(0)}
+                    {jobs
+                      .reduce(
+                        (sum, job) => sum + Number.parseFloat(job.totalAmount),
+                        0,
+                      )
+                      .toFixed(0)}
                   </p>
                 </div>
                 <DollarSign className="h-10 w-10 text-accent opacity-50" />
@@ -231,9 +285,15 @@ export default function JobsPage() {
             <Card className="glass border-primary/20 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Avg. Duration</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Avg. Duration
+                  </p>
                   <p className="text-3xl font-bold">
-                    {Math.round(jobs.reduce((sum, job) => sum + job.duration, 0) / jobs.length)} days
+                    {Math.round(
+                      jobs.reduce((sum, job) => sum + job.duration, 0) /
+                        jobs.length,
+                    )}{" "}
+                    days
                   </p>
                 </div>
                 <Clock className="h-10 w-10 text-primary opacity-50" />
@@ -246,7 +306,9 @@ export default function JobsPage() {
             {filteredJobs.length === 0 ? (
               <Card className="glass border-muted p-12 text-center">
                 <Briefcase className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <p className="text-muted-foreground">No jobs found matching your search</p>
+                <p className="text-muted-foreground">
+                  No jobs found matching your search
+                </p>
               </Card>
             ) : (
               filteredJobs.map((job, index) => (
@@ -267,77 +329,110 @@ export default function JobsPage() {
                           </Badge>
                         </div>
 
-                        <p className="text-muted-foreground mb-4">{job.projectDescription}</p>
+                        <p className="text-muted-foreground mb-4">
+                          {job.projectDescription}
+                        </p>
 
                         <div className="space-y-2 mb-4">
                           <p className="text-sm font-medium">Milestones:</p>
                           {job.milestones.map((milestone, idx) => (
-                            <div key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
+                            <div
+                              key={idx}
+                              className="flex items-start gap-2 text-sm text-muted-foreground"
+                            >
                               <span className="text-primary">•</span>
                               <span>
-                                {milestone.description} - <span className="font-semibold">{milestone.amount}</span>
+                                {milestone.description} -{" "}
+                                <span className="font-semibold">
+                                  {milestone.amount}
+                                </span>
                               </span>
                             </div>
                           ))}
                         </div>
 
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>Posted {new Date(job.createdAt).toLocaleDateString()}</span>
+                          <span>
+                            Posted{" "}
+                            {new Date(job.createdAt).toLocaleDateString()}
+                          </span>
                           <span>•</span>
-                          <span>{job.applications?.length || 0} applications</span>
+                          <span>
+                            {job.applications?.length || 0} applications
+                          </span>
                         </div>
                       </div>
 
                       <div className="flex flex-col items-end gap-4">
                         <div className="text-right">
-                          <p className="text-sm text-muted-foreground mb-1">Total Budget</p>
-                          <p className="text-3xl font-bold text-primary">{job.totalAmount}</p>
+                          <p className="text-sm text-muted-foreground mb-1">
+                            Total Budget
+                          </p>
+                          <p className="text-3xl font-bold text-primary">
+                            {job.totalAmount}
+                          </p>
                         </div>
 
                         <Dialog>
                           <DialogTrigger asChild>
-                            <Button onClick={() => setSelectedJob(job)} className="w-full md:w-auto">
+                            <Button
+                              onClick={() => setSelectedJob(job)}
+                              className="w-full md:w-auto"
+                            >
                               Apply Now
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="glass">
                             <DialogHeader>
-                              <DialogTitle>Apply to Job #{selectedJob?.id}</DialogTitle>
+                              <DialogTitle>
+                                Apply to Job #{selectedJob?.id}
+                              </DialogTitle>
                               <DialogDescription>
-                                Submit your application to work on this project. The client will review and may accept
-                                your proposal.
+                                Submit your application to work on this project.
+                                The client will review and may accept your
+                                proposal.
                               </DialogDescription>
                             </DialogHeader>
 
                             <div className="space-y-4 py-4">
                               <div className="space-y-2">
-                                <Label htmlFor="coverLetter">Cover Letter *</Label>
+                                <Label htmlFor="coverLetter">
+                                  Cover Letter *
+                                </Label>
                                 <Textarea
                                   id="coverLetter"
                                   placeholder="Explain why you're the best fit for this project..."
                                   value={coverLetter}
-                                  onChange={(e) => setCoverLetter(e.target.value)}
+                                  onChange={(e) =>
+                                    setCoverLetter(e.target.value)
+                                  }
                                   rows={5}
                                   className="glass"
                                 />
                               </div>
 
                               <div className="space-y-2">
-                                <Label htmlFor="timeline">Proposed Timeline (days) *</Label>
+                                <Label htmlFor="timeline">
+                                  Proposed Timeline (days) *
+                                </Label>
                                 <Input
                                   id="timeline"
                                   type="number"
                                   placeholder="30"
                                   value={proposedTimeline}
-                                  onChange={(e) => setProposedTimeline(e.target.value)}
+                                  onChange={(e) =>
+                                    setProposedTimeline(e.target.value)
+                                  }
                                   className="glass"
                                 />
                               </div>
 
                               <div className="rounded-lg border border-border/40 bg-muted/20 p-4">
                                 <p className="text-sm text-muted-foreground">
-                                  <span className="font-semibold">Note:</span> Once the client accepts your application,
-                                  the escrow will be assigned to you and you can start working on the milestones.
+                                  <span className="font-semibold">Note:</span>{" "}
+                                  Once the client accepts your application, the
+                                  escrow will be assigned to you and you can
+                                  start working on the milestones.
                                 </p>
                               </div>
                             </div>
@@ -345,10 +440,14 @@ export default function JobsPage() {
                             <DialogFooter>
                               <Button
                                 onClick={handleApply}
-                                disabled={!coverLetter || !proposedTimeline || applying}
+                                disabled={
+                                  !coverLetter || !proposedTimeline || applying
+                                }
                                 className="w-full"
                               >
-                                {applying ? "Submitting..." : "Submit Application"}
+                                {applying
+                                  ? "Submitting..."
+                                  : "Submit Application"}
                               </Button>
                             </DialogFooter>
                           </DialogContent>
@@ -363,5 +462,5 @@ export default function JobsPage() {
         </motion.div>
       </div>
     </div>
-  )
+  );
 }

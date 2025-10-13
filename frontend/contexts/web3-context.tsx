@@ -248,7 +248,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           description: "You cancelled the network switch",
         });
       } else {
-        console.error("[v0] Error switching network:", error);
+        console.error("Error switching network:", error);
         toast({
           title: "Switch failed",
           description: error.message || "Failed to switch network",
@@ -273,7 +273,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           });
           return result;
         } catch (error) {
-          console.error(`[v0] Error calling ${method}:`, error);
+          console.error(`Error calling ${method}:`, error);
           throw error;
         }
       },
@@ -293,7 +293,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           });
           return txHash;
         } catch (error) {
-          console.error(`[v0] Error sending ${method}:`, error);
+          console.error(`Error sending ${method}:`, error);
           throw error;
         }
       },

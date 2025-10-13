@@ -1,36 +1,45 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { useWeb3 } from "@/contexts/web3-context"
-import { useToast } from "@/hooks/use-toast"
-import { CONTRACTS } from "@/lib/web3/config"
-import type { Escrow } from "@/lib/web3/types"
-import { motion } from "framer-motion"
-import { Clock, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Wallet, TrendingUp, FileText } from "lucide-react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Progress } from "@/components/ui/progress"
-import { MilestoneActions } from "@/components/milestone-actions"
-import { ReputationScore } from "@/components/reputation-score"
-import { EscrowNFTBadge } from "@/components/escrow-nft-badge"
+import { useState, useEffect } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useWeb3 } from "@/contexts/web3-context";
+import { useToast } from "@/hooks/use-toast";
+import { CONTRACTS } from "@/lib/web3/config";
+import type { Escrow } from "@/lib/web3/types";
+import { motion } from "framer-motion";
+import {
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Wallet,
+  TrendingUp,
+  FileText,
+} from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
+import { MilestoneActions } from "@/components/milestone-actions";
+import { ReputationScore } from "@/components/reputation-score";
+import { EscrowNFTBadge } from "@/components/escrow-nft-badge";
 
 export default function DashboardPage() {
-  const { wallet, getContract } = useWeb3()
-  const { toast } = useToast()
-  const [escrows, setEscrows] = useState<Escrow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [expandedEscrow, setExpandedEscrow] = useState<string | null>(null)
+  const { wallet, getContract } = useWeb3();
+  const { toast } = useToast();
+  const [escrows, setEscrows] = useState<Escrow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedEscrow, setExpandedEscrow] = useState<string | null>(null);
 
   useEffect(() => {
     if (wallet.isConnected) {
-      fetchUserEscrows()
+      fetchUserEscrows();
     }
-  }, [wallet.isConnected])
+  }, [wallet.isConnected]);
 
   const fetchUserEscrows = async () => {
-    setLoading(true)
+    setLoading(true);
     try {
       // Mock data for demonstration
       const mockEscrows: Escrow[] = [
@@ -130,39 +139,48 @@ export default function DashboardPage() {
           ],
           projectDescription: "Smart Contract Development Project",
         },
-      ]
+      ];
 
-      setEscrows(mockEscrows)
+      setEscrows(mockEscrows);
     } catch (error) {
-      console.error("[v0] Error fetching escrows:", error)
+      console.error("Error fetching escrows:", error);
       toast({
         title: "Failed to load escrows",
         description: "Could not fetch your escrows from the blockchain",
         variant: "destructive",
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: any; icon: any; label: string }> = {
-      pending: { variant: "secondary", icon: Clock, label: "Pending" },
-      active: { variant: "default", icon: TrendingUp, label: "Active" },
-      completed: { variant: "outline", icon: CheckCircle2, label: "Completed" },
-      disputed: { variant: "destructive", icon: AlertCircle, label: "Disputed" },
-    }
+    const variants: Record<string, { variant: any; icon: any; label: string }> =
+      {
+        pending: { variant: "secondary", icon: Clock, label: "Pending" },
+        active: { variant: "default", icon: TrendingUp, label: "Active" },
+        completed: {
+          variant: "outline",
+          icon: CheckCircle2,
+          label: "Completed",
+        },
+        disputed: {
+          variant: "destructive",
+          icon: AlertCircle,
+          label: "Disputed",
+        },
+      };
 
-    const config = variants[status] || variants.pending
-    const Icon = config.icon
+    const config = variants[status] || variants.pending;
+    const Icon = config.icon;
 
     return (
       <Badge variant={config.variant} className="gap-1">
         <Icon className="h-3 w-3" />
         {config.label}
       </Badge>
-    )
-  }
+    );
+  };
 
   const getMilestoneStatusBadge = (status: string) => {
     const variants: Record<string, { variant: any; label: string }> = {
@@ -170,31 +188,31 @@ export default function DashboardPage() {
       submitted: { variant: "default", label: "Submitted" },
       approved: { variant: "outline", label: "Approved" },
       disputed: { variant: "destructive", label: "Disputed" },
-    }
+    };
 
-    const config = variants[status] || variants.pending
+    const config = variants[status] || variants.pending;
 
     return (
       <Badge variant={config.variant} className="text-xs">
         {config.label}
       </Badge>
-    )
-  }
+    );
+  };
 
   const calculateProgress = (escrow: Escrow) => {
-    const released = Number.parseFloat(escrow.releasedAmount)
-    const total = Number.parseFloat(escrow.totalAmount)
-    return (released / total) * 100
-  }
+    const released = Number.parseFloat(escrow.releasedAmount);
+    const total = Number.parseFloat(escrow.totalAmount);
+    return (released / total) * 100;
+  };
 
   const filterEscrows = (filter: string) => {
-    if (filter === "all") return escrows
-    return escrows.filter((e) => e.status === filter)
-  }
+    if (filter === "all") return escrows;
+    return escrows.filter((e) => e.status === filter);
+  };
 
   const toggleExpand = (id: string) => {
-    setExpandedEscrow(expandedEscrow === id ? null : id)
-  }
+    setExpandedEscrow(expandedEscrow === id ? null : id);
+  };
 
   if (!wallet.isConnected) {
     return (
@@ -202,10 +220,12 @@ export default function DashboardPage() {
         <Card className="glass border-primary/20 p-12 text-center max-w-md">
           <Wallet className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
           <h2 className="text-2xl font-bold mb-2">Wallet Not Connected</h2>
-          <p className="text-muted-foreground mb-6">Please connect your wallet to view your escrows</p>
+          <p className="text-muted-foreground mb-6">
+            Please connect your wallet to view your escrows
+          </p>
         </Card>
       </div>
-    )
+    );
   }
 
   if (loading) {
@@ -216,20 +236,28 @@ export default function DashboardPage() {
           <p className="text-muted-foreground">Loading your escrows...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  const completedEscrows = escrows.filter((e) => e.status === "completed")
-  const totalVolume = escrows.reduce((sum, e) => sum + Number.parseFloat(e.totalAmount), 0).toFixed(0)
+  const completedEscrows = escrows.filter((e) => e.status === "completed");
+  const totalVolume = escrows
+    .reduce((sum, e) => sum + Number.parseFloat(e.totalAmount), 0)
+    .toFixed(0);
 
   return (
     <div className="min-h-screen py-12">
       <div className="container mx-auto px-4">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-4xl md:text-5xl font-bold mb-2">Dashboard</h1>
-              <p className="text-xl text-muted-foreground">Manage your escrows and milestones</p>
+              <p className="text-xl text-muted-foreground">
+                Manage your escrows and milestones
+              </p>
             </div>
           </div>
 
@@ -246,7 +274,9 @@ export default function DashboardPage() {
             <Card className="glass border-primary/20 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Total Escrows</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Total Escrows
+                  </p>
                   <p className="text-3xl font-bold">{escrows.length}</p>
                 </div>
                 <FileText className="h-10 w-10 text-primary opacity-50" />
@@ -256,8 +286,12 @@ export default function DashboardPage() {
             <Card className="glass border-accent/20 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Active Projects</p>
-                  <p className="text-3xl font-bold">{escrows.filter((e) => e.status === "active").length}</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Active Projects
+                  </p>
+                  <p className="text-3xl font-bold">
+                    {escrows.filter((e) => e.status === "active").length}
+                  </p>
                 </div>
                 <TrendingUp className="h-10 w-10 text-accent opacity-50" />
               </div>
@@ -266,8 +300,12 @@ export default function DashboardPage() {
             <Card className="glass border-primary/20 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Completed</p>
-                  <p className="text-3xl font-bold">{completedEscrows.length}</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Completed
+                  </p>
+                  <p className="text-3xl font-bold">
+                    {completedEscrows.length}
+                  </p>
                 </div>
                 <CheckCircle2 className="h-10 w-10 text-primary opacity-50" />
               </div>
@@ -276,7 +314,9 @@ export default function DashboardPage() {
 
           {completedEscrows.length > 0 && (
             <div className="mb-8">
-              <h2 className="text-2xl font-bold mb-4">Your Completion Badges</h2>
+              <h2 className="text-2xl font-bold mb-4">
+                Your Completion Badges
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {completedEscrows.map((escrow) => (
                   <EscrowNFTBadge
@@ -295,9 +335,15 @@ export default function DashboardPage() {
           <Tabs defaultValue="all" className="space-y-6">
             <TabsList className="glass">
               <TabsTrigger value="all">All ({escrows.length})</TabsTrigger>
-              <TabsTrigger value="pending">Pending ({filterEscrows("pending").length})</TabsTrigger>
-              <TabsTrigger value="active">Active ({filterEscrows("active").length})</TabsTrigger>
-              <TabsTrigger value="completed">Completed ({filterEscrows("completed").length})</TabsTrigger>
+              <TabsTrigger value="pending">
+                Pending ({filterEscrows("pending").length})
+              </TabsTrigger>
+              <TabsTrigger value="active">
+                Active ({filterEscrows("active").length})
+              </TabsTrigger>
+              <TabsTrigger value="completed">
+                Completed ({filterEscrows("completed").length})
+              </TabsTrigger>
             </TabsList>
 
             {["all", "pending", "active", "completed"].map((filter) => (
@@ -305,12 +351,18 @@ export default function DashboardPage() {
                 {filterEscrows(filter).length === 0 ? (
                   <Card className="glass border-muted p-12 text-center">
                     <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                    <p className="text-muted-foreground">No {filter !== "all" ? filter : ""} escrows found</p>
+                    <p className="text-muted-foreground">
+                      No {filter !== "all" ? filter : ""} escrows found
+                    </p>
                   </Card>
                 ) : (
                   filterEscrows(filter).map((escrow, index) => {
-                    const isClient = escrow.payer.toLowerCase() === wallet.address?.toLowerCase()
-                    const isFreelancer = escrow.beneficiary.toLowerCase() === wallet.address?.toLowerCase()
+                    const isClient =
+                      escrow.payer.toLowerCase() ===
+                      wallet.address?.toLowerCase();
+                    const isFreelancer =
+                      escrow.beneficiary.toLowerCase() ===
+                      wallet.address?.toLowerCase();
 
                     return (
                       <motion.div
@@ -324,7 +376,9 @@ export default function DashboardPage() {
                             <div className="flex items-start justify-between mb-4">
                               <div className="flex-1">
                                 <div className="flex items-center gap-3 mb-2">
-                                  <h3 className="text-xl font-bold">Escrow #{escrow.id}</h3>
+                                  <h3 className="text-xl font-bold">
+                                    Escrow #{escrow.id}
+                                  </h3>
                                   {getStatusBadge(escrow.status)}
                                   {isClient && (
                                     <Badge
@@ -346,46 +400,77 @@ export default function DashboardPage() {
                                 <div className="space-y-1 text-sm text-muted-foreground">
                                   <p>
                                     <span className="font-medium">Client:</span>{" "}
-                                    <span className="font-mono">{escrow.payer.slice(0, 10)}...</span>
+                                    <span className="font-mono">
+                                      {escrow.payer.slice(0, 10)}...
+                                    </span>
                                   </p>
                                   <p>
-                                    <span className="font-medium">Freelancer:</span>{" "}
-                                    <span className="font-mono">{escrow.beneficiary.slice(0, 10)}...</span>
+                                    <span className="font-medium">
+                                      Freelancer:
+                                    </span>{" "}
+                                    <span className="font-mono">
+                                      {escrow.beneficiary.slice(0, 10)}...
+                                    </span>
                                   </p>
                                   <p>
-                                    <span className="font-medium">Created:</span>{" "}
-                                    {new Date(escrow.createdAt).toLocaleDateString()}
+                                    <span className="font-medium">
+                                      Created:
+                                    </span>{" "}
+                                    {new Date(
+                                      escrow.createdAt,
+                                    ).toLocaleDateString()}
                                   </p>
                                   {escrow.projectDescription && (
                                     <p className="mt-2 pt-2 border-t border-border">
-                                      <span className="font-medium">Project:</span> {escrow.projectDescription}
+                                      <span className="font-medium">
+                                        Project:
+                                      </span>{" "}
+                                      {escrow.projectDescription}
                                     </p>
                                   )}
                                 </div>
                               </div>
 
                               <div className="text-right">
-                                <p className="text-sm text-muted-foreground mb-1">Total Amount</p>
-                                <p className="text-2xl font-bold text-primary">{escrow.totalAmount}</p>
-                                <p className="text-xs text-muted-foreground mt-1">Released: {escrow.releasedAmount}</p>
+                                <p className="text-sm text-muted-foreground mb-1">
+                                  Total Amount
+                                </p>
+                                <p className="text-2xl font-bold text-primary">
+                                  {escrow.totalAmount}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Released: {escrow.releasedAmount}
+                                </p>
                               </div>
                             </div>
 
                             <div className="mb-4">
                               <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium">Progress</span>
+                                <span className="text-sm font-medium">
+                                  Progress
+                                </span>
                                 <span className="text-sm text-muted-foreground">
                                   {calculateProgress(escrow).toFixed(0)}%
                                 </span>
                               </div>
-                              <Progress value={calculateProgress(escrow)} className="h-2" />
+                              <Progress
+                                value={calculateProgress(escrow)}
+                                className="h-2"
+                              />
                             </div>
 
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-4 text-sm">
-                                <span className="text-muted-foreground">{escrow.milestones.length} Milestones</span>
                                 <span className="text-muted-foreground">
-                                  {escrow.milestones.filter((m) => m.status === "approved").length} Approved
+                                  {escrow.milestones.length} Milestones
+                                </span>
+                                <span className="text-muted-foreground">
+                                  {
+                                    escrow.milestones.filter(
+                                      (m) => m.status === "approved",
+                                    ).length
+                                  }{" "}
+                                  Approved
                                 </span>
                               </div>
 
@@ -395,7 +480,9 @@ export default function DashboardPage() {
                                 onClick={() => toggleExpand(escrow.id)}
                                 className="gap-2"
                               >
-                                {expandedEscrow === escrow.id ? "Hide Details" : "View Details"}
+                                {expandedEscrow === escrow.id
+                                  ? "Hide Details"
+                                  : "View Details"}
                                 {expandedEscrow === escrow.id ? (
                                   <ChevronUp className="h-4 w-4" />
                                 ) : (
@@ -414,28 +501,44 @@ export default function DashboardPage() {
                               className="border-t border-border bg-muted/20"
                             >
                               <div className="p-6 space-y-4">
-                                <h4 className="font-semibold mb-4">Milestones</h4>
+                                <h4 className="font-semibold mb-4">
+                                  Milestones
+                                </h4>
                                 {escrow.milestones.map((milestone, idx) => (
                                   <Card key={idx} className="p-4 border-muted">
                                     <div className="flex items-start justify-between mb-2">
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-2">
-                                          <span className="font-semibold">Milestone {idx + 1}</span>
-                                          {getMilestoneStatusBadge(milestone.status)}
+                                          <span className="font-semibold">
+                                            Milestone {idx + 1}
+                                          </span>
+                                          {getMilestoneStatusBadge(
+                                            milestone.status,
+                                          )}
                                         </div>
-                                        <p className="text-sm text-muted-foreground">{milestone.description}</p>
+                                        <p className="text-sm text-muted-foreground">
+                                          {milestone.description}
+                                        </p>
                                         {milestone.submittedAt && (
                                           <p className="text-xs text-muted-foreground mt-2">
-                                            Submitted: {new Date(milestone.submittedAt).toLocaleDateString()}
+                                            Submitted:{" "}
+                                            {new Date(
+                                              milestone.submittedAt,
+                                            ).toLocaleDateString()}
                                           </p>
                                         )}
                                         {milestone.approvedAt && (
                                           <p className="text-xs text-muted-foreground">
-                                            Approved: {new Date(milestone.approvedAt).toLocaleDateString()}
+                                            Approved:{" "}
+                                            {new Date(
+                                              milestone.approvedAt,
+                                            ).toLocaleDateString()}
                                           </p>
                                         )}
                                       </div>
-                                      <span className="font-bold text-primary ml-4">{milestone.amount}</span>
+                                      <span className="font-bold text-primary ml-4">
+                                        {milestone.amount}
+                                      </span>
                                     </div>
 
                                     <div className="mt-4">
@@ -443,9 +546,13 @@ export default function DashboardPage() {
                                         escrowId={escrow.id}
                                         milestoneIndex={idx}
                                         milestone={milestone}
-                                        isPayer={escrow.payer.toLowerCase() === wallet.address?.toLowerCase()}
+                                        isPayer={
+                                          escrow.payer.toLowerCase() ===
+                                          wallet.address?.toLowerCase()
+                                        }
                                         isBeneficiary={
-                                          escrow.beneficiary.toLowerCase() === wallet.address?.toLowerCase()
+                                          escrow.beneficiary.toLowerCase() ===
+                                          wallet.address?.toLowerCase()
                                         }
                                         escrowStatus={escrow.status}
                                         onSuccess={fetchUserEscrows}
@@ -458,7 +565,7 @@ export default function DashboardPage() {
                           )}
                         </Card>
                       </motion.div>
-                    )
+                    );
                   })
                 )}
               </TabsContent>
@@ -467,5 +574,5 @@ export default function DashboardPage() {
         </motion.div>
       </div>
     </div>
-  )
+  );
 }
