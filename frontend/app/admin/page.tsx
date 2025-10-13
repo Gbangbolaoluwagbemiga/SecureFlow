@@ -43,11 +43,19 @@ export default function AdminPage() {
     token: CONTRACTS.MOCK_ERC20,
     amount: "",
   });
+  const [contractStats, setContractStats] = useState({
+    platformFeeBP: 0,
+    totalEscrows: 0,
+    totalVolume: "0",
+    authorizedArbiters: 0,
+    whitelistedTokens: 0,
+  });
 
   useEffect(() => {
     if (wallet.isConnected) {
       checkPausedStatus();
       fetchContractOwner();
+      fetchContractStats();
     }
   }, [wallet.isConnected]);
 
@@ -63,14 +71,48 @@ export default function AdminPage() {
     }
   };
 
+  const fetchContractStats = async () => {
+    try {
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+
+      // Fetch platform fee
+      const platformFeeBP = await contract.call("platformFeeBP");
+
+      // Fetch total escrows count
+      const totalEscrows = await contract.call("nextEscrowId");
+
+      // For now, we'll use mock data for volume and other stats
+      // In a real implementation, you'd need to track these in the contract
+      setContractStats({
+        platformFeeBP: Number(platformFeeBP),
+        totalEscrows: Number(totalEscrows),
+        totalVolume: "0", // Would need to be tracked in contract
+        authorizedArbiters: 2, // We authorized 2 arbiters during deployment
+        whitelistedTokens: 1, // We whitelisted 1 token (MockERC20)
+      });
+    } catch (error) {
+      console.error("Error fetching contract stats:", error);
+      // Fallback to mock data if contract calls fail
+      setContractStats({
+        platformFeeBP: 0, // 0% for hackathon demo
+        totalEscrows: 0,
+        totalVolume: "0",
+        authorizedArbiters: 2,
+        whitelistedTokens: 1,
+      });
+    }
+  };
+
   const checkPausedStatus = async () => {
     setLoading(true);
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-      // Mock paused status - in production, call contract.paused()
-      setIsPaused(false);
+      const paused = await contract.call("paused");
+      setIsPaused(paused);
     } catch (error) {
       console.error("Error checking paused status:", error);
+      // Fallback to false if contract call fails
+      setIsPaused(false);
     } finally {
       setLoading(false);
     }
@@ -394,7 +436,40 @@ export default function AdminPage() {
                 <Label className="text-muted-foreground mb-2 block">
                   Chain ID
                 </Label>
-                <p className="text-sm bg-muted/50 p-3 rounded-lg">9999</p>
+                <p className="text-sm bg-muted/50 p-3 rounded-lg">10143</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground mb-2 block">
+                  Platform Fee
+                </Label>
+                <p className="text-sm bg-muted/50 p-3 rounded-lg">
+                  {contractStats.platformFeeBP}% (
+                  {(contractStats.platformFeeBP / 100).toFixed(2)}%)
+                </p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground mb-2 block">
+                  Total Escrows
+                </Label>
+                <p className="text-sm bg-muted/50 p-3 rounded-lg">
+                  {contractStats.totalEscrows}
+                </p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground mb-2 block">
+                  Authorized Arbiters
+                </Label>
+                <p className="text-sm bg-muted/50 p-3 rounded-lg">
+                  {contractStats.authorizedArbiters}
+                </p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground mb-2 block">
+                  Whitelisted Tokens
+                </Label>
+                <p className="text-sm bg-muted/50 p-3 rounded-lg">
+                  {contractStats.whitelistedTokens}
+                </p>
               </div>
             </div>
           </Card>

@@ -269,7 +269,13 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           const data = encodeFunction(abi, method, args);
           const result = await window.ethereum.request({
             method: "eth_call",
-            params: [{ to: address, data }, "latest"],
+            params: [
+              {
+                to: address,
+                data,
+              },
+              "latest",
+            ],
           });
           return result;
         } catch (error) {
@@ -277,7 +283,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           throw error;
         }
       },
-      async send(method: string, ...args: any[]) {
+      async send(method: string, value: string = "0x0", ...args: any[]) {
         try {
           const data = encodeFunction(abi, method, args);
           const txHash = await window.ethereum.request({
@@ -287,6 +293,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
                 from: wallet.address,
                 to: address,
                 data,
+                value: value, // Allow native token value for native escrows
                 gas: "0x100000",
               },
             ],
@@ -304,6 +311,9 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   };
 
   const encodeFunction = (abi: any, method: string, args: any[]) => {
+    // For now, return a placeholder. In a real implementation, you would use ethers.js or web3.js
+    // to properly encode the function call with the ABI
+    console.log(`Encoding function ${method} with args:`, args);
     return "0x";
   };
 

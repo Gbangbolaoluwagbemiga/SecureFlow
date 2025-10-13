@@ -156,7 +156,8 @@ abstract contract EscrowCore is ReentrancyGuard, Ownable, Pausable, ISecureFlow 
     }
 
     receive() external payable {
-        revert("SecureFlow: Do not send native directly");
+        // Accept native tokens for hackathon demo
+        // In production, this should be more restrictive
     }
 
     fallback() external payable {

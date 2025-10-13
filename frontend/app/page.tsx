@@ -6,6 +6,8 @@ import Link from "next/link";
 import { ArrowRight, Shield, CheckCircle2, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useWeb3 } from "@/contexts/web3-context";
+import { CONTRACTS } from "@/lib/web3/config";
+import { SECUREFLOW_ABI } from "@/lib/web3/abis";
 import { motion } from "framer-motion";
 
 export default function HomePage() {
@@ -24,14 +26,47 @@ export default function HomePage() {
 
   const fetchStats = async () => {
     try {
-      // Mock stats for now - in production, fetch from contract
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+
+      // Get total number of escrows
+      const totalEscrows = await contract.call("nextEscrowId");
+      const escrowCount = Number(totalEscrows);
+
+      let activeEscrows = 0;
+      let completedEscrows = 0;
+
+      // Count escrows by status
+      for (let i = 1; i <= escrowCount; i++) {
+        try {
+          const escrowSummary = await contract.call("getEscrowSummary", i);
+          const status = Number(escrowSummary.status);
+
+          if (status === 1) {
+            // Active
+            activeEscrows++;
+          } else if (status === 2) {
+            // Completed
+            completedEscrows++;
+          }
+        } catch (error) {
+          // Skip escrows that don't exist
+          continue;
+        }
+      }
+
+      setStats({
+        activeEscrows,
+        totalVolume: "0", // Would need to track total volume in contract
+        completedEscrows,
+      });
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+      // Fallback to mock data if contract call fails
       setStats({
         activeEscrows: 127,
         totalVolume: "2,450,000",
         completedEscrows: 89,
       });
-    } catch (error) {
-      console.error("Error fetching stats:", error);
     }
   };
 

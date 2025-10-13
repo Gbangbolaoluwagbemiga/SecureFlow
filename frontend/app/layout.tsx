@@ -14,6 +14,18 @@ export const metadata: Metadata = {
   description:
     "Trustless payments with transparent milestones powered by Monad Testnet",
   generator: "SecureFlow",
+  manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
+      { url: "/placeholder-logo.png", sizes: "32x32", type: "image/png" },
+      { url: "/placeholder-logo.svg", sizes: "any", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/placeholder-logo.png", sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
@@ -23,6 +35,22 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="/favicon.ico" />
+        <link
+          rel="icon"
+          type="image/png"
+          sizes="32x32"
+          href="/placeholder-logo.png"
+        />
+        <link rel="icon" type="image/svg+xml" href="/placeholder-logo.svg" />
+        <link
+          rel="apple-touch-icon"
+          sizes="180x180"
+          href="/placeholder-logo.png"
+        />
+        <link rel="manifest" href="/manifest.json" />
+      </head>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
         <ThemeProvider
           attribute="class"

@@ -168,11 +168,11 @@ export default function CreateEscrowPage() {
       return;
     }
 
-    if (!formData.token || formData.token === ZERO_ADDRESS) {
+    // Allow both native tokens (ZERO_ADDRESS) and ERC20 tokens
+    if (!formData.token) {
       toast({
         title: "Invalid token address",
-        description:
-          "Please enter a valid ERC20 token address or deploy a token first",
+        description: "Please select a token type",
         variant: "destructive",
       });
       return;
@@ -210,16 +210,33 @@ export default function CreateEscrowPage() {
         ? ZERO_ADDRESS
         : formData.beneficiary;
 
-      const txHash = await escrowContract.send(
-        "createEscrow",
-        beneficiaryAddress,
-        formData.token,
-        formData.totalAmount,
-        milestoneDescriptions,
-        milestoneAmounts,
-        formData.duration,
-        formData.projectDescription,
-      );
+      let txHash;
+
+      if (formData.token === ZERO_ADDRESS) {
+        // Use createEscrowNative for native MON tokens
+        const totalAmountWei = BigInt(formData.totalAmount) * BigInt(10 ** 18);
+        txHash = await escrowContract.send(
+          "createEscrowNative",
+          totalAmountWei.toString(), // Send native value
+          beneficiaryAddress,
+          milestoneAmounts,
+          milestoneDescriptions,
+          formData.duration,
+          formData.projectDescription,
+        );
+      } else {
+        // Use createEscrow for ERC20 tokens
+        txHash = await escrowContract.send(
+          "createEscrow",
+          beneficiaryAddress,
+          formData.token,
+          formData.totalAmount,
+          milestoneAmounts,
+          milestoneDescriptions,
+          formData.duration,
+          formData.projectDescription,
+        );
+      }
 
       toast({
         title: isOpenJob ? "Job posted!" : "Escrow created!",

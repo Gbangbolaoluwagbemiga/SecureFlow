@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
+import { SECUREFLOW_ABI } from "@/lib/web3/abis";
 import type { Escrow } from "@/lib/web3/types";
 import { motion } from "framer-motion";
 import { Briefcase, Clock, DollarSign, Search, Wallet } from "lucide-react";
@@ -24,7 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 export default function JobsPage() {
-  const { wallet } = useWeb3();
+  const { wallet, getContract } = useWeb3();
   const { toast } = useToast();
   const [jobs, setJobs] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +35,23 @@ export default function JobsPage() {
   const [proposedTimeline, setProposedTimeline] = useState("");
   const [applying, setApplying] = useState(false);
 
+  const getStatusFromNumber = (status: number): string => {
+    switch (status) {
+      case 0:
+        return "pending";
+      case 1:
+        return "active";
+      case 2:
+        return "completed";
+      case 3:
+        return "disputed";
+      case 4:
+        return "cancelled";
+      default:
+        return "pending";
+    }
+  };
+
   useEffect(() => {
     fetchOpenJobs();
   }, []);
@@ -41,102 +59,150 @@ export default function JobsPage() {
   const fetchOpenJobs = async () => {
     setLoading(true);
     try {
-      // Mock data - open jobs without assigned freelancers
-      const mockJobs: Escrow[] = [
-        {
-          id: "10",
-          payer: "0x1234567890123456789012345678901234567890",
-          beneficiary: "0x0000000000000000000000000000000000000000", // No freelancer assigned
-          token: CONTRACTS.MOCK_ERC20,
-          totalAmount: "5000",
-          releasedAmount: "0",
-          status: "pending",
-          createdAt: Date.now() - 86400000 * 2,
-          duration: 30,
-          projectDescription:
-            "Build a modern e-commerce website with React and Node.js. Need full-stack developer with experience in payment integrations.",
-          isOpenJob: true,
-          milestones: [
-            {
-              description: "Frontend UI/UX design and implementation",
-              amount: "2000",
-              status: "pending",
-            },
-            {
-              description: "Backend API and database setup",
-              amount: "2000",
-              status: "pending",
-            },
-            {
-              description: "Payment integration and testing",
-              amount: "1000",
-              status: "pending",
-            },
-          ],
-          applications: [],
-        },
-        {
-          id: "11",
-          payer: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
-          beneficiary: "0x0000000000000000000000000000000000000000",
-          token: CONTRACTS.MOCK_ERC20,
-          totalAmount: "3000",
-          releasedAmount: "0",
-          status: "pending",
-          createdAt: Date.now() - 86400000 * 1,
-          duration: 20,
-          projectDescription:
-            "Smart contract audit for DeFi protocol. Looking for experienced Solidity auditor with proven track record.",
-          isOpenJob: true,
-          milestones: [
-            {
-              description: "Initial code review and vulnerability assessment",
-              amount: "1500",
-              status: "pending",
-            },
-            {
-              description: "Detailed audit report and recommendations",
-              amount: "1500",
-              status: "pending",
-            },
-          ],
-          applications: [],
-        },
-        {
-          id: "12",
-          payer: "0x9999999999999999999999999999999999999999",
-          beneficiary: "0x0000000000000000000000000000000000000000",
-          token: CONTRACTS.MOCK_ERC20,
-          totalAmount: "8000",
-          releasedAmount: "0",
-          status: "pending",
-          createdAt: Date.now() - 86400000 * 3,
-          duration: 45,
-          projectDescription:
-            "Mobile app development for iOS and Android. Social media platform with real-time messaging and content sharing.",
-          isOpenJob: true,
-          milestones: [
-            {
-              description: "UI/UX design and prototyping",
-              amount: "2000",
-              status: "pending",
-            },
-            {
-              description: "Core features development",
-              amount: "4000",
-              status: "pending",
-            },
-            {
-              description: "Testing, deployment, and app store submission",
-              amount: "2000",
-              status: "pending",
-            },
-          ],
-          applications: [],
-        },
-      ];
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
 
-      setJobs(mockJobs);
+      // Get total number of escrows
+      const totalEscrows = await contract.call("nextEscrowId");
+      const escrowCount = Number(totalEscrows);
+
+      const openJobs: Escrow[] = [];
+
+      // Fetch open jobs from the contract
+      for (let i = 1; i <= escrowCount; i++) {
+        try {
+          const escrowSummary = await contract.call("getEscrowSummary", i);
+
+          // Check if this is an open job (beneficiary is zero address)
+          const isOpenJob =
+            escrowSummary.beneficiary ===
+            "0x0000000000000000000000000000000000000000";
+
+          if (isOpenJob) {
+            // Convert contract data to our Escrow type
+            const job: Escrow = {
+              id: i.toString(),
+              payer: escrowSummary.depositor,
+              beneficiary: escrowSummary.beneficiary,
+              token: escrowSummary.token,
+              totalAmount: escrowSummary.totalAmount.toString(),
+              releasedAmount: escrowSummary.releasedAmount.toString(),
+              status: getStatusFromNumber(escrowSummary.status),
+              createdAt: Number(escrowSummary.createdAt) * 1000, // Convert to milliseconds
+              duration: Number(escrowSummary.duration),
+              milestones: [], // Would need to fetch milestones separately
+              projectDescription: escrowSummary.projectTitle || "",
+              isOpenJob: true,
+              applications: [], // Would need to fetch applications separately
+            };
+
+            openJobs.push(job);
+          }
+        } catch (error) {
+          // Skip escrows that don't exist or user doesn't have access to
+          continue;
+        }
+      }
+
+      // If no real open jobs found, use mock data for demonstration
+      if (openJobs.length === 0) {
+        const mockJobs: Escrow[] = [
+          {
+            id: "10",
+            payer: "0x1234567890123456789012345678901234567890",
+            beneficiary: "0x0000000000000000000000000000000000000000", // No freelancer assigned
+            token: CONTRACTS.MOCK_ERC20,
+            totalAmount: "5000",
+            releasedAmount: "0",
+            status: "pending",
+            createdAt: Date.now() - 86400000 * 2,
+            duration: 30,
+            projectDescription:
+              "Build a modern e-commerce website with React and Node.js. Need full-stack developer with experience in payment integrations.",
+            isOpenJob: true,
+            milestones: [
+              {
+                description: "Frontend UI/UX design and implementation",
+                amount: "2000",
+                status: "pending",
+              },
+              {
+                description: "Backend API and database setup",
+                amount: "2000",
+                status: "pending",
+              },
+              {
+                description: "Payment integration and testing",
+                amount: "1000",
+                status: "pending",
+              },
+            ],
+            applications: [],
+          },
+          {
+            id: "11",
+            payer: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            beneficiary: "0x0000000000000000000000000000000000000000",
+            token: CONTRACTS.MOCK_ERC20,
+            totalAmount: "3000",
+            releasedAmount: "0",
+            status: "pending",
+            createdAt: Date.now() - 86400000 * 1,
+            duration: 20,
+            projectDescription:
+              "Smart contract audit for DeFi protocol. Looking for experienced Solidity auditor with proven track record.",
+            isOpenJob: true,
+            milestones: [
+              {
+                description: "Initial code review and vulnerability assessment",
+                amount: "1500",
+                status: "pending",
+              },
+              {
+                description: "Detailed audit report and recommendations",
+                amount: "1500",
+                status: "pending",
+              },
+            ],
+            applications: [],
+          },
+          {
+            id: "12",
+            payer: "0x9999999999999999999999999999999999999999",
+            beneficiary: "0x0000000000000000000000000000000000000000",
+            token: CONTRACTS.MOCK_ERC20,
+            totalAmount: "8000",
+            releasedAmount: "0",
+            status: "pending",
+            createdAt: Date.now() - 86400000 * 3,
+            duration: 45,
+            projectDescription:
+              "Mobile app development for iOS and Android. Social media platform with real-time messaging and content sharing.",
+            isOpenJob: true,
+            milestones: [
+              {
+                description: "UI/UX design and prototyping",
+                amount: "2000",
+                status: "pending",
+              },
+              {
+                description: "Core features development",
+                amount: "4000",
+                status: "pending",
+              },
+              {
+                description: "Testing, deployment, and app store submission",
+                amount: "2000",
+                status: "pending",
+              },
+            ],
+            applications: [],
+          },
+        ];
+
+        setJobs(mockJobs);
+      } else {
+        setJobs(openJobs);
+      }
     } catch (error) {
       console.error("Error fetching jobs:", error);
       toast({
