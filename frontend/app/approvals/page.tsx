@@ -102,39 +102,105 @@ export default function ApprovalsPage() {
             const isMyJob =
               escrowSummary[0].toLowerCase() === wallet.address?.toLowerCase();
 
+            console.log(
+              `Checking job ${i}: depositor=${escrowSummary[0]}, myAddress=${wallet.address}, isMyJob=${isMyJob}`,
+            );
+
             if (isMyJob) {
               // Check if it's still an open job
               const isOpenJob =
                 escrowSummary[1] ===
                 "0x0000000000000000000000000000000000000000";
 
+              console.log(
+                `Job ${i} open check: beneficiary=${escrowSummary[1]}, isOpenJob=${isOpenJob}`,
+              );
+
               if (isOpenJob) {
                 // Fetch applications for this job
-                const applicationCount = await contract.call(
-                  "getApplicationCount",
-                  i,
-                );
+                let applicationCount = 0;
                 const applications: Application[] = [];
 
-                if (Number(applicationCount) > 0) {
-                  const applicationsData = await contract.call(
-                    "getApplicationsPage",
-                    i,
-                    0,
-                    Number(applicationCount),
+                try {
+                  applicationCount = Number(
+                    await contract.call("getApplicationCount", i),
                   );
+                  console.log(`Job ${i} has ${applicationCount} applications`);
 
-                  if (applicationsData && applicationsData.length > 0) {
-                    for (const app of applicationsData) {
-                      applications.push({
-                        freelancer: app[0],
-                        coverLetter: app[1],
-                        proposedTimeline: Number(app[2]),
-                        appliedAt: Number(app[3]) * 1000, // Convert to milliseconds
-                        exists: app[4],
-                      });
+                  if (applicationCount > 0) {
+                    const applicationsData = await contract.call(
+                      "getApplicationsPage",
+                      i,
+                      0,
+                      applicationCount,
+                    );
+                    console.log(
+                      `Applications data for job ${i}:`,
+                      applicationsData,
+                    );
+
+                    if (applicationsData && applicationsData.length > 0) {
+                      for (const app of applicationsData) {
+                        console.log(`Raw application data:`, app);
+
+                        try {
+                          // Handle different data structures
+                          let freelancer = "";
+                          let coverLetter = "";
+                          let proposedTimeline = 0;
+                          let appliedAt = 0;
+                          let exists = false;
+
+                          // Try to access fields safely
+                          if (Array.isArray(app)) {
+                            freelancer = app[0] || "";
+                            coverLetter = app[1] || "";
+                            proposedTimeline = Number(app[2]) || 0;
+                            appliedAt = Number(app[3]) || 0;
+                            exists = app[4] || false;
+                          } else if (app && typeof app === "object") {
+                            // Handle Proxy(Result) objects
+                            freelancer = app.freelancer || app[0] || "";
+                            coverLetter = app.coverLetter || app[1] || "";
+                            proposedTimeline =
+                              Number(app.proposedTimeline || app[2]) || 0;
+                            appliedAt = Number(app.appliedAt || app[3]) || 0;
+                            exists = app.exists || app[4] || false;
+                          }
+
+                          console.log(`Parsed application:`, {
+                            freelancer,
+                            coverLetter,
+                            proposedTimeline,
+                            appliedAt,
+                            exists,
+                          });
+
+                          applications.push({
+                            freelancer,
+                            coverLetter,
+                            proposedTimeline,
+                            appliedAt: appliedAt * 1000, // Convert to milliseconds
+                            exists,
+                          });
+                        } catch (parseError) {
+                          console.error(
+                            `Error parsing application data:`,
+                            parseError,
+                          );
+                          console.log(`Problematic app data:`, app);
+                          // Skip this application if parsing fails
+                          continue;
+                        }
+                      }
                     }
                   }
+                } catch (error) {
+                  console.error(
+                    `Error fetching applications for job ${i}:`,
+                    error,
+                  );
+                  applicationCount = 0;
                 }
 
                 const job: JobWithApplications = {
@@ -164,6 +230,7 @@ export default function ApprovalsPage() {
         }
       }
 
+      console.log(`Found ${myJobs.length} jobs with applications`);
       setJobs(myJobs);
     } catch (error) {
       console.error("Error fetching my jobs:", error);
@@ -424,7 +491,12 @@ export default function ApprovalsPage() {
                                             className="text-xs"
                                           >
                                             <Calendar className="h-3 w-3 mr-1" />
-                                            {application.proposedTimeline} days
+                                            {isNaN(
+                                              application.proposedTimeline,
+                                            ) ||
+                                            application.proposedTimeline === 0
+                                              ? "Not specified"
+                                              : `${application.proposedTimeline} days`}
                                           </Badge>
                                         </div>
 
@@ -433,15 +505,19 @@ export default function ApprovalsPage() {
                                             Cover Letter:
                                           </Label>
                                           <div className="bg-muted/20 rounded-lg p-3 text-sm break-words">
-                                            {application.coverLetter}
+                                            {application.coverLetter ||
+                                              "No cover letter provided"}
                                           </div>
                                         </div>
 
                                         <div className="text-xs text-muted-foreground mt-2">
                                           Applied:{" "}
-                                          {new Date(
-                                            application.appliedAt,
-                                          ).toLocaleString()}
+                                          {application.appliedAt &&
+                                          application.appliedAt > 0
+                                            ? new Date(
+                                                application.appliedAt,
+                                              ).toLocaleString()
+                                            : "Unknown date"}
                                         </div>
                                       </div>
 

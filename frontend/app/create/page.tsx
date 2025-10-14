@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,51 @@ export default function CreateEscrowPage() {
   >(null);
   const [useNativeToken, setUseNativeToken] = useState(false);
   const [isOpenJob, setIsOpenJob] = useState(false);
+  const [isContractPaused, setIsContractPaused] = useState(false);
+
+  useEffect(() => {
+    checkContractPauseStatus();
+  }, []);
+
+  const checkContractPauseStatus = async () => {
+    try {
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+      const paused = await contract.call("paused");
+      console.log(
+        "Contract pause status (create page):",
+        paused,
+        "type:",
+        typeof paused,
+      );
+
+      let isPaused = false;
+
+      // Use the same robust parsing logic as admin page
+      if (paused === true || paused === "true" || paused === 1) {
+        isPaused = true;
+      } else if (paused === false || paused === "false" || paused === 0) {
+        isPaused = false;
+      } else if (paused && typeof paused === "object") {
+        try {
+          const pausedValue = paused.toString();
+          console.log("Paused proxy toString() (create page):", pausedValue);
+          isPaused = pausedValue === "true" || pausedValue === "1";
+        } catch (e) {
+          console.warn("Could not parse paused proxy object (create page):", e);
+          isPaused = false; // Default to not paused
+        }
+      }
+
+      console.log("Is paused (create page):", isPaused);
+      setIsContractPaused(isPaused);
+    } catch (error) {
+      console.error(
+        "Error checking contract pause status (create page):",
+        error,
+      );
+      setIsContractPaused(false);
+    }
+  };
 
   const [formData, setFormData] = useState({
     beneficiary: "",
@@ -224,7 +269,7 @@ export default function CreateEscrowPage() {
         const requiredConfirmations = 1;
 
         // Convert duration from days to seconds
-        const durationInSeconds = formData.duration * 24 * 60 * 60;
+        const durationInSeconds = Number(formData.duration) * 24 * 60 * 60;
 
         txHash = await escrowContract.send(
           "createEscrowNative",
@@ -249,7 +294,7 @@ export default function CreateEscrowPage() {
         );
 
         // Convert duration from days to seconds
-        const durationInSeconds = formData.duration * 24 * 60 * 60;
+        const durationInSeconds = Number(formData.duration) * 24 * 60 * 60;
 
         txHash = await escrowContract.send(
           "createEscrow",
@@ -303,6 +348,18 @@ export default function CreateEscrowPage() {
             Set up a secure escrow with milestone-based payments
           </p>
 
+          {isContractPaused && (
+            <div className="mb-8 p-4 bg-red-100 border border-red-300 rounded-lg">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+                <p className="text-red-800 font-medium">
+                  Contract is currently paused. Escrow creation is temporarily
+                  disabled.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-center mb-12">
             <div className="flex items-center gap-4">
               {[1, 2, 3].map((s) => (
@@ -344,18 +401,6 @@ export default function CreateEscrowPage() {
                       Basic Information
                     </h2>
                   </div>
-
-                  <Alert className="border-accent/50 bg-accent/10">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="text-sm">
-                      <strong>Before creating an escrow:</strong> Make sure you
-                      have deployed your SecureFlow escrow contract and an ERC20
-                      token on Monad Testnet. Update the contract addresses in{" "}
-                      <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                        lib/web3/config.ts
-                      </code>
-                    </AlertDescription>
-                  </Alert>
 
                   <Card className="p-4 border-primary/20 bg-primary/5">
                     <Label className="mb-3 block">Job Type</Label>
@@ -796,7 +841,7 @@ export default function CreateEscrowPage() {
               ) : (
                 <Button
                   onClick={handleSubmit}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isContractPaused}
                   className="gap-2 glow-primary"
                 >
                   {isSubmitting

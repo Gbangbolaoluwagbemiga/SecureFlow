@@ -20,6 +20,7 @@ export interface Escrow {
   projectDescription?: string;
   isOpenJob?: boolean; // true if no freelancer assigned yet
   applications?: Application[];
+  applicationCount?: number; // real count from blockchain
   isJobCreator?: boolean; // true if current user is the job creator
 }
 

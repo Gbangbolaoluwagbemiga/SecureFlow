@@ -10,7 +10,14 @@ import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
 import type { Escrow } from "@/lib/web3/types";
 import { motion } from "framer-motion";
-import { Briefcase, Clock, DollarSign, Search, Wallet } from "lucide-react";
+import {
+  Briefcase,
+  Clock,
+  DollarSign,
+  Search,
+  Wallet,
+  AlertCircle,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -35,6 +42,7 @@ export default function JobsPage() {
   const [proposedTimeline, setProposedTimeline] = useState("");
   const [applying, setApplying] = useState(false);
   const [hasApplied, setHasApplied] = useState<Record<string, boolean>>({});
+  const [isContractPaused, setIsContractPaused] = useState(false);
 
   const getStatusFromNumber = (status: number): string => {
     switch (status) {
@@ -55,7 +63,40 @@ export default function JobsPage() {
 
   useEffect(() => {
     fetchOpenJobs();
+    checkContractPauseStatus();
   }, []);
+
+  const checkContractPauseStatus = async () => {
+    try {
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+      const paused = await contract.call("paused");
+      console.log("Contract pause status:", paused, "type:", typeof paused);
+
+      let isPaused = false;
+
+      // Use the same robust parsing logic as admin page
+      if (paused === true || paused === "true" || paused === 1) {
+        isPaused = true;
+      } else if (paused === false || paused === "false" || paused === 0) {
+        isPaused = false;
+      } else if (paused && typeof paused === "object") {
+        try {
+          const pausedValue = paused.toString();
+          console.log("Paused proxy toString():", pausedValue);
+          isPaused = pausedValue === "true" || pausedValue === "1";
+        } catch (e) {
+          console.warn("Could not parse paused proxy object:", e);
+          isPaused = false; // Default to not paused
+        }
+      }
+
+      console.log("Is paused (jobs page):", isPaused);
+      setIsContractPaused(isPaused);
+    } catch (error) {
+      console.error("Error checking contract pause status:", error);
+      setIsContractPaused(false);
+    }
+  };
 
   // Clear application status cache when wallet changes
   useEffect(() => {
@@ -173,6 +214,20 @@ export default function JobsPage() {
                 );
               }
 
+              // Fetch application count for this job
+              let applicationCount = 0;
+              try {
+                const applications = await contract.call("getApplications", i);
+                applicationCount = applications ? applications.length : 0;
+                console.log(`Job ${i} has ${applicationCount} applications`);
+              } catch (error) {
+                console.warn(
+                  `Could not fetch applications for job ${i}:`,
+                  error,
+                );
+                applicationCount = 0;
+              }
+
               // Convert contract data to our Escrow type
               const job: Escrow = {
                 id: i.toString(),
@@ -188,6 +243,7 @@ export default function JobsPage() {
                 projectDescription: escrowSummary[13] || "", // projectTitle
                 isOpenJob: true,
                 applications: [], // Would need to fetch applications separately
+                applicationCount: applicationCount, // Add real application count
                 isJobCreator: isJobCreator, // Add flag to track if current user is the job creator
               };
 
@@ -315,6 +371,17 @@ export default function JobsPage() {
             <p className="text-xl text-muted-foreground">
               Find and apply to open escrow projects
             </p>
+            {isContractPaused && (
+              <div className="mt-4 p-4 bg-red-100 border border-red-300 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-red-600" />
+                  <p className="text-red-800 font-medium">
+                    Contract is currently paused. Applications are temporarily
+                    disabled.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Search Bar */}
@@ -445,9 +512,7 @@ export default function JobsPage() {
                             {new Date(job.createdAt).toLocaleDateString()}
                           </span>
                           <span>•</span>
-                          <span>
-                            {job.applications?.length || 0} applications
-                          </span>
+                          <span>{job.applicationCount || 0} applications</span>
                         </div>
                       </div>
 
@@ -471,6 +536,14 @@ export default function JobsPage() {
                           >
                             Your Job
                           </Button>
+                        ) : isContractPaused ? (
+                          <Button
+                            className="w-full md:w-auto min-w-[120px]"
+                            disabled
+                            variant="destructive"
+                          >
+                            Contract Paused
+                          </Button>
                         ) : (
                           <Dialog>
                             <DialogTrigger asChild>
@@ -478,8 +551,11 @@ export default function JobsPage() {
                                 onClick={() => setSelectedJob(job)}
                                 className="w-full md:w-auto min-w-[120px]"
                                 disabled={hasApplied[job.id]}
+                                variant={
+                                  hasApplied[job.id] ? "secondary" : "default"
+                                }
                               >
-                                {hasApplied[job.id] ? "Applied" : "Apply Now"}
+                                {hasApplied[job.id] ? "Applied ✓" : "Apply Now"}
                               </Button>
                             </DialogTrigger>
                             <DialogContent className="glass">
