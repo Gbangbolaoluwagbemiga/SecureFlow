@@ -64,151 +64,58 @@ export default function DashboardPage() {
       // Get total number of escrows
       const totalEscrows = await contract.call("nextEscrowId");
       const escrowCount = Number(totalEscrows);
+      console.log(
+        "Total escrows from contract:",
+        totalEscrows,
+        "Count:",
+        escrowCount,
+      );
 
       const userEscrows: Escrow[] = [];
 
       // Fetch user's escrows from the contract
-      for (let i = 1; i <= escrowCount; i++) {
-        try {
-          const escrowSummary = await contract.call("getEscrowSummary", i);
+      // Check if there are any escrows created yet (nextEscrowId > 1 means at least one escrow exists)
+      if (escrowCount > 1) {
+        for (let i = 1; i < escrowCount; i++) {
+          try {
+            console.log(`Fetching escrow ${i}...`);
+            const escrowSummary = await contract.call("getEscrowSummary", i);
+            console.log(`Escrow ${i} data:`, escrowSummary);
 
-          // Check if user is involved in this escrow
-          const isPayer =
-            escrowSummary.depositor.toLowerCase() ===
-            wallet.address?.toLowerCase();
-          const isBeneficiary =
-            escrowSummary.beneficiary.toLowerCase() ===
-            wallet.address?.toLowerCase();
+            // Check if user is involved in this escrow
+            // getEscrowSummary returns indexed properties: [depositor, beneficiary, arbiters, status, totalAmount, paidAmount, remaining, token, deadline, workStarted, createdAt, milestoneCount, isOpenJob, projectTitle, projectDescription]
+            const isPayer =
+              escrowSummary[0].toLowerCase() === wallet.address?.toLowerCase();
+            const isBeneficiary =
+              escrowSummary[1].toLowerCase() === wallet.address?.toLowerCase();
 
-          if (isPayer || isBeneficiary) {
-            // Convert contract data to our Escrow type
-            const escrow: Escrow = {
-              id: i.toString(),
-              payer: escrowSummary.depositor,
-              beneficiary: escrowSummary.beneficiary,
-              token: escrowSummary.token,
-              totalAmount: escrowSummary.totalAmount.toString(),
-              releasedAmount: escrowSummary.releasedAmount.toString(),
-              status: getStatusFromNumber(escrowSummary.status),
-              createdAt: Number(escrowSummary.createdAt) * 1000, // Convert to milliseconds
-              duration: Number(escrowSummary.duration),
-              milestones: [], // Would need to fetch milestones separately
-              projectDescription: escrowSummary.projectTitle || "",
-            };
+            if (isPayer || isBeneficiary) {
+              // Convert contract data to our Escrow type
+              const escrow: Escrow = {
+                id: i.toString(),
+                payer: escrowSummary[0], // depositor
+                beneficiary: escrowSummary[1], // beneficiary
+                token: escrowSummary[7], // token
+                totalAmount: escrowSummary[4].toString(), // totalAmount
+                releasedAmount: escrowSummary[5].toString(), // paidAmount
+                status: getStatusFromNumber(Number(escrowSummary[3])), // status
+                createdAt: Number(escrowSummary[10]) * 1000, // createdAt (convert to milliseconds)
+                duration: Number(escrowSummary[8]) - Number(escrowSummary[10]), // deadline - createdAt (in seconds)
+                milestones: [], // Would need to fetch milestones separately
+                projectDescription: escrowSummary[13] || "", // projectTitle
+              };
 
-            userEscrows.push(escrow);
+              userEscrows.push(escrow);
+            }
+          } catch (error) {
+            // Skip escrows that don't exist or user doesn't have access to
+            continue;
           }
-        } catch (error) {
-          // Skip escrows that don't exist or user doesn't have access to
-          continue;
         }
       }
 
-      // If no real escrows found, use mock data for demonstration
-      if (userEscrows.length === 0) {
-        const mockEscrows: Escrow[] = [
-          {
-            id: "1",
-            payer: "0x1234567890123456789012345678901234567890",
-            beneficiary: "0x0987654321098765432109876543210987654321",
-            token: CONTRACTS.MOCK_ERC20,
-            totalAmount: "5000",
-            releasedAmount: "2000",
-            status: "active",
-            createdAt: Date.now() - 86400000 * 5,
-            duration: 30,
-            milestones: [
-              {
-                description: "Initial design mockups and wireframes",
-                amount: "1000",
-                status: "approved",
-                submittedAt: Date.now() - 86400000 * 4,
-                approvedAt: Date.now() - 86400000 * 3,
-              },
-              {
-                description: "Frontend development - Homepage and navigation",
-                amount: "1000",
-                status: "approved",
-                submittedAt: Date.now() - 86400000 * 2,
-                approvedAt: Date.now() - 86400000 * 1,
-              },
-              {
-                description: "Backend API integration and database setup",
-                amount: "1500",
-                status: "submitted",
-                submittedAt: Date.now() - 86400000,
-              },
-              {
-                description: "Testing, deployment, and documentation",
-                amount: "1500",
-                status: "pending",
-              },
-            ],
-            projectDescription: "Website Development Project",
-          },
-          {
-            id: "2",
-            payer: "0x1234567890123456789012345678901234567890",
-            beneficiary: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
-            token: CONTRACTS.MOCK_ERC20,
-            totalAmount: "3000",
-            releasedAmount: "3000",
-            status: "completed",
-            createdAt: Date.now() - 86400000 * 45,
-            duration: 30,
-            milestones: [
-              {
-                description: "Logo design and brand identity",
-                amount: "1500",
-                status: "approved",
-                submittedAt: Date.now() - 86400000 * 40,
-                approvedAt: Date.now() - 86400000 * 39,
-              },
-              {
-                description: "Marketing materials and social media assets",
-                amount: "1500",
-                status: "approved",
-                submittedAt: Date.now() - 86400000 * 35,
-                approvedAt: Date.now() - 86400000 * 34,
-              },
-            ],
-            projectDescription: "Brand Identity Project",
-          },
-          {
-            id: "3",
-            payer: "0x9999999999999999999999999999999999999999",
-            beneficiary: wallet.address || "",
-            token: CONTRACTS.MOCK_ERC20,
-            totalAmount: "8000",
-            releasedAmount: "0",
-            status: "pending",
-            createdAt: Date.now() - 86400000 * 2,
-            duration: 60,
-            milestones: [
-              {
-                description: "Smart contract development",
-                amount: "3000",
-                status: "pending",
-              },
-              {
-                description: "Frontend dApp interface",
-                amount: "3000",
-                status: "pending",
-              },
-              {
-                description: "Testing and audit preparation",
-                amount: "2000",
-                status: "pending",
-              },
-            ],
-            projectDescription: "Smart Contract Development Project",
-          },
-        ];
-
-        setEscrows(mockEscrows);
-      } else {
-        setEscrows(userEscrows);
-      }
+      // Set the actual escrows from the contract
+      setEscrows(userEscrows);
     } catch (error) {
       console.error("Error fetching escrows:", error);
       toast({

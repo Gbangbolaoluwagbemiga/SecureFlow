@@ -36,21 +36,24 @@ export default function HomePage() {
       let completedEscrows = 0;
 
       // Count escrows by status
-      for (let i = 1; i <= escrowCount; i++) {
-        try {
-          const escrowSummary = await contract.call("getEscrowSummary", i);
-          const status = Number(escrowSummary.status);
+      // Check if there are any escrows created yet (nextEscrowId > 1 means at least one escrow exists)
+      if (escrowCount > 1) {
+        for (let i = 1; i < escrowCount; i++) {
+          try {
+            const escrowSummary = await contract.call("getEscrowSummary", i);
+            const status = Number(escrowSummary[3]); // status is at index 3
 
-          if (status === 1) {
-            // Active
-            activeEscrows++;
-          } else if (status === 2) {
-            // Completed
-            completedEscrows++;
+            if (status === 1) {
+              // Active
+              activeEscrows++;
+            } else if (status === 2) {
+              // Completed
+              completedEscrows++;
+            }
+          } catch (error) {
+            // Skip escrows that don't exist
+            continue;
           }
-        } catch (error) {
-          // Skip escrows that don't exist
-          continue;
         }
       }
 
@@ -61,11 +64,11 @@ export default function HomePage() {
       });
     } catch (error) {
       console.error("Error fetching stats:", error);
-      // Fallback to mock data if contract call fails
+      // Set empty stats if contract call fails
       setStats({
-        activeEscrows: 127,
-        totalVolume: "2,450,000",
-        completedEscrows: 89,
+        activeEscrows: 0,
+        totalVolume: "0",
+        completedEscrows: 0,
       });
     }
   };

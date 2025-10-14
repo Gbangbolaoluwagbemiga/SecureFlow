@@ -81,8 +81,7 @@ export default function AdminPage() {
       // Fetch total escrows count
       const totalEscrows = await contract.call("nextEscrowId");
 
-      // For now, we'll use mock data for volume and other stats
-      // In a real implementation, you'd need to track these in the contract
+      // Set actual contract stats
       setContractStats({
         platformFeeBP: Number(platformFeeBP),
         totalEscrows: Number(totalEscrows),
@@ -92,13 +91,13 @@ export default function AdminPage() {
       });
     } catch (error) {
       console.error("Error fetching contract stats:", error);
-      // Fallback to mock data if contract calls fail
+      // Set empty stats if contract calls fail
       setContractStats({
-        platformFeeBP: 0, // 0% for hackathon demo
+        platformFeeBP: 0,
         totalEscrows: 0,
         totalVolume: "0",
-        authorizedArbiters: 2,
-        whitelistedTokens: 1,
+        authorizedArbiters: 0,
+        whitelistedTokens: 0,
       });
     }
   };

@@ -223,6 +223,9 @@ export default function CreateEscrowPage() {
         const arbiters = ["0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41"]; // Default arbiter
         const requiredConfirmations = 1;
 
+        // Convert duration from days to seconds
+        const durationInSeconds = formData.duration * 24 * 60 * 60;
+
         txHash = await escrowContract.send(
           "createEscrowNative",
           totalAmountInWei, // msg.value in wei (hex format)
@@ -231,7 +234,7 @@ export default function CreateEscrowPage() {
           requiredConfirmations, // requiredConfirmations parameter
           milestoneAmounts, // milestoneAmounts parameter
           milestoneDescriptions, // milestoneDescriptions parameter
-          formData.duration, // duration parameter
+          durationInSeconds, // duration parameter (in seconds)
           formData.projectDescription, // projectTitle parameter
           formData.projectDescription, // projectDescription parameter
         );
@@ -245,6 +248,9 @@ export default function CreateEscrowPage() {
           (BigInt(m.amount) * BigInt(10 ** 18)).toString(),
         );
 
+        // Convert duration from days to seconds
+        const durationInSeconds = formData.duration * 24 * 60 * 60;
+
         txHash = await escrowContract.send(
           "createEscrow",
           "no-value", // No msg.value for ERC20
@@ -254,7 +260,7 @@ export default function CreateEscrowPage() {
           milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
           milestoneDescriptions, // milestoneDescriptions parameter
           formData.token, // token parameter
-          formData.duration, // duration parameter
+          durationInSeconds, // duration parameter (in seconds)
           formData.projectDescription, // projectTitle parameter
           formData.projectDescription, // projectDescription parameter
         );

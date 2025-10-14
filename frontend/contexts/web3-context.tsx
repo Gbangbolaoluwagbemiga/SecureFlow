@@ -278,7 +278,19 @@ export function Web3Provider({ children }: { children: ReactNode }) {
               "latest",
             ],
           });
-          return result;
+
+          // Decode the result using ethers.js
+          try {
+            const iface = new ethers.Interface(abi);
+            const decodedResult = iface.decodeFunctionResult(method, result);
+            return decodedResult;
+          } catch (decodeError) {
+            console.warn(
+              `Could not decode result for ${method}, returning raw data:`,
+              decodeError,
+            );
+            return result;
+          }
         } catch (error) {
           console.error(`Error calling ${method}:`, error);
           throw error;
