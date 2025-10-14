@@ -9,12 +9,14 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFreelancerStatus } from "@/hooks/use-freelancer-status";
 import { useAdminStatus } from "@/hooks/use-admin-status";
+import { useJobCreatorStatus } from "@/hooks/use-job-creator-status";
 
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const { isFreelancer } = useFreelancerStatus();
   const { isAdmin } = useAdminStatus();
+  const { isJobCreator } = useJobCreatorStatus();
 
   useEffect(() => {
     if (mobileMenuOpen) {
@@ -81,6 +83,14 @@ export function Navbar() {
             >
               Dashboard
             </Link>
+            {isJobCreator && (
+              <Link
+                href="/approvals"
+                className="text-sm font-medium hover:text-primary transition-colors"
+              >
+                Approvals
+              </Link>
+            )}
             {isFreelancer && (
               <Link
                 href="/freelancer"
@@ -163,6 +173,15 @@ export function Navbar() {
                 >
                   Dashboard
                 </Link>
+                {isJobCreator && (
+                  <Link
+                    href="/approvals"
+                    className="text-sm font-medium hover:text-primary transition-colors py-2"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Approvals
+                  </Link>
+                )}
                 {isFreelancer && (
                   <Link
                     href="/freelancer"

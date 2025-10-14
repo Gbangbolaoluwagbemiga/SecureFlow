@@ -30,7 +30,8 @@ export function useAdminStatus() {
       const owner = await contract.call("owner");
 
       // Check if current wallet is the owner
-      const isOwner = owner.toLowerCase() === wallet.address?.toLowerCase();
+      const isOwner =
+        owner.toString().toLowerCase() === wallet.address?.toLowerCase();
       setIsAdmin(isOwner);
     } catch (error) {
       console.error("Error checking admin status:", error);

@@ -174,8 +174,8 @@ export default function DashboardPage() {
   };
 
   const calculateProgress = (escrow: Escrow) => {
-    const released = Number.parseFloat(escrow.releasedAmount);
-    const total = Number.parseFloat(escrow.totalAmount);
+    const released = Number.parseFloat(escrow.releasedAmount) / 1e18;
+    const total = Number.parseFloat(escrow.totalAmount) / 1e18;
     return (released / total) * 100;
   };
 
@@ -215,8 +215,8 @@ export default function DashboardPage() {
 
   const completedEscrows = escrows.filter((e) => e.status === "completed");
   const totalVolume = escrows
-    .reduce((sum, e) => sum + Number.parseFloat(e.totalAmount), 0)
-    .toFixed(0);
+    .reduce((sum, e) => sum + Number.parseFloat(e.totalAmount) / 1e18, 0)
+    .toFixed(2);
 
   return (
     <div className="min-h-screen py-12">
@@ -410,10 +410,16 @@ export default function DashboardPage() {
                                   Total Amount
                                 </p>
                                 <p className="text-2xl font-bold text-primary">
-                                  {escrow.totalAmount}
+                                  {(
+                                    Number.parseFloat(escrow.totalAmount) / 1e18
+                                  ).toFixed(2)}
                                 </p>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                  Released: {escrow.releasedAmount}
+                                  Released:{" "}
+                                  {(
+                                    Number.parseFloat(escrow.releasedAmount) /
+                                    1e18
+                                  ).toFixed(2)}
                                 </p>
                               </div>
                             </div>
@@ -511,7 +517,10 @@ export default function DashboardPage() {
                                         )}
                                       </div>
                                       <span className="font-bold text-primary ml-4">
-                                        {milestone.amount}
+                                        {(
+                                          Number.parseFloat(milestone.amount) /
+                                          1e18
+                                        ).toFixed(2)}
                                       </span>
                                     </div>
 

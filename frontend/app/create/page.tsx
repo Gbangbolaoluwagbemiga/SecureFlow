@@ -359,17 +359,17 @@ export default function CreateEscrowPage() {
 
                   <Card className="p-4 border-primary/20 bg-primary/5">
                     <Label className="mb-3 block">Job Type</Label>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <Button
                         type="button"
                         variant={!isOpenJob ? "default" : "outline"}
                         onClick={() => setIsOpenJob(false)}
-                        className="h-auto py-4 flex-col items-start"
+                        className="h-auto py-4 flex-col items-start text-left min-h-[80px]"
                       >
-                        <span className="font-semibold mb-1">
+                        <span className="font-semibold mb-1 text-sm sm:text-base">
                           Direct Assignment
                         </span>
-                        <span className="text-xs text-left opacity-80">
+                        <span className="text-xs text-left opacity-80 break-words">
                           Assign to a specific freelancer you already know
                         </span>
                       </Button>
@@ -380,10 +380,12 @@ export default function CreateEscrowPage() {
                           setIsOpenJob(true);
                           setFormData({ ...formData, beneficiary: "" });
                         }}
-                        className="h-auto py-4 flex-col items-start"
+                        className="h-auto py-4 flex-col items-start text-left min-h-[80px]"
                       >
-                        <span className="font-semibold mb-1">Open Job</span>
-                        <span className="text-xs text-left opacity-80">
+                        <span className="font-semibold mb-1 text-sm sm:text-base">
+                          Open Job
+                        </span>
+                        <span className="text-xs text-left opacity-80 break-words">
                           Post publicly and review freelancer applications
                         </span>
                       </Button>
