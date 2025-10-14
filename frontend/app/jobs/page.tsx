@@ -96,12 +96,21 @@ export default function JobsPage() {
               let userHasApplied = false;
               if (wallet.address && !isJobCreator) {
                 try {
-                  userHasApplied = await contract.call(
+                  const hasAppliedResult = await contract.call(
                     "hasUserApplied",
                     i,
                     wallet.address,
                   );
+                  console.log(
+                    `hasUserApplied result for job ${i}:`,
+                    hasAppliedResult,
+                  );
+                  userHasApplied = Boolean(hasAppliedResult);
                 } catch (error) {
+                  console.error(
+                    `Error checking application status for job ${i}:`,
+                    error,
+                  );
                   // If check fails, assume they haven't applied
                   userHasApplied = false;
                 }
@@ -180,6 +189,12 @@ export default function JobsPage() {
       setCoverLetter("");
       setProposedTimeline("");
       setSelectedJob(null);
+
+      // Update the application status for this specific job
+      setHasApplied((prev) => ({
+        ...prev,
+        [selectedJob.id]: true,
+      }));
 
       // Refresh the jobs list to update application counts
       await fetchOpenJobs();

@@ -299,11 +299,40 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       async send(method: string, value: string = "0x0", ...args: any[]) {
         try {
           const data = encodeFunction(abi, method, args);
+
+          // Estimate gas for the transaction
+          let gasLimit = "0x100000"; // Default fallback
+          try {
+            const estimatedGas = await window.ethereum.request({
+              method: "eth_estimateGas",
+              params: [
+                {
+                  from: wallet.address,
+                  to: address,
+                  data,
+                  value:
+                    value !== "0x0" && value !== "no-value" ? value : "0x0",
+                },
+              ],
+            });
+            // Add 20% buffer to estimated gas
+            const gasWithBuffer = Math.floor(Number(estimatedGas) * 1.2);
+            gasLimit = `0x${gasWithBuffer.toString(16)}`;
+            console.log(`Gas estimated: ${estimatedGas}, using: ${gasLimit}`);
+          } catch (gasError) {
+            console.warn("Gas estimation failed, using default:", gasError);
+            // For specific functions that might fail gas estimation, use lower defaults
+            if (method === "unpause" || method === "pause") {
+              gasLimit = "0x30000"; // 196,608 gas - much lower for simple functions
+              console.log(`Using reduced gas limit for ${method}: ${gasLimit}`);
+            }
+          }
+
           const txParams: any = {
             from: wallet.address,
             to: address,
             data,
-            gas: "0x100000",
+            gas: gasLimit,
           };
 
           // Only add value field if it's not "0x0" or "no-value" (for native token transactions)

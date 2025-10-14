@@ -107,7 +107,17 @@ export default function AdminPage() {
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       const paused = await contract.call("paused");
-      setIsPaused(paused);
+      console.log(
+        "Initial paused status check:",
+        paused,
+        "Type:",
+        typeof paused,
+      );
+
+      // Handle different possible return types
+      const isPaused = paused === true || paused === "true" || paused === 1;
+      console.log("Is paused (initial):", isPaused);
+      setIsPaused(isPaused);
     } catch (error) {
       console.error("Error checking paused status:", error);
       // Fallback to false if contract call fails
@@ -128,7 +138,32 @@ export default function AdminPage() {
 
       switch (actionType) {
         case "pause":
-          await contract.send("pause");
+          // Check if contract is already paused
+          const currentPausedStatusForPause = await contract.call("paused");
+          console.log(
+            "Current paused status for pause:",
+            currentPausedStatusForPause,
+            "Type:",
+            typeof currentPausedStatusForPause,
+          );
+
+          // Handle different possible return types
+          const isPausedForPause =
+            currentPausedStatusForPause === true ||
+            currentPausedStatusForPause === "true" ||
+            currentPausedStatusForPause === 1;
+          console.log("Is paused for pause:", isPausedForPause);
+
+          if (isPausedForPause) {
+            toast({
+              title: "Contract Already Paused",
+              description: "The contract is already in a paused state",
+              variant: "default",
+            });
+            return;
+          }
+
+          await contract.send("pause", "no-value");
           setIsPaused(true);
           toast({
             title: "Contract paused",
@@ -136,7 +171,32 @@ export default function AdminPage() {
           });
           break;
         case "unpause":
-          await contract.send("unpause");
+          // Check if contract is already unpaused
+          const currentPausedStatus = await contract.call("paused");
+          console.log(
+            "Current paused status:",
+            currentPausedStatus,
+            "Type:",
+            typeof currentPausedStatus,
+          );
+
+          // Handle different possible return types
+          const isPaused =
+            currentPausedStatus === true ||
+            currentPausedStatus === "true" ||
+            currentPausedStatus === 1;
+          console.log("Is paused:", isPaused);
+
+          if (!isPaused) {
+            toast({
+              title: "Contract Already Unpaused",
+              description: "The contract is already in an active state",
+              variant: "default",
+            });
+            return;
+          }
+
+          await contract.send("unpause", "no-value");
           setIsPaused(false);
           toast({
             title: "Contract unpaused",
@@ -146,6 +206,7 @@ export default function AdminPage() {
         case "withdraw":
           await contract.send(
             "withdrawStuckTokens",
+            "no-value",
             withdrawData.token,
             withdrawData.amount,
           );

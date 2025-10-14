@@ -43,13 +43,25 @@ export function MilestoneActions({
   const [actionType, setActionType] = useState<
     "start" | "submit" | "approve" | "reject" | "dispute" | "resolve" | null
   >(null);
+  const [rejectionReason, setRejectionReason] = useState("");
 
   const openDialog = (type: typeof actionType) => {
     setActionType(type);
+    setRejectionReason(""); // Clear rejection reason when opening dialog
     setDialogOpen(true);
   };
 
   const handleAction = async () => {
+    // Validate rejection reason if rejecting
+    if (actionType === "reject" && !rejectionReason.trim()) {
+      toast({
+        title: "Reason required",
+        description: "Please provide a reason for rejecting this milestone",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
@@ -66,17 +78,24 @@ export function MilestoneActions({
         case "submit":
           txHash = await contract.send(
             "submitMilestone",
+            "no-value",
             escrowId,
             milestoneIndex,
+            milestone.description,
           );
           toast({
             title: "Milestone submitted!",
             description: "Waiting for client approval",
           });
+          
+          // Wait for blockchain state to update, then refresh data
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          onSuccess();
           break;
         case "approve":
           txHash = await contract.send(
             "approveMilestone",
+            "no-value",
             escrowId,
             milestoneIndex,
           );
@@ -84,21 +103,35 @@ export function MilestoneActions({
             title: "Milestone approved!",
             description: "Payment has been released to the beneficiary",
           });
+          
+          // Wait for blockchain state to update, then refresh data
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          onSuccess();
           break;
         case "reject":
           txHash = await contract.send(
             "rejectMilestone",
+            "no-value",
             escrowId,
             milestoneIndex,
+            rejectionReason,
           );
           toast({
             title: "Milestone rejected!",
             description:
               "The milestone has been rejected and returned to freelancer",
           });
+          
+          // Wait for blockchain state to update, then refresh data
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          onSuccess();
           break;
         case "dispute":
-          txHash = await contract.send("disputeMilestone", escrowId);
+          txHash = await contract.send(
+            "disputeMilestone",
+            "no-value",
+            escrowId,
+          );
           toast({
             title: "Dispute raised",
             description: "The escrow is now in dispute status",
@@ -308,6 +341,28 @@ export function MilestoneActions({
               </div>
             </div>
           </div>
+
+          {/* Rejection reason input for reject action */}
+          {actionType === "reject" && (
+            <div className="my-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reason for rejection (required)
+              </label>
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Please explain why this milestone is being rejected so the freelancer can make improvements..."
+                className="w-full p-3 border border-gray-300 rounded-md resize-none"
+                rows={3}
+                required
+              />
+              {!rejectionReason.trim() && (
+                <p className="text-sm text-red-600 mt-1">
+                  Please provide a reason for rejection
+                </p>
+              )}
+            </div>
+          )}
 
           <DialogFooter>
             <Button

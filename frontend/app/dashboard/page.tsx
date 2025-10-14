@@ -8,7 +8,7 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
-import type { Escrow } from "@/lib/web3/types";
+import type { Escrow, Milestone } from "@/lib/web3/types";
 import { motion } from "framer-motion";
 import {
   Clock,
@@ -57,7 +57,7 @@ export default function DashboardPage() {
     const statuses = [
       "pending",
       "submitted",
-      "approved",
+      "Approved",
       "disputed",
       "resolved",
     ];
@@ -360,10 +360,18 @@ export default function DashboardPage() {
                 token: escrowSummary[7], // token
                 totalAmount: escrowSummary[4].toString(), // totalAmount
                 releasedAmount: escrowSummary[5].toString(), // paidAmount
-                status: getStatusFromNumber(Number(escrowSummary[3])), // status
+                status: getStatusFromNumber(Number(escrowSummary[3])) as
+                  | "pending"
+                  | "active"
+                  | "completed"
+                  | "disputed", // status
                 createdAt: Number(escrowSummary[10]) * 1000, // createdAt (convert to milliseconds)
                 duration: Number(escrowSummary[8]) - Number(escrowSummary[10]), // deadline - createdAt (in seconds)
-                milestones: await fetchMilestones(contract, i, escrowSummary), // Fetch milestones from contract
+                milestones: (await fetchMilestones(
+                  contract,
+                  i,
+                  escrowSummary,
+                )) as Milestone[], // Fetch milestones from contract and assert correct type
                 projectDescription: escrowSummary[13] || "", // projectTitle
               };
 
