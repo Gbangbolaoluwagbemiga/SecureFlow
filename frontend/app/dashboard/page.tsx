@@ -338,6 +338,11 @@ export default function DashboardPage() {
             console.log(`Fetching escrow ${i}...`);
             const escrowSummary = await contract.call("getEscrowSummary", i);
             console.log(`Escrow ${i} data:`, escrowSummary);
+            console.log(
+              `Escrow ${i} - releasedAmount (paidAmount):`,
+              escrowSummary[5],
+            );
+            console.log(`Escrow ${i} - totalAmount:`, escrowSummary[4]);
 
             // Check if user is involved in this escrow
             // getEscrowSummary returns indexed properties: [depositor, beneficiary, arbiters, status, totalAmount, paidAmount, remaining, token, deadline, workStarted, createdAt, milestoneCount, isOpenJob, projectTitle, projectDescription]
@@ -452,6 +457,9 @@ export default function DashboardPage() {
         title: "Milestone Approved",
         description: "The milestone has been approved and payment released",
       });
+
+      // Wait a moment for blockchain state to update
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       await fetchUserEscrows();
     } catch (error) {
       console.error("Error approving milestone:", error);
@@ -829,7 +837,6 @@ export default function DashboardPage() {
                                         escrowStatus={escrow.status}
                                         onSuccess={fetchUserEscrows}
                                       />
-
                                     </div>
                                   </Card>
                                 ))}
