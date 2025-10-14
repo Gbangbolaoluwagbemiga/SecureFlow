@@ -8,11 +8,13 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFreelancerStatus } from "@/hooks/use-freelancer-status";
+import { useAdminStatus } from "@/hooks/use-admin-status";
 
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const { isFreelancer } = useFreelancerStatus();
+  const { isAdmin } = useAdminStatus();
 
   useEffect(() => {
     if (mobileMenuOpen) {
@@ -87,12 +89,14 @@ export function Navbar() {
                 Freelancer
               </Link>
             )}
-            <Link
-              href="/admin"
-              className="text-sm font-medium hover:text-primary transition-colors"
-            >
-              Admin
-            </Link>
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="text-sm font-medium hover:text-primary transition-colors"
+              >
+                Admin
+              </Link>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -106,7 +110,13 @@ export function Navbar() {
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
               {mobileMenuOpen ? (
-                <X className="h-5 w-5" />
+                <X
+                  className="h-5 w-5"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMobileMenuOpen(false);
+                  }}
+                />
               ) : (
                 <Menu className="h-5 w-5" />
               )}
@@ -162,13 +172,15 @@ export function Navbar() {
                     Freelancer
                   </Link>
                 )}
-                <Link
-                  href="/admin"
-                  className="text-sm font-medium hover:text-primary transition-colors py-2"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Admin
-                </Link>
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    className="text-sm font-medium hover:text-primary transition-colors py-2"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Admin
+                  </Link>
+                )}
               </div>
             </motion.div>
           )}
