@@ -59,6 +59,7 @@ export default function ApprovalsPage() {
     null,
   );
   const [approving, setApproving] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const getStatusFromNumber = (status: number): string => {
     switch (status) {
@@ -220,6 +221,12 @@ export default function ApprovalsPage() {
                   applications,
                   applicationCount: Number(applicationCount),
                 };
+
+                console.log(`Job ${i} final data:`, {
+                  applicationCount: Number(applicationCount),
+                  applicationsLength: applications.length,
+                  applications: applications,
+                });
 
                 myJobs.push(job);
               }
@@ -440,10 +447,16 @@ export default function ApprovalsPage() {
                           </p>
                         </div>
 
-                        <Dialog>
+                        <Dialog
+                          open={dialogOpen && selectedJob?.id === job.id}
+                          onOpenChange={setDialogOpen}
+                        >
                           <DialogTrigger asChild>
                             <Button
-                              onClick={() => setSelectedJob(job)}
+                              onClick={() => {
+                                setSelectedJob(job);
+                                setDialogOpen(true);
+                              }}
                               className="w-full lg:w-auto min-w-[140px]"
                               disabled={job.applicationCount === 0}
                             >
@@ -549,6 +562,7 @@ export default function ApprovalsPage() {
                               <Button
                                 variant="outline"
                                 onClick={() => {
+                                  setDialogOpen(false);
                                   setSelectedJob(null);
                                   setSelectedFreelancer(null);
                                 }}
