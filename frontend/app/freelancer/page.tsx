@@ -61,8 +61,9 @@ export default function FreelancerPage() {
   const [submittingMilestone, setSubmittingMilestone] = useState<string | null>(
     null,
   );
-  const [milestoneDescription, setMilestoneDescription] = useState("");
   const [selectedEscrowId, setSelectedEscrowId] = useState<string | null>(null);
+  const [showDisputeDialog, setShowDisputeDialog] = useState(false);
+  const [disputeReason, setDisputeReason] = useState("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -125,14 +126,45 @@ export default function FreelancerPage() {
                   milestones && Array.isArray(milestones)
                     ? milestones.map((m: any, index: number) => {
                         try {
+                          // Handle different milestone data structures
+                          let description = "";
+                          let amount = "0";
+                          let status = 0;
+                          let submittedAt = undefined;
+                          let approvedAt = undefined;
+
+                          if (m && typeof m === "object") {
+                            // If milestone is an object with indexed properties
+                            description = m[0] || m.description || "";
+                            amount = m[1]
+                              ? m[1].toString()
+                              : m.amount
+                                ? m.amount.toString()
+                                : "0";
+                            status = Number(m[2] || m.status || 0);
+                            submittedAt = m[3]
+                              ? Number(m[3]) * 1000
+                              : m.submittedAt
+                                ? Number(m.submittedAt) * 1000
+                                : undefined;
+                            approvedAt = m[4]
+                              ? Number(m[4]) * 1000
+                              : m.approvedAt
+                                ? Number(m.approvedAt) * 1000
+                                : undefined;
+                          } else {
+                            // Fallback for unexpected structure
+                            description = `Milestone ${index + 1}`;
+                            amount = "0";
+                            status = 0;
+                          }
+
                           return {
-                            description: m[0] || "", // description
-                            amount: m[1] ? m[1].toString() : "0", // amount
-                            status: getMilestoneStatusFromNumber(
-                              Number(m[2] || 0),
-                            ), // status
-                            submittedAt: m[3] ? Number(m[3]) * 1000 : undefined, // submittedAt
-                            approvedAt: m[4] ? Number(m[4]) * 1000 : undefined, // approvedAt
+                            description,
+                            amount,
+                            status: getMilestoneStatusFromNumber(status),
+                            submittedAt,
+                            approvedAt,
                           };
                         } catch (error) {
                           console.error(
@@ -203,7 +235,11 @@ export default function FreelancerPage() {
   };
 
   const submitMilestone = async (escrowId: string, milestoneIndex: number) => {
-    if (!milestoneDescription.trim()) {
+    // Get the milestone description from the escrow data
+    const escrow = escrows.find((e) => e.id === escrowId);
+    const milestone = escrow?.milestones[milestoneIndex];
+
+    if (!milestone?.description?.trim()) {
       toast({
         title: "Description required",
         description: "Please provide a description of your work",
@@ -226,7 +262,7 @@ export default function FreelancerPage() {
         "no-value",
         escrowId,
         milestoneIndex,
-        milestoneDescription,
+        milestone.description,
       );
 
       toast({
@@ -245,6 +281,56 @@ export default function FreelancerPage() {
       toast({
         title: "Failed to submit milestone",
         description: "Could not submit your milestone",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingMilestone(null);
+    }
+  };
+
+  const openDispute = async (
+    escrowId: string,
+    milestoneIndex: number,
+    reason: string,
+  ) => {
+    if (!reason.trim()) {
+      toast({
+        title: "Reason required",
+        description: "Please provide a reason for the dispute",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+
+      toast({
+        title: "Opening dispute...",
+        description: "Submitting transaction to open dispute",
+      });
+
+      const txHash = await contract.send(
+        "openDispute",
+        "no-value",
+        escrowId,
+        milestoneIndex,
+        reason,
+      );
+
+      toast({
+        title: "Dispute opened!",
+        description: "A dispute has been opened for this milestone",
+      });
+
+      // Refresh escrows
+      await fetchFreelancerEscrows();
+    } catch (error) {
+      console.error("Error opening dispute:", error);
+      toast({
+        title: "Failed to open dispute",
+        description: "Could not open dispute for this milestone",
         variant: "destructive",
       });
     } finally {
@@ -273,6 +359,23 @@ export default function FreelancerPage() {
       "Resolved",
     ];
     return statuses[status] || "Unknown";
+  };
+
+  const getMilestoneStatusColor = (status: string) => {
+    switch (status) {
+      case "NotStarted":
+        return "bg-gray-100 text-gray-800";
+      case "Submitted":
+        return "bg-yellow-100 text-yellow-800";
+      case "Approved":
+        return "bg-green-100 text-green-800";
+      case "Disputed":
+        return "bg-red-100 text-red-800";
+      case "Resolved":
+        return "bg-blue-100 text-blue-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -415,14 +518,54 @@ export default function FreelancerPage() {
                                   Milestone {index + 1}
                                 </span>
                                 <Badge
-                                  className={getStatusColor(milestone.status)}
+                                  className={getMilestoneStatusColor(
+                                    milestone.status,
+                                  )}
                                 >
                                   {milestone.status}
                                 </Badge>
                               </div>
-                              <p className="text-sm text-gray-600 mb-1">
-                                {milestone.description}
-                              </p>
+                              {milestone.status === "NotStarted" ? (
+                                <div className="mb-2">
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                                    Description (Editable)
+                                  </label>
+                                  <Textarea
+                                    value={milestone.description}
+                                    onChange={(e) => {
+                                      // Update milestone description in local state
+                                      const updatedEscrows = escrows.map(
+                                        (esc) => {
+                                          if (esc.id === escrow.id) {
+                                            return {
+                                              ...esc,
+                                              milestones: esc.milestones.map(
+                                                (m, i) =>
+                                                  i === index
+                                                    ? {
+                                                        ...m,
+                                                        description:
+                                                          e.target.value,
+                                                      }
+                                                    : m,
+                                              ),
+                                            };
+                                          }
+                                          return esc;
+                                        },
+                                      );
+                                      setEscrows(updatedEscrows);
+                                    }}
+                                    className="text-sm"
+                                    rows={2}
+                                    placeholder="Describe what you'll complete for this milestone..."
+                                  />
+                                </div>
+                              ) : (
+                                <p className="text-sm text-gray-600 mb-1">
+                                  {milestone.description}
+                                </p>
+                              )}
                               <p className="text-sm font-semibold text-green-600">
                                 {formatAmount(milestone.amount)} tokens
                               </p>
@@ -432,24 +575,75 @@ export default function FreelancerPage() {
                                 escrow.status === "InProgress" && (
                                   <Button
                                     size="sm"
-                                    onClick={() => {
-                                      setSelectedEscrowId(
-                                        `${escrow.id}-${index}`,
-                                      );
-                                      setMilestoneDescription("");
-                                    }}
+                                    onClick={() =>
+                                      submitMilestone(escrow.id, index)
+                                    }
+                                    disabled={
+                                      submittingMilestone ===
+                                      `${escrow.id}-${index}`
+                                    }
                                   >
-                                    Submit
+                                    {submittingMilestone ===
+                                    `${escrow.id}-${index}`
+                                      ? "Submitting..."
+                                      : "Submit"}
                                   </Button>
                                 )}
                               {milestone.status === "Submitted" && (
-                                <Badge className="bg-blue-100 text-blue-800">
-                                  Awaiting Approval
-                                </Badge>
+                                <div className="flex gap-2">
+                                  <Badge className="bg-yellow-100 text-yellow-800">
+                                    Submitted
+                                  </Badge>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedEscrowId(escrow.id);
+                                      setSelectedMilestoneIndex(index);
+                                      setDisputeReason("");
+                                      setShowDisputeDialog(true);
+                                    }}
+                                    disabled={
+                                      submittingMilestone ===
+                                      `${escrow.id}-${index}`
+                                    }
+                                  >
+                                    Dispute
+                                  </Button>
+                                </div>
                               )}
                               {milestone.status === "Approved" && (
                                 <Badge className="bg-green-100 text-green-800">
-                                  Paid
+                                  Approved
+                                </Badge>
+                              )}
+                              {milestone.status === "Rejected" && (
+                                <div className="flex gap-2">
+                                  <Badge className="bg-red-100 text-red-800">
+                                    Rejected
+                                  </Badge>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedEscrowId(escrow.id);
+                                      setSelectedMilestoneIndex(index);
+                                      setDisputeReason("");
+                                      setShowDisputeDialog(true);
+                                    }}
+                                  >
+                                    Dispute
+                                  </Button>
+                                </div>
+                              )}
+                              {milestone.status === "Disputed" && (
+                                <Badge className="bg-red-100 text-red-800">
+                                  Under Dispute
+                                </Badge>
+                              )}
+                              {milestone.status === "Resolved" && (
+                                <Badge className="bg-blue-100 text-blue-800">
+                                  Resolved
                                 </Badge>
                               )}
                             </div>
@@ -490,48 +684,56 @@ export default function FreelancerPage() {
           </div>
         )}
 
-        {/* Milestone Submission Modal */}
-        {selectedEscrowId && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <Card className="w-full max-w-md">
+        {/* Dispute Dialog */}
+        {showDisputeDialog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md mx-4">
               <CardHeader>
-                <CardTitle>Submit Milestone</CardTitle>
+                <CardTitle>Open Dispute</CardTitle>
                 <CardDescription>
-                  Describe the work you've completed for this milestone
+                  Provide a reason for disputing this milestone
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      value={milestoneDescription}
-                      onChange={(e) => setMilestoneDescription(e.target.value)}
-                      placeholder="Describe what you've completed..."
+                    <label className="block text-sm font-medium mb-2">
+                      Dispute Reason
+                    </label>
+                    <textarea
+                      value={disputeReason}
+                      onChange={(e) => setDisputeReason(e.target.value)}
+                      placeholder="Explain why you're disputing this milestone..."
+                      className="w-full p-3 border rounded-lg resize-none"
                       rows={4}
                     />
                   </div>
-                  <div className="flex gap-3">
+                  <div className="flex gap-2">
                     <Button
                       onClick={() => {
-                        const [escrowId, milestoneIndex] =
-                          selectedEscrowId.split("-");
-                        submitMilestone(escrowId, parseInt(milestoneIndex));
+                        if (
+                          selectedEscrowId &&
+                          selectedMilestoneIndex !== null
+                        ) {
+                          openDispute(
+                            selectedEscrowId,
+                            selectedMilestoneIndex,
+                            disputeReason,
+                          );
+                          setShowDisputeDialog(false);
+                        }
                       }}
-                      disabled={submittingMilestone === selectedEscrowId}
+                      disabled={
+                        !disputeReason.trim() || submittingMilestone !== null
+                      }
                       className="flex-1"
                     >
-                      {submittingMilestone === selectedEscrowId
-                        ? "Submitting..."
-                        : "Submit"}
+                      {submittingMilestone ? "Opening..." : "Open Dispute"}
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => {
-                        setSelectedEscrowId(null);
-                        setMilestoneDescription("");
-                      }}
+                      onClick={() => setShowDisputeDialog(false)}
+                      className="flex-1"
                     >
                       Cancel
                     </Button>

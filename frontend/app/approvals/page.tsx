@@ -351,7 +351,13 @@ export default function ApprovalsPage() {
                             {new Date(job.createdAt).toLocaleDateString()}
                           </span>
                           <span>•</span>
-                          <span>Budget: {job.totalAmount} tokens</span>
+                          <span>
+                            Budget:{" "}
+                            {(
+                              Number.parseFloat(job.totalAmount) / 1e18
+                            ).toFixed(2)}{" "}
+                            tokens
+                          </span>
                         </div>
                       </div>
 
@@ -361,7 +367,9 @@ export default function ApprovalsPage() {
                             Total Budget
                           </p>
                           <p className="text-2xl md:text-3xl font-bold text-primary break-all">
-                            {job.totalAmount}
+                            {(
+                              Number.parseFloat(job.totalAmount) / 1e18
+                            ).toFixed(2)}
                           </p>
                         </div>
 

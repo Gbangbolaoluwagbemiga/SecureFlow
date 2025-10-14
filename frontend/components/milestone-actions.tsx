@@ -41,7 +41,7 @@ export function MilestoneActions({
   const [isLoading, setIsLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<
-    "start" | "submit" | "approve" | "dispute" | "resolve" | null
+    "start" | "submit" | "approve" | "reject" | "dispute" | "resolve" | null
   >(null);
 
   const openDialog = (type: typeof actionType) => {
@@ -83,6 +83,18 @@ export function MilestoneActions({
           toast({
             title: "Milestone approved!",
             description: "Payment has been released to the beneficiary",
+          });
+          break;
+        case "reject":
+          txHash = await contract.send(
+            "rejectMilestone",
+            escrowId,
+            milestoneIndex,
+          );
+          toast({
+            title: "Milestone rejected!",
+            description:
+              "The milestone has been rejected and returned to freelancer",
           });
           break;
         case "dispute":
@@ -140,6 +152,13 @@ export function MilestoneActions({
           description: `Approve milestone ${milestoneIndex + 1} and release ${milestone.amount} tokens to the beneficiary.`,
           icon: CheckCircle2,
           confirmText: "Approve & Release",
+        };
+      case "reject":
+        return {
+          title: "Reject Milestone",
+          description: `Reject milestone ${milestoneIndex + 1}. The freelancer will be notified and can resubmit.`,
+          icon: AlertTriangle,
+          confirmText: "Reject",
         };
       case "dispute":
         return {
@@ -213,9 +232,27 @@ export function MilestoneActions({
           </Button>
         )}
 
-        {/* Dispute - Both parties can dispute */}
+        {/* Reject Milestone - Only payer for submitted milestones */}
+        {milestone.status === "submitted" && isPayer && (
+          <Button
+            onClick={() => openDialog("reject")}
+            size="sm"
+            variant="destructive"
+            className="gap-2"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            Reject
+          </Button>
+        )}
+
+        {/* Debug info */}
+        {console.log(
+          `MilestoneActions - Status: ${milestone.status}, isPayer: ${isPayer}, isBeneficiary: ${isBeneficiary}`,
+        )}
+
+        {/* Dispute - Only beneficiary can dispute */}
         {(milestone.status === "submitted" || escrowStatus === "active") &&
-          (isPayer || isBeneficiary) && (
+          isBeneficiary && (
             <Button
               onClick={() => openDialog("dispute")}
               size="sm"
@@ -258,7 +295,15 @@ export function MilestoneActions({
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Amount:</span>
                 <span className="font-bold text-primary">
-                  {milestone.amount}
+                  {(() => {
+                    try {
+                      const amount = Number.parseFloat(milestone.amount);
+                      if (isNaN(amount)) return "0.00";
+                      return (amount / 1e18).toFixed(2);
+                    } catch (e) {
+                      return "0.00";
+                    }
+                  })()}
                 </span>
               </div>
             </div>

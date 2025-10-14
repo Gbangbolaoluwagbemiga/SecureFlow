@@ -32,6 +32,9 @@ export default function DashboardPage() {
   const [escrows, setEscrows] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedEscrow, setExpandedEscrow] = useState<string | null>(null);
+  const [submittingMilestone, setSubmittingMilestone] = useState<string | null>(
+    null,
+  );
 
   const getStatusFromNumber = (status: number): string => {
     switch (status) {
@@ -47,6 +50,260 @@ export default function DashboardPage() {
         return "cancelled";
       default:
         return "pending";
+    }
+  };
+
+  const getMilestoneStatusFromNumber = (status: number): string => {
+    const statuses = [
+      "pending",
+      "submitted",
+      "approved",
+      "disputed",
+      "resolved",
+    ];
+    console.log(
+      `Milestone status number: ${status}, mapped to: ${statuses[status] || "pending"}`,
+    );
+    return statuses[status] || "pending";
+  };
+
+  const fetchMilestones = async (
+    contract: any,
+    escrowId: number,
+    escrowSummary?: any,
+  ) => {
+    try {
+      const milestones = await contract.call("getMilestones", escrowId);
+      console.log(`Milestones for escrow ${escrowId}:`, milestones);
+      if (milestones && Array.isArray(milestones)) {
+        return milestones.map((m: any, index: number) => {
+          try {
+            console.log(`Raw milestone ${index}:`, m);
+
+            // Handle different milestone data structures
+            let description = "";
+            let amount = "0";
+            let status = 0;
+            let submittedAt = undefined;
+            let approvedAt = undefined;
+
+            if (m && typeof m === "object") {
+              // Try to access properties safely
+              try {
+                // Handle different possible data structures
+                // The milestone data structure from contract is: [description, amount, status, submittedAt, approvedAt]
+                if (m[0] !== undefined) {
+                  // Check if m[0] is another Proxy object (nested structure)
+                  if (
+                    m[0] &&
+                    typeof m[0] === "object" &&
+                    m[0][0] !== undefined
+                  ) {
+                    // Nested structure: m[0][0] contains the description
+                    const rawDescription = String(m[0][0]);
+                    const cleanDescription = rawDescription
+                      .split(",")[0]
+                      .trim();
+                    description = cleanDescription || `Milestone ${index + 1}`;
+                  } else {
+                    // Direct structure: m[0] contains the description
+                    const rawDescription = String(m[0]);
+                    const cleanDescription = rawDescription
+                      .split(",")[0]
+                      .trim();
+                    description = cleanDescription || `Milestone ${index + 1}`;
+                  }
+                } else if (m.description !== undefined) {
+                  description = String(
+                    m.description || `Milestone ${index + 1}`,
+                  );
+                } else {
+                  description = `Milestone ${index + 1}`;
+                }
+              } catch (e) {
+                description = `Milestone ${index + 1}`;
+              }
+
+              try {
+                // Handle amount parsing more carefully
+                if (m[1] !== undefined) {
+                  // Check if m[1] is another Proxy object (nested structure)
+                  if (
+                    m[1] &&
+                    typeof m[1] === "object" &&
+                    m[1][1] !== undefined
+                  ) {
+                    // Nested structure: m[1][1] contains the amount
+                    const amountValue = m[1][1];
+                    if (
+                      typeof amountValue === "number" ||
+                      typeof amountValue === "bigint"
+                    ) {
+                      amount = amountValue.toString();
+                    } else if (typeof amountValue === "string") {
+                      amount = amountValue;
+                    } else {
+                      amount = "0";
+                    }
+                  } else {
+                    // Direct structure: m[1] contains the amount
+                    const amountValue = m[1];
+                    if (
+                      typeof amountValue === "number" ||
+                      typeof amountValue === "bigint"
+                    ) {
+                      amount = amountValue.toString();
+                    } else if (typeof amountValue === "string") {
+                      amount = amountValue;
+                    } else {
+                      amount = "0";
+                    }
+                  }
+                } else if (m.amount !== undefined) {
+                  const amountValue = m.amount;
+                  if (
+                    typeof amountValue === "number" ||
+                    typeof amountValue === "bigint"
+                  ) {
+                    amount = amountValue.toString();
+                  } else if (typeof amountValue === "string") {
+                    amount = amountValue;
+                  } else {
+                    amount = "0";
+                  }
+                } else {
+                  // If no amount is set in milestone data, calculate it from escrow total
+                  // This is a fallback - ideally milestone amounts should be set during creation
+                  const escrowTotal =
+                    Number.parseFloat(escrowSummary[4].toString()) || 0;
+                  const milestoneCount = Number(escrowSummary[11]) || 1;
+                  const calculatedAmount = Math.floor(
+                    escrowTotal / milestoneCount,
+                  );
+                  amount = calculatedAmount.toString();
+                }
+              } catch (e) {
+                amount = "0";
+              }
+
+              try {
+                // Handle status parsing
+                if (m[2] !== undefined) {
+                  // Check if m[2] is another Proxy object (nested structure)
+                  if (
+                    m[2] &&
+                    typeof m[2] === "object" &&
+                    m[2][2] !== undefined
+                  ) {
+                    // Nested structure: m[2][2] contains the status
+                    status = Number(m[2][2]) || 0;
+                  } else {
+                    // Direct structure: m[2] contains the status
+                    status = Number(m[2]) || 0;
+                  }
+                } else if (m.status !== undefined) {
+                  status = Number(m.status) || 0;
+                } else {
+                  status = 0;
+                }
+              } catch (e) {
+                status = 0;
+              }
+
+              try {
+                // Handle submittedAt parsing
+                if (m[3] !== undefined) {
+                  // Check if m[3] is another Proxy object (nested structure)
+                  if (
+                    m[3] &&
+                    typeof m[3] === "object" &&
+                    m[3][3] !== undefined
+                  ) {
+                    // Nested structure: m[3][3] contains the submittedAt
+                    const submittedValue = m[3][3];
+                    if (submittedValue && submittedValue !== 0) {
+                      submittedAt = Number(submittedValue) * 1000;
+                    }
+                  } else {
+                    // Direct structure: m[3] contains the submittedAt
+                    const submittedValue = m[3];
+                    if (submittedValue && submittedValue !== 0) {
+                      submittedAt = Number(submittedValue) * 1000;
+                    }
+                  }
+                } else if (m.submittedAt !== undefined) {
+                  const submittedValue = m.submittedAt;
+                  if (submittedValue && submittedValue !== 0) {
+                    submittedAt = Number(submittedValue) * 1000;
+                  }
+                }
+              } catch (e) {
+                submittedAt = undefined;
+              }
+
+              try {
+                // Handle approvedAt parsing
+                if (m[4] !== undefined) {
+                  // Check if m[4] is another Proxy object (nested structure)
+                  if (
+                    m[4] &&
+                    typeof m[4] === "object" &&
+                    m[4][4] !== undefined
+                  ) {
+                    // Nested structure: m[4][4] contains the approvedAt
+                    const approvedValue = m[4][4];
+                    if (approvedValue && approvedValue !== 0) {
+                      approvedAt = Number(approvedValue) * 1000;
+                    }
+                  } else {
+                    // Direct structure: m[4] contains the approvedAt
+                    const approvedValue = m[4];
+                    if (approvedValue && approvedValue !== 0) {
+                      approvedAt = Number(approvedValue) * 1000;
+                    }
+                  }
+                } else if (m.approvedAt !== undefined) {
+                  const approvedValue = m.approvedAt;
+                  if (approvedValue && approvedValue !== 0) {
+                    approvedAt = Number(approvedValue) * 1000;
+                  }
+                }
+              } catch (e) {
+                approvedAt = undefined;
+              }
+            } else {
+              // Fallback for unexpected structure
+              description = `Milestone ${index + 1}`;
+              amount = "0";
+              status = 0;
+            }
+
+            const milestoneData = {
+              description,
+              amount,
+              status: getMilestoneStatusFromNumber(status),
+              submittedAt,
+              approvedAt,
+            };
+            console.log(`Parsed milestone ${index}:`, milestoneData);
+            console.log(
+              `Milestone ${index} raw status: ${status}, mapped to: ${getMilestoneStatusFromNumber(status)}`,
+            );
+            return milestoneData;
+          } catch (error) {
+            console.error(`Error processing milestone ${index}:`, error);
+            return {
+              description: `Milestone ${index + 1}`,
+              amount: "0",
+              status: "pending",
+            };
+          }
+        });
+      }
+      return [];
+    } catch (error) {
+      console.error("Error fetching milestones:", error);
+      return [];
     }
   };
 
@@ -101,7 +358,7 @@ export default function DashboardPage() {
                 status: getStatusFromNumber(Number(escrowSummary[3])), // status
                 createdAt: Number(escrowSummary[10]) * 1000, // createdAt (convert to milliseconds)
                 duration: Number(escrowSummary[8]) - Number(escrowSummary[10]), // deadline - createdAt (in seconds)
-                milestones: [], // Would need to fetch milestones separately
+                milestones: await fetchMilestones(contract, i, escrowSummary), // Fetch milestones from contract
                 projectDescription: escrowSummary[13] || "", // projectTitle
               };
 
@@ -184,6 +441,30 @@ export default function DashboardPage() {
     return escrows.filter((e) => e.status === filter);
   };
 
+  const approveMilestone = async (escrowId: string, milestoneIndex: number) => {
+    try {
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+      if (!contract) return;
+
+      setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
+      await contract.send("approveMilestone", escrowId, milestoneIndex);
+      toast({
+        title: "Milestone Approved",
+        description: "The milestone has been approved and payment released",
+      });
+      await fetchUserEscrows();
+    } catch (error) {
+      console.error("Error approving milestone:", error);
+      toast({
+        title: "Approval Failed",
+        description: "Could not approve milestone. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingMilestone(null);
+    }
+  };
+
   const toggleExpand = (id: string) => {
     setExpandedEscrow(expandedEscrow === id ? null : id);
   };
@@ -240,6 +521,7 @@ export default function DashboardPage() {
               address={wallet.address || ""}
               completedEscrows={completedEscrows.length}
               totalVolume={totalVolume}
+              role="both"
             />
           </div>
 
@@ -517,10 +799,17 @@ export default function DashboardPage() {
                                         )}
                                       </div>
                                       <span className="font-bold text-primary ml-4">
-                                        {(
-                                          Number.parseFloat(milestone.amount) /
-                                          1e18
-                                        ).toFixed(2)}
+                                        {(() => {
+                                          try {
+                                            const amount = Number.parseFloat(
+                                              milestone.amount,
+                                            );
+                                            if (isNaN(amount)) return "0.00";
+                                            return (amount / 1e18).toFixed(2);
+                                          } catch (e) {
+                                            return "0.00";
+                                          }
+                                        })()}
                                       </span>
                                     </div>
 
@@ -540,6 +829,7 @@ export default function DashboardPage() {
                                         escrowStatus={escrow.status}
                                         onSuccess={fetchUserEscrows}
                                       />
+
                                     </div>
                                   </Card>
                                 ))}
