@@ -87,9 +87,9 @@ export function MilestoneActions({
             title: "Milestone submitted!",
             description: "Waiting for client approval",
           });
-          
+
           // Wait for blockchain state to update, then refresh data
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
           onSuccess();
           break;
         case "approve":
@@ -103,9 +103,9 @@ export function MilestoneActions({
             title: "Milestone approved!",
             description: "Payment has been released to the beneficiary",
           });
-          
+
           // Wait for blockchain state to update, then refresh data
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
           onSuccess();
           break;
         case "reject":
@@ -121,9 +121,9 @@ export function MilestoneActions({
             description:
               "The milestone has been rejected and returned to freelancer",
           });
-          
+
           // Wait for blockchain state to update, then refresh data
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
           onSuccess();
           break;
         case "dispute":
@@ -278,10 +278,21 @@ export function MilestoneActions({
           </Button>
         )}
 
-        {/* Debug info */}
-        {console.log(
-          `MilestoneActions - Status: ${milestone.status}, isPayer: ${isPayer}, isBeneficiary: ${isBeneficiary}`,
+        {/* Approved Status - Show approved badge */}
+        {milestone.status === "approved" && (
+          <div className="flex items-center gap-2 text-green-600">
+            <CheckCircle2 className="h-4 w-4" />
+            <span className="text-sm font-medium">Approved</span>
+          </div>
         )}
+
+        {/* Debug info */}
+        {(() => {
+          console.log(
+            `MilestoneActions - Status: ${milestone.status}, isPayer: ${isPayer}, isBeneficiary: ${isBeneficiary}`,
+          );
+          return null;
+        })()}
 
         {/* Dispute - Only beneficiary can dispute */}
         {(milestone.status === "submitted" || escrowStatus === "active") &&

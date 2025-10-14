@@ -114,8 +114,25 @@ export default function AdminPage() {
         typeof paused,
       );
 
-      // Handle different possible return types
-      const isPaused = paused === true || paused === "true" || paused === 1;
+      // Handle different possible return types - including Proxy objects
+      let isPaused = false;
+
+      if (paused === true || paused === "true" || paused === 1) {
+        isPaused = true;
+      } else if (paused === false || paused === "false" || paused === 0) {
+        isPaused = false;
+      } else if (paused && typeof paused === "object") {
+        // Handle Proxy objects - try to extract the actual value
+        try {
+          const pausedValue = paused.toString();
+          console.log("Paused proxy toString():", pausedValue);
+          isPaused = pausedValue === "true" || pausedValue === "1";
+        } catch (e) {
+          console.warn("Could not parse paused proxy object:", e);
+          isPaused = false; // Default to not paused
+        }
+      }
+
       console.log("Is paused (initial):", isPaused);
       setIsPaused(isPaused);
     } catch (error) {
@@ -147,11 +164,33 @@ export default function AdminPage() {
             typeof currentPausedStatusForPause,
           );
 
-          // Handle different possible return types
-          const isPausedForPause =
+          // Handle different possible return types - including Proxy objects
+          let isPausedForPause = false;
+
+          if (
             currentPausedStatusForPause === true ||
             currentPausedStatusForPause === "true" ||
-            currentPausedStatusForPause === 1;
+            currentPausedStatusForPause === 1
+          ) {
+            isPausedForPause = true;
+          } else if (
+            currentPausedStatusForPause === false ||
+            currentPausedStatusForPause === "false" ||
+            currentPausedStatusForPause === 0
+          ) {
+            isPausedForPause = false;
+          } else if (
+            currentPausedStatusForPause &&
+            typeof currentPausedStatusForPause === "object"
+          ) {
+            try {
+              const pausedValue = currentPausedStatusForPause.toString();
+              isPausedForPause = pausedValue === "true" || pausedValue === "1";
+            } catch (e) {
+              isPausedForPause = false;
+            }
+          }
+
           console.log("Is paused for pause:", isPausedForPause);
 
           if (isPausedForPause) {
@@ -180,11 +219,33 @@ export default function AdminPage() {
             typeof currentPausedStatus,
           );
 
-          // Handle different possible return types
-          const isPaused =
+          // Handle different possible return types - including Proxy objects
+          let isPaused = false;
+
+          if (
             currentPausedStatus === true ||
             currentPausedStatus === "true" ||
-            currentPausedStatus === 1;
+            currentPausedStatus === 1
+          ) {
+            isPaused = true;
+          } else if (
+            currentPausedStatus === false ||
+            currentPausedStatus === "false" ||
+            currentPausedStatus === 0
+          ) {
+            isPaused = false;
+          } else if (
+            currentPausedStatus &&
+            typeof currentPausedStatus === "object"
+          ) {
+            try {
+              const pausedValue = currentPausedStatus.toString();
+              isPaused = pausedValue === "true" || pausedValue === "1";
+            } catch (e) {
+              isPaused = false;
+            }
+          }
+
           console.log("Is paused:", isPaused);
 
           if (!isPaused) {

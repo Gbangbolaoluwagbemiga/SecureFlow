@@ -62,6 +62,7 @@ export default function FreelancerPage() {
     null,
   );
   const [selectedEscrowId, setSelectedEscrowId] = useState<string | null>(null);
+  const [milestoneDescription, setMilestoneDescription] = useState("");
   const [showDisputeDialog, setShowDisputeDialog] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
   const { toast } = useToast();
@@ -235,11 +236,8 @@ export default function FreelancerPage() {
   };
 
   const submitMilestone = async (escrowId: string, milestoneIndex: number) => {
-    // Get the milestone description from the escrow data
-    const escrow = escrows.find((e) => e.id === escrowId);
-    const milestone = escrow?.milestones[milestoneIndex];
-
-    if (!milestone?.description?.trim()) {
+    // Validate milestone description from input field
+    if (!milestoneDescription?.trim()) {
       toast({
         title: "Description required",
         description: "Please provide a description of your work",
@@ -262,7 +260,7 @@ export default function FreelancerPage() {
         "no-value",
         escrowId,
         milestoneIndex,
-        milestone.description,
+        milestoneDescription,
       );
 
       toast({
@@ -531,31 +529,10 @@ export default function FreelancerPage() {
                                     Description (Editable)
                                   </label>
                                   <Textarea
-                                    value={milestone.description}
-                                    onChange={(e) => {
-                                      // Update milestone description in local state
-                                      const updatedEscrows = escrows.map(
-                                        (esc) => {
-                                          if (esc.id === escrow.id) {
-                                            return {
-                                              ...esc,
-                                              milestones: esc.milestones.map(
-                                                (m, i) =>
-                                                  i === index
-                                                    ? {
-                                                        ...m,
-                                                        description:
-                                                          e.target.value,
-                                                      }
-                                                    : m,
-                                              ),
-                                            };
-                                          }
-                                          return esc;
-                                        },
-                                      );
-                                      setEscrows(updatedEscrows);
-                                    }}
+                                    value={milestoneDescription}
+                                    onChange={(e) =>
+                                      setMilestoneDescription(e.target.value)
+                                    }
                                     className="text-sm"
                                     rows={2}
                                     placeholder="Describe what you'll complete for this milestone..."
@@ -570,7 +547,7 @@ export default function FreelancerPage() {
                                 {formatAmount(milestone.amount)} tokens
                               </p>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 mt-2">
                               {milestone.status === "NotStarted" &&
                                 escrow.status === "InProgress" && (
                                   <Button
@@ -661,19 +638,6 @@ export default function FreelancerPage() {
                         >
                           <Play className="h-4 w-4" />
                           Start Work
-                        </Button>
-                      )}
-                      {escrow.status === "InProgress" && (
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedEscrowId(escrow.id);
-                            setMilestoneDescription("");
-                          }}
-                          className="flex items-center gap-2"
-                        >
-                          <Send className="h-4 w-4" />
-                          Submit Milestone
                         </Button>
                       )}
                     </div>

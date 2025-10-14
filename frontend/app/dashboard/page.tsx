@@ -57,7 +57,7 @@ export default function DashboardPage() {
     const statuses = [
       "pending",
       "submitted",
-      "Approved",
+      "approved",
       "disputed",
       "resolved",
     ];
@@ -181,6 +181,9 @@ export default function DashboardPage() {
                     escrowTotal / milestoneCount,
                   );
                   amount = calculatedAmount.toString();
+                  console.log(
+                    `Calculated milestone amount: escrowTotal=${escrowTotal}, milestoneCount=${milestoneCount}, calculatedAmount=${calculatedAmount}`,
+                  );
                 }
               } catch (e) {
                 amount = "0";
@@ -288,6 +291,13 @@ export default function DashboardPage() {
             console.log(`Parsed milestone ${index}:`, milestoneData);
             console.log(
               `Milestone ${index} raw status: ${status}, mapped to: ${getMilestoneStatusFromNumber(status)}`,
+            );
+            console.log(`Milestone ${index} approvedAt:`, approvedAt);
+            console.log(
+              `Milestone ${index} raw amount:`,
+              amount,
+              "Converted:",
+              (Number.parseFloat(amount) / 1e18).toFixed(2),
             );
             return milestoneData;
           } catch (error) {
@@ -821,6 +831,7 @@ export default function DashboardPage() {
                                               milestone.amount,
                                             );
                                             if (isNaN(amount)) return "0.00";
+                                            // Convert from wei to tokens
                                             return (amount / 1e18).toFixed(2);
                                           } catch (e) {
                                             return "0.00";

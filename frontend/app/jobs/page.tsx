@@ -57,6 +57,11 @@ export default function JobsPage() {
     fetchOpenJobs();
   }, []);
 
+  // Clear application status cache when wallet changes
+  useEffect(() => {
+    setHasApplied({});
+  }, [wallet.address]);
+
   const fetchOpenJobs = async () => {
     setLoading(true);
     try {
@@ -104,8 +109,56 @@ export default function JobsPage() {
                   console.log(
                     `hasUserApplied result for job ${i}:`,
                     hasAppliedResult,
+                    "Type:",
+                    typeof hasAppliedResult,
                   );
-                  userHasApplied = Boolean(hasAppliedResult);
+
+                  // Handle different possible return types - be more strict about what counts as "applied"
+                  userHasApplied =
+                    hasAppliedResult === true ||
+                    hasAppliedResult === "true" ||
+                    hasAppliedResult === 1;
+                  console.log(`User has applied to job ${i}:`, userHasApplied);
+
+                  // Double-check by looking at applications directly if hasUserApplied seems wrong
+                  if (
+                    hasAppliedResult &&
+                    hasAppliedResult !== false &&
+                    hasAppliedResult !== "false" &&
+                    hasAppliedResult !== 0
+                  ) {
+                    try {
+                      const applications = await contract.call(
+                        "getApplications",
+                        i,
+                      );
+                      console.log(`Applications for job ${i}:`, applications);
+                      // Check if current user is in the applications list
+                      const userInApplications = applications.some(
+                        (app: any) =>
+                          app.freelancer &&
+                          app.freelancer.toLowerCase() ===
+                            wallet.address?.toLowerCase(),
+                      );
+                      console.log(
+                        `User found in applications for job ${i}:`,
+                        userInApplications,
+                      );
+
+                      // If hasUserApplied says true but user is not in applications, trust applications
+                      if (!userInApplications) {
+                        console.log(
+                          `hasUserApplied returned true but user not in applications - correcting to false`,
+                        );
+                        userHasApplied = false;
+                      }
+                    } catch (appError) {
+                      console.warn(
+                        `Could not fetch applications for job ${i}:`,
+                        appError,
+                      );
+                    }
+                  }
                 } catch (error) {
                   console.error(
                     `Error checking application status for job ${i}:`,
@@ -114,6 +167,10 @@ export default function JobsPage() {
                   // If check fails, assume they haven't applied
                   userHasApplied = false;
                 }
+              } else {
+                console.log(
+                  `Skipping application check for job ${i} - isJobCreator: ${isJobCreator}, wallet: ${wallet.address}`,
+                );
               }
 
               // Convert contract data to our Escrow type

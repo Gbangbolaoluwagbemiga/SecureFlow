@@ -325,6 +325,13 @@ export function Web3Provider({ children }: { children: ReactNode }) {
             if (method === "unpause" || method === "pause") {
               gasLimit = "0x30000"; // 196,608 gas - much lower for simple functions
               console.log(`Using reduced gas limit for ${method}: ${gasLimit}`);
+            } else if (
+              method === "submitMilestone" ||
+              method === "approveMilestone" ||
+              method === "rejectMilestone"
+            ) {
+              gasLimit = "0x50000"; // 327,680 gas - reasonable for milestone functions
+              console.log(`Using reduced gas limit for ${method}: ${gasLimit}`);
             }
           }
 
