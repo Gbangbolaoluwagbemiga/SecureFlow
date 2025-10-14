@@ -1,40 +1,46 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { WalletButton } from "@/components/wallet-button"
-import { Shield, Menu, X } from "lucide-react"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { Button } from "@/components/ui/button"
-import { useState, useEffect, useRef } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import Link from "next/link";
+import { WalletButton } from "@/components/wallet-button";
+import { Shield, Menu, X } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useFreelancerStatus } from "@/hooks/use-freelancer-status";
 
 export function Navbar() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const mobileMenuRef = useRef<HTMLDivElement>(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const { isFreelancer } = useFreelancerStatus();
 
   useEffect(() => {
     if (mobileMenuOpen) {
-      document.body.style.overflow = "hidden"
+      document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = "unset"
+      document.body.style.overflow = "unset";
     }
     return () => {
-      document.body.style.overflow = "unset"
-    }
-  }, [mobileMenuOpen])
+      document.body.style.overflow = "unset";
+    };
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (mobileMenuOpen && mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
-        setMobileMenuOpen(false)
+      if (
+        mobileMenuOpen &&
+        mobileMenuRef.current &&
+        !mobileMenuRef.current.contains(event.target as Node)
+      ) {
+        setMobileMenuOpen(false);
       }
-    }
+    };
 
-    document.addEventListener("mousedown", handleClickOutside)
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [mobileMenuOpen])
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [mobileMenuOpen]);
 
   return (
     <>
@@ -42,24 +48,49 @@ export function Navbar() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-bold text-xl">
             <Shield className="h-6 w-6 text-primary" />
-            <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">SecureFlow</span>
+            <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              SecureFlow
+            </span>
           </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-6">
-            <Link href="/" className="text-sm font-medium hover:text-primary transition-colors">
+            <Link
+              href="/"
+              className="text-sm font-medium hover:text-primary transition-colors"
+            >
               Home
             </Link>
-            <Link href="/jobs" className="text-sm font-medium hover:text-primary transition-colors">
+            <Link
+              href="/jobs"
+              className="text-sm font-medium hover:text-primary transition-colors"
+            >
               Browse Jobs
             </Link>
-            <Link href="/create" className="text-sm font-medium hover:text-primary transition-colors">
+            <Link
+              href="/create"
+              className="text-sm font-medium hover:text-primary transition-colors"
+            >
               Create Escrow
             </Link>
-            <Link href="/dashboard" className="text-sm font-medium hover:text-primary transition-colors">
+            <Link
+              href="/dashboard"
+              className="text-sm font-medium hover:text-primary transition-colors"
+            >
               Dashboard
             </Link>
-            <Link href="/admin" className="text-sm font-medium hover:text-primary transition-colors">
+            {isFreelancer && (
+              <Link
+                href="/freelancer"
+                className="text-sm font-medium hover:text-primary transition-colors"
+              >
+                Freelancer
+              </Link>
+            )}
+            <Link
+              href="/admin"
+              className="text-sm font-medium hover:text-primary transition-colors"
+            >
               Admin
             </Link>
           </div>
@@ -74,7 +105,11 @@ export function Navbar() {
               className="md:hidden"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              {mobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
             </Button>
           </div>
         </div>
@@ -118,6 +153,15 @@ export function Navbar() {
                 >
                   Dashboard
                 </Link>
+                {isFreelancer && (
+                  <Link
+                    href="/freelancer"
+                    className="text-sm font-medium hover:text-primary transition-colors py-2"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Freelancer
+                  </Link>
+                )}
                 <Link
                   href="/admin"
                   className="text-sm font-medium hover:text-primary transition-colors py-2"
@@ -144,5 +188,5 @@ export function Navbar() {
         )}
       </AnimatePresence>
     </>
-  )
+  );
 }
