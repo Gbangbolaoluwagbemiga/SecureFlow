@@ -12,24 +12,36 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { motion } from "framer-motion";
+import { FreelancerHeader } from "@/components/freelancer/freelancer-header";
+import { FreelancerStats } from "@/components/freelancer/freelancer-stats";
+import { EscrowCard } from "@/components/freelancer/escrow-card";
+import { FreelancerLoading } from "@/components/freelancer/freelancer-loading";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
-  Play,
-  CheckCircle,
-  Clock,
-  DollarSign,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
   FileText,
-  Send,
   User,
+  DollarSign,
+  CheckCircle,
   Calendar,
-  Coins,
+  Play,
+  RefreshCw,
 } from "lucide-react";
+import { motion } from "framer-motion";
 
 interface Escrow {
   id: string;

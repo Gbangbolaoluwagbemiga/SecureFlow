@@ -3,30 +3,25 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
-import { motion } from "framer-motion";
+import { AdminHeader } from "@/components/admin/admin-header";
+import { AdminStats } from "@/components/admin/admin-stats";
+import { ContractControls } from "@/components/admin/contract-controls";
+import { AdminLoading } from "@/components/admin/admin-loading";
 import {
-  Shield,
-  Pause,
-  Play,
-  AlertTriangle,
-  Download,
   Lock,
+  Shield,
+  Play,
+  Pause,
+  Download,
+  AlertTriangle,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { motion } from "framer-motion";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function AdminPage() {

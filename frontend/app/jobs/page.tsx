@@ -2,34 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
 import type { Escrow } from "@/lib/web3/types";
-import { motion } from "framer-motion";
-import {
-  Briefcase,
-  Clock,
-  DollarSign,
-  Search,
-  Wallet,
-  AlertCircle,
-} from "lucide-react";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Briefcase } from "lucide-react";
+import { JobsHeader } from "@/components/jobs/jobs-header";
+import { JobsStats } from "@/components/jobs/jobs-stats";
+import { JobCard } from "@/components/jobs/job-card";
+import { ApplicationDialog } from "@/components/jobs/application-dialog";
+import { JobsLoading } from "@/components/jobs/jobs-loading";
 
 export default function JobsPage() {
   const { wallet, getContract } = useWeb3();
@@ -333,312 +316,46 @@ export default function JobsPage() {
       ),
   );
 
-  if (!wallet.isConnected) {
-    return (
-      <div className="min-h-screen flex items-center justify-center gradient-mesh">
-        <Card className="glass border-primary/20 p-12 text-center max-w-md">
-          <Wallet className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-          <h2 className="text-2xl font-bold mb-2">Wallet Not Connected</h2>
-          <p className="text-muted-foreground mb-6">
-            Please connect your wallet to browse available jobs
-          </p>
-        </Card>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent mb-4" />
-          <p className="text-muted-foreground">Loading available jobs...</p>
-        </div>
-      </div>
-    );
+  if (!wallet.isConnected || loading) {
+    return <JobsLoading isConnected={wallet.isConnected} />;
   }
 
   return (
     <div className="min-h-screen py-12">
       <div className="container mx-auto px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="mb-8">
-            <h1 className="text-4xl md:text-5xl font-bold mb-2">Browse Jobs</h1>
-            <p className="text-xl text-muted-foreground">
-              Find and apply to open escrow projects
-            </p>
-            {isContractPaused && (
-              <div className="mt-4 p-4 bg-red-100 border border-red-300 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-red-600" />
-                  <p className="text-red-800 font-medium">
-                    Contract is currently paused. Applications are temporarily
-                    disabled.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
+        <JobsHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <JobsStats jobs={jobs} />
 
-          {/* Search Bar */}
-          <div className="mb-8">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input
-                placeholder="Search jobs by description or skills..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 glass"
+        {/* Jobs List */}
+        <div className="space-y-6">
+          {filteredJobs.length === 0 ? (
+            <Card className="glass border-muted p-12 text-center">
+              <Briefcase className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <p className="text-muted-foreground">
+                No jobs found matching your search
+              </p>
+            </Card>
+          ) : (
+            filteredJobs.map((job, index) => (
+              <JobCard
+                key={job.id}
+                job={job}
+                index={index}
+                hasApplied={hasApplied[job.id] || false}
+                isContractPaused={isContractPaused}
+                onApply={setSelectedJob}
               />
-            </div>
-          </div>
+            ))
+          )}
+        </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-8">
-            <Card className="glass border-primary/20 p-4 md:p-6">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Available Jobs
-                  </p>
-                  <p className="text-2xl md:text-3xl font-bold break-all">
-                    {jobs.length}
-                  </p>
-                </div>
-                <Briefcase className="h-8 w-8 md:h-10 md:w-10 text-primary opacity-50 flex-shrink-0" />
-              </div>
-            </Card>
-
-            <Card className="glass border-accent/20 p-4 md:p-6">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Total Value
-                  </p>
-                  <p className="text-2xl md:text-3xl font-bold break-all">
-                    {jobs
-                      .reduce(
-                        (sum, job) =>
-                          sum + Number.parseFloat(job.totalAmount) / 1e18,
-                        0,
-                      )
-                      .toFixed(2)}
-                  </p>
-                </div>
-                <DollarSign className="h-8 w-8 md:h-10 md:w-10 text-accent opacity-50 flex-shrink-0" />
-              </div>
-            </Card>
-
-            <Card className="glass border-primary/20 p-4 md:p-6 sm:col-span-2 lg:col-span-1">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Avg. Duration
-                  </p>
-                  <p className="text-2xl md:text-3xl font-bold break-all">
-                    {Math.round(
-                      jobs.reduce(
-                        (sum, job) => sum + job.duration / (24 * 60 * 60),
-                        0,
-                      ) / jobs.length,
-                    )}{" "}
-                    days
-                  </p>
-                </div>
-                <Clock className="h-8 w-8 md:h-10 md:w-10 text-primary opacity-50 flex-shrink-0" />
-              </div>
-            </Card>
-          </div>
-
-          {/* Jobs List */}
-          <div className="space-y-6">
-            {filteredJobs.length === 0 ? (
-              <Card className="glass border-muted p-12 text-center">
-                <Briefcase className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <p className="text-muted-foreground">
-                  No jobs found matching your search
-                </p>
-              </Card>
-            ) : (
-              filteredJobs.map((job, index) => (
-                <motion.div
-                  key={job.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.1 }}
-                >
-                  <Card className="glass border-primary/20 p-4 md:p-6 hover:border-primary/40 transition-colors">
-                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-3">
-                          <h3 className="text-xl font-bold">Job #{job.id}</h3>
-                          <Badge variant="secondary" className="gap-1">
-                            <Clock className="h-3 w-3" />
-                            {Math.round(job.duration / (24 * 60 * 60))} days
-                          </Badge>
-                        </div>
-
-                        <p className="text-muted-foreground mb-4 break-words overflow-hidden">
-                          {job.projectDescription}
-                        </p>
-
-                        <div className="space-y-2 mb-4">
-                          <p className="text-sm font-medium">Milestones:</p>
-                          {job.milestones.map((milestone, idx) => (
-                            <div
-                              key={idx}
-                              className="flex items-start gap-2 text-sm text-muted-foreground"
-                            >
-                              <span className="text-primary flex-shrink-0">
-                                •
-                              </span>
-                              <span className="break-words overflow-hidden">
-                                {milestone.description} -{" "}
-                                <span className="font-semibold">
-                                  {milestone.amount}
-                                </span>
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>
-                            Posted{" "}
-                            {new Date(job.createdAt).toLocaleDateString()}
-                          </span>
-                          <span>•</span>
-                          <span>{job.applicationCount || 0} applications</span>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-4 w-full md:w-auto">
-                        <div className="text-right w-full md:w-auto">
-                          <p className="text-sm text-muted-foreground mb-1">
-                            Total Budget
-                          </p>
-                          <p className="text-2xl md:text-3xl font-bold text-primary break-all">
-                            {(
-                              Number.parseFloat(job.totalAmount) / 1e18
-                            ).toFixed(2)}
-                          </p>
-                        </div>
-
-                        {job.isJobCreator ? (
-                          <Button
-                            className="w-full md:w-auto min-w-[120px]"
-                            disabled
-                            variant="outline"
-                          >
-                            Your Job
-                          </Button>
-                        ) : isContractPaused ? (
-                          <Button
-                            className="w-full md:w-auto min-w-[120px]"
-                            disabled
-                            variant="destructive"
-                          >
-                            Contract Paused
-                          </Button>
-                        ) : (
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button
-                                onClick={() => setSelectedJob(job)}
-                                className="w-full md:w-auto min-w-[120px]"
-                                disabled={hasApplied[job.id]}
-                                variant={
-                                  hasApplied[job.id] ? "secondary" : "default"
-                                }
-                              >
-                                {hasApplied[job.id] ? "Applied ✓" : "Apply Now"}
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="glass">
-                              <DialogHeader>
-                                <DialogTitle>
-                                  Apply to Job #{selectedJob?.id}
-                                </DialogTitle>
-                                <DialogDescription>
-                                  Submit your application to work on this
-                                  project. The client will review and may accept
-                                  your proposal.
-                                </DialogDescription>
-                              </DialogHeader>
-
-                              <div className="space-y-4 py-4">
-                                <div className="space-y-2">
-                                  <Label htmlFor="coverLetter">
-                                    Cover Letter *
-                                  </Label>
-                                  <Textarea
-                                    id="coverLetter"
-                                    placeholder="Explain why you're the best fit for this project..."
-                                    value={coverLetter}
-                                    onChange={(e) =>
-                                      setCoverLetter(e.target.value)
-                                    }
-                                    rows={5}
-                                    className="glass"
-                                  />
-                                </div>
-
-                                <div className="space-y-2">
-                                  <Label htmlFor="timeline">
-                                    Proposed Timeline (days) *
-                                  </Label>
-                                  <Input
-                                    id="timeline"
-                                    type="number"
-                                    placeholder="30"
-                                    value={proposedTimeline}
-                                    onChange={(e) =>
-                                      setProposedTimeline(e.target.value)
-                                    }
-                                    className="glass"
-                                  />
-                                </div>
-
-                                <div className="rounded-lg border border-border/40 bg-muted/20 p-4">
-                                  <p className="text-sm text-muted-foreground">
-                                    <span className="font-semibold">Note:</span>{" "}
-                                    Once the client accepts your application,
-                                    the escrow will be assigned to you and you
-                                    can start working on the milestones.
-                                  </p>
-                                </div>
-                              </div>
-
-                              <DialogFooter>
-                                <Button
-                                  onClick={handleApply}
-                                  disabled={
-                                    !coverLetter ||
-                                    !proposedTimeline ||
-                                    applying
-                                  }
-                                  className="w-full"
-                                >
-                                  {applying
-                                    ? "Submitting..."
-                                    : "Submit Application"}
-                                </Button>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
-                </motion.div>
-              ))
-            )}
-          </div>
-        </motion.div>
+        <ApplicationDialog
+          job={selectedJob}
+          open={!!selectedJob}
+          onOpenChange={(open) => !open && setSelectedJob(null)}
+          onApply={handleApply}
+          applying={applying}
+        />
       </div>
     </div>
   );
