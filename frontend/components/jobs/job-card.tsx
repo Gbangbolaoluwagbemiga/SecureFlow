@@ -22,6 +22,9 @@ export function JobCard({
   isContractPaused,
   onApply,
 }: JobCardProps) {
+  console.log(
+    `JobCard ${job.id} - isJobCreator: ${job.isJobCreator}, hasApplied: ${hasApplied}, isContractPaused: ${isContractPaused}`,
+  );
   const getStatusColor = (status: string) => {
     switch (status) {
       case "pending":

@@ -121,6 +121,10 @@ export default function JobsPage() {
                 escrowSummary[0].toLowerCase() ===
                 wallet.address?.toLowerCase();
 
+              console.log(
+                `Job ${i} - Depositor: ${escrowSummary[0]}, Wallet: ${wallet.address}, IsJobCreator: ${isJobCreator}`,
+              );
+
               // Check if current user has already applied to this job
               let userHasApplied = false;
               if (wallet.address && !isJobCreator) {

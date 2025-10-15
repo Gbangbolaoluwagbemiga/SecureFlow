@@ -8,7 +8,7 @@ import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
 import type { Escrow, Milestone } from "@/lib/web3/types";
 import { motion } from "framer-motion";
-import { Wallet, CheckCircle2, AlertCircle } from "lucide-react";
+import { Wallet, CheckCircle2, AlertCircle, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
@@ -448,7 +448,89 @@ export default function DashboardPage() {
   const calculateProgress = (escrow: Escrow) => {
     const released = Number.parseFloat(escrow.releasedAmount) / 1e18;
     const total = Number.parseFloat(escrow.totalAmount) / 1e18;
-    return (released / total) * 100;
+    return total > 0 ? (released / total) * 100 : 0;
+  };
+
+  const formatAmount = (amount: string) => {
+    return (Number.parseFloat(amount) / 1e18).toFixed(2);
+  };
+
+  const getTokenInfo = (tokenAddress: string) => {
+    return {
+      name:
+        tokenAddress === "0x0000000000000000000000000000000000000000"
+          ? "MON"
+          : "Token",
+      symbol:
+        tokenAddress === "0x0000000000000000000000000000000000000000"
+          ? "MON"
+          : "TKN",
+    };
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "active":
+        return "bg-blue-100 text-blue-800";
+      case "completed":
+        return "bg-green-100 text-green-800";
+      case "disputed":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getMilestoneStatusColor = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "submitted":
+        return "bg-blue-100 text-blue-800";
+      case "approved":
+        return "bg-green-100 text-green-800";
+      case "disputed":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const handleSubmitMilestone = async (
+    escrowId: string,
+    milestoneIndex: number,
+    description: string,
+  ) => {
+    try {
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+      setSubmittingMilestone(escrowId);
+
+      const txHash = await contract.send(
+        "submitMilestone",
+        "no-value",
+        Number(escrowId),
+        milestoneIndex,
+        description,
+      );
+
+      toast({
+        title: "Milestone Submitted",
+        description: `Transaction: ${txHash}`,
+      });
+
+      await fetchUserEscrows();
+    } catch (error) {
+      console.error("Error submitting milestone:", error);
+      toast({
+        title: "Error",
+        description: "Failed to submit milestone",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingMilestone(null);
+    }
   };
 
   const filterEscrows = (filter: string) => {
@@ -510,11 +592,72 @@ export default function DashboardPage() {
     .reduce((sum, e) => sum + Number.parseFloat(e.totalAmount) / 1e18, 0)
     .toFixed(2);
 
+  if (!wallet.isConnected) {
+    return (
+      <div className="min-h-screen py-12">
+        <div className="container mx-auto px-4">
+          <DashboardHeader />
+          <Card className="glass border-primary/20 p-12 text-center max-w-md">
+            <Wallet className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+            <h2 className="text-2xl font-bold mb-2">Connect Your Wallet</h2>
+            <p className="text-muted-foreground">
+              Connect your wallet to view your escrows and manage milestones.
+            </p>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen py-12">
+        <div className="container mx-auto px-4">
+          <DashboardHeader />
+          <DashboardLoading />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen py-12">
       <div className="container mx-auto px-4">
         <DashboardHeader />
         <DashboardStats escrows={escrows} />
+
+        {escrows.length === 0 ? (
+          <Card className="glass border-muted p-12 text-center">
+            <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+            <h3 className="text-xl font-bold mb-2">No Escrows Found</h3>
+            <p className="text-muted-foreground">
+              You don't have any escrows yet. Create one to get started.
+            </p>
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            {escrows.map((escrow, index) => (
+              <EscrowCard
+                key={escrow.id}
+                escrow={escrow}
+                index={index}
+                expanded={expandedEscrow === escrow.id}
+                onToggleExpanded={() =>
+                  setExpandedEscrow(
+                    expandedEscrow === escrow.id ? null : escrow.id,
+                  )
+                }
+                onSubmitMilestone={handleSubmitMilestone}
+                submittingMilestone={submittingMilestone === escrow.id}
+                formatAmount={formatAmount}
+                getTokenInfo={getTokenInfo}
+                getStatusColor={getStatusColor}
+                getMilestoneStatusColor={getMilestoneStatusColor}
+                calculateProgress={calculateProgress}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
