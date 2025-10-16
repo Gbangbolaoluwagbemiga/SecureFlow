@@ -148,14 +148,33 @@ export default function CreateEscrowPage() {
 
   const validateStep = () => {
     if (step === 1) {
-      if (
-        (!isOpenJob && !formData.beneficiary) ||
-        !formData.token ||
-        !formData.projectDescription
-      ) {
+      // Validate all required fields for step 1
+      const errors: string[] = [];
+      
+      if (!formData.projectTitle || formData.projectTitle.length < 3) {
+        errors.push("Project title must be at least 3 characters");
+      }
+      
+      if (!formData.projectDescription || formData.projectDescription.length < 50) {
+        errors.push("Project description must be at least 50 characters");
+      }
+      
+      if (!formData.duration || Number(formData.duration) < 1 || Number(formData.duration) > 365) {
+        errors.push("Duration must be between 1 and 365 days");
+      }
+      
+      if (!formData.totalBudget || Number(formData.totalBudget) < 0.01) {
+        errors.push("Total budget must be at least 0.01 tokens");
+      }
+      
+      if (!formData.isOpenJob && (!formData.beneficiary || !/^0x[a-fA-F0-9]{40}$/.test(formData.beneficiary))) {
+        errors.push("Valid beneficiary address is required for direct escrow");
+      }
+      
+      if (errors.length > 0) {
         toast({
-          title: "Missing information",
-          description: "Please fill in all required fields",
+          title: "Missing or invalid information",
+          description: errors.join(", "),
           variant: "destructive",
         });
         return false;
@@ -195,11 +214,90 @@ export default function CreateEscrowPage() {
     setStep(step - 1);
   };
 
+  const validateForm = () => {
+    const errors: string[] = [];
+
+    // Validate project title
+    if (!formData.projectTitle || formData.projectTitle.length < 3) {
+      errors.push("Project title must be at least 3 characters long");
+    }
+
+    // Validate project description
+    if (
+      !formData.projectDescription ||
+      formData.projectDescription.length < 50
+    ) {
+      errors.push("Project description must be at least 50 characters long");
+    }
+
+    // Validate duration
+    if (
+      !formData.duration ||
+      Number(formData.duration) < 1 ||
+      Number(formData.duration) > 365
+    ) {
+      errors.push("Duration must be between 1 and 365 days");
+    }
+
+    // Validate total budget
+    if (!formData.totalBudget || Number(formData.totalBudget) < 0.01) {
+      errors.push("Total budget must be at least 0.01 tokens");
+    }
+
+    // Validate beneficiary (only if not open job)
+    if (!formData.isOpenJob) {
+      if (!formData.beneficiary) {
+        errors.push("Beneficiary address is required for direct escrow");
+      } else if (!/^0x[a-fA-F0-9]{40}$/.test(formData.beneficiary)) {
+        errors.push("Beneficiary address must be a valid Ethereum address");
+      }
+    }
+
+    // Validate milestones
+    if (formData.milestones.length === 0) {
+      errors.push("At least one milestone is required");
+    }
+
+    for (let i = 0; i < formData.milestones.length; i++) {
+      const milestone = formData.milestones[i];
+      if (!milestone.description || milestone.description.length < 10) {
+        errors.push(
+          `Milestone ${i + 1} description must be at least 10 characters long`,
+        );
+      }
+      if (!milestone.amount || Number(milestone.amount) < 0.01) {
+        errors.push(`Milestone ${i + 1} amount must be at least 0.01 tokens`);
+      }
+    }
+
+    // Validate milestone amounts sum
+    const totalMilestoneAmount = formData.milestones.reduce(
+      (sum, milestone) => sum + Number(milestone.amount || 0),
+      0,
+    );
+    if (Math.abs(totalMilestoneAmount - Number(formData.totalBudget)) > 0.01) {
+      errors.push("Total milestone amounts must equal the total budget");
+    }
+
+    return errors;
+  };
+
   const handleSubmit = async () => {
     if (!wallet.isConnected) {
       toast({
         title: "Wallet not connected",
         description: "Please connect your wallet to create an escrow",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate form
+    const validationErrors = validateForm();
+    if (validationErrors.length > 0) {
+      toast({
+        title: "Form validation failed",
+        description: validationErrors.join(", "),
         variant: "destructive",
       });
       return;

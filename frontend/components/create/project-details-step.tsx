@@ -53,6 +53,7 @@ export function ProjectDetailsStep({
               onChange={(e) => onUpdate({ projectTitle: e.target.value })}
               placeholder="Enter project title"
               required
+              minLength={3}
             />
           </div>
 
@@ -65,6 +66,7 @@ export function ProjectDetailsStep({
               onChange={(e) => onUpdate({ duration: e.target.value })}
               placeholder="e.g., 30"
               min="1"
+              max="365"
               required
             />
           </div>
@@ -79,7 +81,11 @@ export function ProjectDetailsStep({
             placeholder="Describe the project requirements and deliverables..."
             className="min-h-[120px]"
             required
+            minLength={50}
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            Minimum 50 characters required
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -91,23 +97,32 @@ export function ProjectDetailsStep({
               value={formData.totalBudget}
               onChange={(e) => onUpdate({ totalBudget: e.target.value })}
               placeholder="e.g., 1000"
-              min="0"
+              min="0.01"
               step="0.01"
               required
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              Minimum 0.01 tokens required
+            </p>
           </div>
 
           <div>
-            <Label htmlFor="beneficiary">Beneficiary Address</Label>
+            <Label htmlFor="beneficiary">
+              Beneficiary Address {!formData.isOpenJob && "*"}
+            </Label>
             <Input
               id="beneficiary"
               value={formData.beneficiary}
               onChange={(e) => onUpdate({ beneficiary: e.target.value })}
               placeholder="0x..."
               disabled={formData.isOpenJob}
+              required={!formData.isOpenJob}
+              pattern="^0x[a-fA-F0-9]{40}$"
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Leave empty for open job applications
+              {formData.isOpenJob
+                ? "Leave empty for open job applications"
+                : "Valid Ethereum address required for direct escrow"}
             </p>
           </div>
         </div>

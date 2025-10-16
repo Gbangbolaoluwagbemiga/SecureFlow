@@ -225,7 +225,7 @@ export default function JobsPage() {
                 releasedAmount: escrowSummary[5].toString(), // paidAmount
                 status: getStatusFromNumber(Number(escrowSummary[3])), // status
                 createdAt: Number(escrowSummary[10]) * 1000, // createdAt (convert to milliseconds)
-                duration: Number(escrowSummary[8]) - Number(escrowSummary[10]), // deadline - createdAt (in seconds)
+                duration: (Number(escrowSummary[8]) - Number(escrowSummary[10])) / (24 * 60 * 60), // Convert seconds to days
                 milestones: [], // Would need to fetch milestones separately
                 projectDescription: escrowSummary[13] || "", // projectTitle
                 isOpenJob: true,
@@ -266,10 +266,64 @@ export default function JobsPage() {
   const handleApply = async () => {
     if (!selectedJob || !wallet.isConnected) return;
 
+    // Check if user has already applied to this job
+    if (hasApplied[selectedJob.id]) {
+      toast({
+        title: "Already Applied",
+        description: "You have already applied to this job.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setApplying(true);
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       if (!contract) return;
+
+      // Double-check with blockchain to prevent duplicate applications
+      try {
+        const hasUserAppliedResult = await contract.call(
+          "hasUserApplied",
+          selectedJob.id,
+        );
+        console.log("hasUserApplied result:", hasUserAppliedResult);
+
+        // Handle different return types including Proxy(Result) objects
+        let userHasApplied = false;
+        if (hasUserAppliedResult && typeof hasUserAppliedResult === "object") {
+          try {
+            const resultValue =
+              hasUserAppliedResult[0] || hasUserAppliedResult.toString();
+            userHasApplied =
+              resultValue === true ||
+              resultValue === "true" ||
+              resultValue === 1 ||
+              resultValue === "1";
+          } catch (e) {
+            console.log("Error parsing hasUserApplied result:", e);
+            userHasApplied = false;
+          }
+        } else {
+          userHasApplied =
+            hasUserAppliedResult === true ||
+            hasUserAppliedResult === "true" ||
+            hasUserAppliedResult === 1;
+        }
+
+        if (userHasApplied) {
+          toast({
+            title: "Already Applied",
+            description: "You have already applied to this job.",
+            variant: "destructive",
+          });
+          setApplying(false);
+          return;
+        }
+      } catch (checkError) {
+        console.warn("Could not check if user has applied:", checkError);
+        // Continue with application if check fails
+      }
 
       // Call the smart contract applyToJob function
       await contract.send(

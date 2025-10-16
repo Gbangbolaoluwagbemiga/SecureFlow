@@ -18,14 +18,18 @@ interface ApplicationCardProps {
   application: Application;
   index: number;
   onApprove: (freelancer: string) => void;
+  onReject: (freelancer: string) => void;
   approving: boolean;
+  rejecting: boolean;
 }
 
 export function ApplicationCard({
   application,
   index,
   onApprove,
+  onReject,
   approving,
+  rejecting,
 }: ApplicationCardProps) {
   return (
     <Card key={index} className="p-4 border-border/40">
@@ -62,15 +66,31 @@ export function ApplicationCard({
         </div>
 
         <div className="flex flex-col gap-2 w-full lg:w-auto">
-          <Button
-            onClick={() => onApprove(application.freelancerAddress)}
-            disabled={approving}
-            className="w-full lg:w-auto"
-            size="sm"
-          >
-            <CheckCircle className="h-4 w-4 mr-2" />
-            {approving ? "Approving..." : "Approve"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => {
+                console.log("🟢 GREEN APPROVE BUTTON CLICKED!");
+                console.log(
+                  "Freelancer address:",
+                  application.freelancerAddress,
+                );
+                onApprove(application.freelancerAddress);
+              }}
+              disabled={approving || rejecting}
+              className="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 cursor-pointer"
+              size="sm"
+            >
+              {approving ? "Approving..." : "Approve"}
+            </Button>
+            <Button
+              onClick={() => onReject(application.freelancerAddress)}
+              disabled={approving || rejecting}
+              className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 cursor-pointer"
+              size="sm"
+            >
+              {rejecting ? "Rejecting..." : "Reject"}
+            </Button>
+          </div>
         </div>
       </div>
     </Card>

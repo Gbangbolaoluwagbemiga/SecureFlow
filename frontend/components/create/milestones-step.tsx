@@ -106,7 +106,11 @@ export function MilestonesStep({
                   placeholder="Describe what needs to be delivered..."
                   className="min-h-[80px]"
                   required
+                  minLength={10}
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Minimum 10 characters required
+                </p>
               </div>
 
               <div>
@@ -121,10 +125,13 @@ export function MilestonesStep({
                     updateMilestone(index, "amount", e.target.value)
                   }
                   placeholder="e.g., 500"
-                  min="0"
+                  min="0.01"
                   step="0.01"
                   required
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Minimum 0.01 tokens required
+                </p>
               </div>
             </div>
           </div>
