@@ -300,38 +300,60 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         try {
           const data = encodeFunction(abi, method, args);
 
-          // Estimate gas for the transaction
-          let gasLimit = "0x100000"; // Default fallback
-          try {
-            const estimatedGas = await window.ethereum.request({
-              method: "eth_estimateGas",
-              params: [
-                {
-                  from: wallet.address,
-                  to: address,
-                  data,
-                  value:
-                    value !== "0x0" && value !== "no-value" ? value : "0x0",
-                },
-              ],
-            });
-            // Add 20% buffer to estimated gas
-            const gasWithBuffer = Math.floor(Number(estimatedGas) * 1.2);
-            gasLimit = `0x${gasWithBuffer.toString(16)}`;
-            console.log(`Gas estimated: ${estimatedGas}, using: ${gasLimit}`);
-          } catch (gasError) {
-            console.warn("Gas estimation failed, using default:", gasError);
-            // For specific functions that might fail gas estimation, use lower defaults
-            if (method === "unpause" || method === "pause") {
-              gasLimit = "0x30000"; // 196,608 gas - much lower for simple functions
-              console.log(`Using reduced gas limit for ${method}: ${gasLimit}`);
-            } else if (
-              method === "submitMilestone" ||
-              method === "approveMilestone" ||
-              method === "rejectMilestone"
-            ) {
-              gasLimit = "0x50000"; // 327,680 gas - reasonable for milestone functions
-              console.log(`Using reduced gas limit for ${method}: ${gasLimit}`);
+          // Estimate gas for the transaction with optimized limits
+          let gasLimit = "0x80000"; // Reduced default fallback (524,288 gas)
+
+          // Force higher gas limits for specific functions that need it
+          if (method === "approve") {
+            gasLimit = "0xc350"; // 50,000 gas - force higher limit for ERC20 approve
+            console.log(`Using forced gas limit for ${method}: ${gasLimit}`);
+          } else {
+            try {
+              const estimatedGas = await window.ethereum.request({
+                method: "eth_estimateGas",
+                params: [
+                  {
+                    from: wallet.address,
+                    to: address,
+                    data,
+                    value:
+                      value !== "0x0" && value !== "no-value" ? value : "0x0",
+                  },
+                ],
+              });
+              // Add only 10% buffer to estimated gas (reduced from 20%)
+              const gasWithBuffer = Math.floor(Number(estimatedGas) * 1.1);
+              gasLimit = `0x${gasWithBuffer.toString(16)}`;
+              console.log(`Gas estimated: ${estimatedGas}, using: ${gasLimit}`);
+            } catch (gasError) {
+              console.warn(
+                "Gas estimation failed, using optimized defaults:",
+                gasError,
+              );
+              // Use much lower, function-specific gas limits
+              if (method === "unpause" || method === "pause") {
+                gasLimit = "0x20000"; // 131,072 gas - very low for simple functions
+                console.log(
+                  `Using reduced gas limit for ${method}: ${gasLimit}`,
+                );
+              } else if (
+                method === "submitMilestone" ||
+                method === "approveMilestone" ||
+                method === "rejectMilestone"
+              ) {
+                gasLimit = "0x30000"; // 196,608 gas - reduced for milestone functions
+                console.log(
+                  `Using reduced gas limit for ${method}: ${gasLimit}`,
+                );
+              } else if (
+                method === "createEscrow" ||
+                method === "createEscrowNative"
+              ) {
+                gasLimit = "0x60000"; // 393,216 gas - optimized for escrow creation
+                console.log(
+                  `Using optimized gas limit for ${method}: ${gasLimit}`,
+                );
+              }
             }
           }
 
@@ -340,6 +362,8 @@ export function Web3Provider({ children }: { children: ReactNode }) {
             to: address,
             data,
             gas: gasLimit,
+            // Let network auto-estimate gas price for better compatibility
+            // gasPrice: method === "approve" ? "0x174876e800" : "0x3b9aca00", // 100 gwei for approve, 1 gwei for others
           };
 
           // Only add value field if it's not "0x0" or "no-value" (for native token transactions)

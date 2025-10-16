@@ -21,12 +21,21 @@ interface ProjectDetailsStepProps {
   };
   onUpdate: (data: Partial<ProjectDetailsStepProps["formData"]>) => void;
   isContractPaused: boolean;
+  errors?: {
+    projectTitle?: string;
+    projectDescription?: string;
+    duration?: string;
+    totalBudget?: string;
+    beneficiary?: string;
+    tokenAddress?: string;
+  };
 }
 
 export function ProjectDetailsStep({
   formData,
   onUpdate,
   isContractPaused,
+  errors = {},
 }: ProjectDetailsStepProps) {
   return (
     <Card className="glass border-primary/20 p-6">
@@ -54,7 +63,13 @@ export function ProjectDetailsStep({
               placeholder="Enter project title"
               required
               minLength={3}
+              className={
+                errors.projectTitle ? "border-red-500 focus:border-red-500" : ""
+              }
             />
+            {errors.projectTitle && (
+              <p className="text-red-500 text-sm mt-1">{errors.projectTitle}</p>
+            )}
           </div>
 
           <div>
@@ -68,7 +83,13 @@ export function ProjectDetailsStep({
               min="1"
               max="365"
               required
+              className={
+                errors.duration ? "border-red-500 focus:border-red-500" : ""
+              }
             />
+            {errors.duration && (
+              <p className="text-red-500 text-sm mt-1">{errors.duration}</p>
+            )}
           </div>
         </div>
 
@@ -79,13 +100,19 @@ export function ProjectDetailsStep({
             value={formData.projectDescription}
             onChange={(e) => onUpdate({ projectDescription: e.target.value })}
             placeholder="Describe the project requirements and deliverables..."
-            className="min-h-[120px]"
+            className={`min-h-[120px] ${errors.projectDescription ? "border-red-500 focus:border-red-500" : ""}`}
             required
             minLength={50}
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Minimum 50 characters required
-          </p>
+          {errors.projectDescription ? (
+            <p className="text-red-500 text-sm mt-1">
+              {errors.projectDescription}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-1">
+              Minimum 50 characters required
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -100,10 +127,17 @@ export function ProjectDetailsStep({
               min="0.01"
               step="0.01"
               required
+              className={
+                errors.totalBudget ? "border-red-500 focus:border-red-500" : ""
+              }
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              Minimum 0.01 tokens required
-            </p>
+            {errors.totalBudget ? (
+              <p className="text-red-500 text-sm mt-1">{errors.totalBudget}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-1">
+                Minimum 0.01 tokens required
+              </p>
+            )}
           </div>
 
           <div>
@@ -118,12 +152,19 @@ export function ProjectDetailsStep({
               disabled={formData.isOpenJob}
               required={!formData.isOpenJob}
               pattern="^0x[a-fA-F0-9]{40}$"
+              className={
+                errors.beneficiary ? "border-red-500 focus:border-red-500" : ""
+              }
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              {formData.isOpenJob
-                ? "Leave empty for open job applications"
-                : "Valid Ethereum address required for direct escrow"}
-            </p>
+            {errors.beneficiary ? (
+              <p className="text-red-500 text-sm mt-1">{errors.beneficiary}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-1">
+                {formData.isOpenJob
+                  ? "Leave empty for open job applications"
+                  : "Valid Ethereum address required for direct escrow"}
+              </p>
+            )}
           </div>
         </div>
 
@@ -138,6 +179,35 @@ export function ProjectDetailsStep({
             />
             <Label htmlFor="useNativeToken">Use Native Token (MON)</Label>
           </div>
+
+          {!formData.useNativeToken && (
+            <div>
+              <Label htmlFor="tokenAddress">Token Address *</Label>
+              <Input
+                id="tokenAddress"
+                value={formData.token}
+                onChange={(e) => onUpdate({ token: e.target.value })}
+                placeholder="0x..."
+                required={!formData.useNativeToken}
+                pattern="^0x[a-fA-F0-9]{40}$"
+                className={
+                  errors.tokenAddress
+                    ? "border-red-500 focus:border-red-500"
+                    : ""
+                }
+              />
+              {errors.tokenAddress ? (
+                <p className="text-red-500 text-sm mt-1">
+                  {errors.tokenAddress}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter the contract address of your ERC20 token deployed on
+                  Monad Testnet
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center space-x-2">
             <input

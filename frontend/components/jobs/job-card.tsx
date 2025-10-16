@@ -25,6 +25,23 @@ export function JobCard({
   console.log(
     `JobCard ${job.id} - isJobCreator: ${job.isJobCreator}, hasApplied: ${hasApplied}, isContractPaused: ${isContractPaused}`,
   );
+  console.log(
+    `JobCard ${job.id} - Button disabled: ${hasApplied || isContractPaused || job.isJobCreator}`,
+  );
+  console.log(
+    `JobCard ${job.id} - Button text logic: isContractPaused=${isContractPaused}, isJobCreator=${job.isJobCreator}, hasApplied=${hasApplied}`,
+  );
+
+  // Additional debugging for application status
+  if (hasApplied) {
+    console.log(
+      `✅ JobCard ${job.id} - User has applied, button should show "Applied"`,
+    );
+  } else {
+    console.log(
+      `❌ JobCard ${job.id} - User has NOT applied, button should show "Apply Now"`,
+    );
+  }
   const getStatusColor = (status: string) => {
     switch (status) {
       case "pending":
@@ -50,10 +67,12 @@ export function JobCard({
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-3">
-              <h3 className="text-xl font-bold">Job #{job.id}</h3>
+              <h3 className="text-xl font-bold">
+                {job.projectTitle || `Job #${job.id}`}
+              </h3>
               <Badge variant="secondary" className="gap-1">
                 <Clock className="h-3 w-3" />
-                {Math.round(job.duration / (24 * 60 * 60))} days
+                {job.duration > 0 ? Math.round(job.duration) : 0} days
               </Badge>
               <Badge className={getStatusColor(job.status)}>{job.status}</Badge>
             </div>

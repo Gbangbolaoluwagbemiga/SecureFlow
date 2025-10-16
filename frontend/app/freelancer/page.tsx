@@ -73,7 +73,13 @@ export default function FreelancerPage() {
   const [submittingMilestone, setSubmittingMilestone] = useState<string | null>(
     null,
   );
+  const [submittedMilestones, setSubmittedMilestones] = useState<Set<string>>(
+    new Set(),
+  );
   const [selectedEscrowId, setSelectedEscrowId] = useState<string | null>(null);
+  const [selectedMilestoneIndex, setSelectedMilestoneIndex] = useState<
+    number | null
+  >(null);
   const [milestoneDescription, setMilestoneDescription] = useState("");
   const [showDisputeDialog, setShowDisputeDialog] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
@@ -148,23 +154,37 @@ export default function FreelancerPage() {
 
                           if (m && typeof m === "object") {
                             // If milestone is an object with indexed properties
-                            description = m[0] || m.description || "";
-                            amount = m[1]
-                              ? m[1].toString()
-                              : m.amount
-                                ? m.amount.toString()
-                                : "0";
-                            status = Number(m[2] || m.status || 0);
-                            submittedAt = m[3]
-                              ? Number(m[3]) * 1000
-                              : m.submittedAt
-                                ? Number(m.submittedAt) * 1000
-                                : undefined;
-                            approvedAt = m[4]
-                              ? Number(m[4]) * 1000
-                              : m.approvedAt
-                                ? Number(m.approvedAt) * 1000
-                                : undefined;
+                            // Safely access array indices with bounds checking
+                            description =
+                              m[0] !== undefined && m[0] !== null
+                                ? String(m[0])
+                                : m.description || "";
+                            amount =
+                              m[1] !== undefined && m[1] !== null
+                                ? String(m[1])
+                                : m.amount !== undefined && m.amount !== null
+                                  ? String(m.amount)
+                                  : "0";
+                            status =
+                              m[2] !== undefined && m[2] !== null
+                                ? Number(m[2])
+                                : m.status !== undefined && m.status !== null
+                                  ? Number(m.status)
+                                  : 0;
+                            submittedAt =
+                              m[3] !== undefined && m[3] !== null
+                                ? Number(m[3]) * 1000
+                                : m.submittedAt !== undefined &&
+                                    m.submittedAt !== null
+                                  ? Number(m.submittedAt) * 1000
+                                  : undefined;
+                            approvedAt =
+                              m[4] !== undefined && m[4] !== null
+                                ? Number(m[4]) * 1000
+                                : m.approvedAt !== undefined &&
+                                    m.approvedAt !== null
+                                  ? Number(m.approvedAt) * 1000
+                                  : undefined;
                           } else {
                             // Fallback for unexpected structure
                             description = `Milestone ${index + 1}`;
@@ -206,6 +226,17 @@ export default function FreelancerPage() {
       }
 
       setEscrows(freelancerEscrows);
+
+      // Update submitted milestones based on current data
+      const currentSubmittedMilestones = new Set<string>();
+      freelancerEscrows.forEach((escrow) => {
+        escrow.milestones.forEach((milestone, index) => {
+          if (milestone.status === "Submitted") {
+            currentSubmittedMilestones.add(`${escrow.id}-${index}`);
+          }
+        });
+      });
+      setSubmittedMilestones(currentSubmittedMilestones);
     } catch (error) {
       console.error("Error fetching freelancer escrows:", error);
       toast({
@@ -279,6 +310,10 @@ export default function FreelancerPage() {
         title: "Milestone submitted!",
         description: "Your milestone has been submitted for review",
       });
+
+      // Mark this milestone as submitted to prevent double submission
+      const milestoneKey = `${escrowId}-${milestoneIndex}`;
+      setSubmittedMilestones((prev) => new Set([...prev, milestoneKey]));
 
       // Clear form
       setMilestoneDescription("");
@@ -362,13 +397,13 @@ export default function FreelancerPage() {
 
   const getMilestoneStatusFromNumber = (status: number): string => {
     const statuses = [
-      "NotStarted",
-      "Submitted",
-      "Approved",
-      "Disputed",
-      "Resolved",
+      "pending",     // 0 - Not started
+      "submitted",   // 1 - Submitted by freelancer
+      "approved",    // 2 - Approved by client
+      "disputed",    // 3 - Under dispute
+      "resolved",    // 4 - Dispute resolved
     ];
-    return statuses[status] || "Unknown";
+    return statuses[status] || "pending";
   };
 
   const getMilestoneStatusColor = (status: string) => {
@@ -569,13 +604,20 @@ export default function FreelancerPage() {
                                     }
                                     disabled={
                                       submittingMilestone ===
-                                      `${escrow.id}-${index}`
+                                        `${escrow.id}-${index}` ||
+                                      submittedMilestones.has(
+                                        `${escrow.id}-${index}`,
+                                      )
                                     }
                                   >
                                     {submittingMilestone ===
                                     `${escrow.id}-${index}`
                                       ? "Submitting..."
-                                      : "Submit"}
+                                      : submittedMilestones.has(
+                                            `${escrow.id}-${index}`,
+                                          )
+                                        ? "Submitted"
+                                        : "Submit"}
                                   </Button>
                                 )}
                               {milestone.status === "Submitted" && (

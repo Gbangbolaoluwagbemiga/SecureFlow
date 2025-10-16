@@ -20,6 +20,11 @@ interface MilestonesStepProps {
   onToggleAIWriter: (show: boolean) => void;
   currentMilestoneIndex: number | null;
   onSetCurrentMilestoneIndex: (index: number | null) => void;
+  totalBudget: string;
+  errors?: {
+    milestones?: string;
+    totalMismatch?: string;
+  };
 }
 
 export function MilestonesStep({
@@ -29,6 +34,8 @@ export function MilestonesStep({
   onToggleAIWriter,
   currentMilestoneIndex,
   onSetCurrentMilestoneIndex,
+  totalBudget,
+  errors = {},
 }: MilestonesStepProps) {
   const addMilestone = () => {
     onUpdate([...milestones, { description: "", amount: "" }]);
@@ -116,13 +123,19 @@ export function MilestonesStep({
                     updateMilestone(index, "description", e.target.value)
                   }
                   placeholder="Describe what needs to be delivered..."
-                  className="min-h-[80px]"
+                  className={`min-h-[80px] ${errors.milestones ? "border-red-500 focus:border-red-500" : ""}`}
                   required
                   minLength={10}
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Minimum 10 characters required
-                </p>
+                {errors.milestones ? (
+                  <p className="text-red-500 text-sm mt-1">
+                    {errors.milestones}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Minimum 10 characters required
+                  </p>
+                )}
               </div>
 
               <div>
@@ -140,10 +153,21 @@ export function MilestonesStep({
                   min="0.01"
                   step="0.01"
                   required
+                  className={
+                    errors.milestones
+                      ? "border-red-500 focus:border-red-500"
+                      : ""
+                  }
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Minimum 0.01 tokens required
-                </p>
+                {errors.milestones ? (
+                  <p className="text-red-500 text-sm mt-1">
+                    {errors.milestones}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Minimum 0.01 tokens required
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -158,6 +182,42 @@ export function MilestonesStep({
           <Plus className="h-4 w-4 mr-2" />
           Add Milestone
         </Button>
+
+        {/* Total Budget Checker */}
+        <div className="mt-6 p-4 bg-muted/50 rounded-lg border">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">
+                Total Milestone Amount:
+              </Label>
+              <div className="text-2xl font-bold text-primary">
+                {milestones
+                  .reduce(
+                    (sum, m) => sum + (Number.parseFloat(m.amount) || 0),
+                    0,
+                  )
+                  .toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">
+                Target Total:
+              </Label>
+              <div className="text-2xl font-bold text-foreground">
+                {totalBudget || "0.00"}
+              </div>
+            </div>
+          </div>
+
+          {errors.totalMismatch && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-red-600 text-sm font-medium">
+                Amount mismatch
+              </p>
+              <p className="text-red-500 text-sm">{errors.totalMismatch}</p>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

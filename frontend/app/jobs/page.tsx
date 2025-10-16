@@ -45,9 +45,13 @@ export default function JobsPage() {
   };
 
   useEffect(() => {
-    fetchOpenJobs();
+    if (wallet.address) {
+      fetchOpenJobs();
+    } else {
+      console.log("Wallet not connected, waiting for connection...");
+    }
     checkContractPauseStatus();
-  }, []);
+  }, [wallet.address]);
 
   const checkContractPauseStatus = async () => {
     try {
@@ -139,50 +143,121 @@ export default function JobsPage() {
                     hasAppliedResult,
                     "Type:",
                     typeof hasAppliedResult,
+                    "Raw value:",
+                    hasAppliedResult?.[0],
+                    "toString:",
+                    hasAppliedResult?.toString(),
                   );
 
                   // Handle different possible return types - be more strict about what counts as "applied"
-                  userHasApplied =
-                    hasAppliedResult === true ||
-                    hasAppliedResult === "true" ||
-                    hasAppliedResult === 1;
-                  console.log(`User has applied to job ${i}:`, userHasApplied);
-
-                  // Double-check by looking at applications directly if hasUserApplied seems wrong
                   if (
                     hasAppliedResult &&
-                    hasAppliedResult !== false &&
-                    hasAppliedResult !== "false" &&
-                    hasAppliedResult !== 0
+                    typeof hasAppliedResult === "object"
                   ) {
+                    // Handle Proxy(Result) objects
                     try {
-                      const applications = await contract.call(
-                        "getApplications",
-                        i,
-                      );
-                      console.log(`Applications for job ${i}:`, applications);
-                      // Check if current user is in the applications list
-                      const userInApplications = applications.some(
-                        (app: any) =>
-                          app.freelancer &&
-                          app.freelancer.toLowerCase() ===
-                            wallet.address?.toLowerCase(),
-                      );
+                      const resultValue =
+                        hasAppliedResult[0] || hasAppliedResult.toString();
+                      userHasApplied =
+                        resultValue === true ||
+                        resultValue === "true" ||
+                        resultValue === 1 ||
+                        resultValue === "1";
                       console.log(
-                        `User found in applications for job ${i}:`,
-                        userInApplications,
+                        `Parsed Proxy(Result) value:`,
+                        resultValue,
+                        "→",
+                        userHasApplied,
                       );
+                    } catch (e) {
+                      console.log("Error parsing Proxy(Result):", e);
+                      userHasApplied = false;
+                    }
+                  } else {
+                    userHasApplied =
+                      hasAppliedResult === true ||
+                      hasAppliedResult === "true" ||
+                      hasAppliedResult === 1;
+                  }
+                  console.log(`User has applied to job ${i}:`, userHasApplied);
 
-                      // If hasUserApplied says true but user is not in applications, trust applications
-                      if (!userInApplications) {
-                        console.log(
-                          `hasUserApplied returned true but user not in applications - correcting to false`,
+                  // Update the hasApplied state for this job
+                  setHasApplied((prev) => ({
+                    ...prev,
+                    [i]: userHasApplied,
+                  }));
+                  console.log(`Updated hasApplied[${i}] to:`, userHasApplied);
+
+                  // If hasUserApplied returned false, try to double-check with applications list
+                  if (!userHasApplied) {
+                    console.log(
+                      `🔍 Double-checking job ${i} applications since hasUserApplied returned false`,
+                    );
+                    try {
+                      // Try to get applications with a smaller limit first
+                      let applications = null;
+                      try {
+                        applications = await contract.call(
+                          "getApplicationsPage",
+                          i, // escrowId
+                          0, // offset
+                          1, // limit - start with 1
                         );
-                        userHasApplied = false;
+                        console.log(
+                          `Applications fetch successful for job ${i}:`,
+                          applications,
+                        );
+                      } catch (error1) {
+                        console.log(
+                          `First attempt failed for job ${i}, trying with limit 10:`,
+                          error1,
+                        );
+                        try {
+                          applications = await contract.call(
+                            "getApplicationsPage",
+                            i, // escrowId
+                            0, // offset
+                            10, // limit - try 10
+                          );
+                          console.log(
+                            `Second attempt successful for job ${i}:`,
+                            applications,
+                          );
+                        } catch (error2) {
+                          console.log(
+                            `All attempts failed for job ${i}:`,
+                            error2,
+                          );
+                          throw error2;
+                        }
+                      }
+
+                      if (applications && Array.isArray(applications)) {
+                        const userInApplications = applications.some(
+                          (app: any) =>
+                            app.freelancer &&
+                            app.freelancer.toLowerCase() ===
+                              wallet.address?.toLowerCase(),
+                        );
+                        console.log(
+                          `User found in applications for job ${i}:`,
+                          userInApplications,
+                        );
+
+                        if (userInApplications) {
+                          userHasApplied = true;
+                          setHasApplied((prev) => ({
+                            ...prev,
+                            [i]: true,
+                          }));
+                          console.log(
+                            `Corrected hasApplied[${i}] to true after direct check`,
+                          );
+                        }
                       }
                     } catch (appError) {
                       console.warn(
-                        `Could not fetch applications for job ${i}:`,
+                        `Could not fetch applications for job ${i} during double-check:`,
                         appError,
                       );
                     }
@@ -204,7 +279,12 @@ export default function JobsPage() {
               // Fetch application count for this job
               let applicationCount = 0;
               try {
-                const applications = await contract.call("getApplications", i);
+                const applications = await contract.call(
+                  "getApplicationsPage",
+                  i, // escrowId
+                  0, // offset
+                  100, // limit
+                );
                 applicationCount = applications ? applications.length : 0;
                 console.log(`Job ${i} has ${applicationCount} applications`);
               } catch (error) {
@@ -225,9 +305,16 @@ export default function JobsPage() {
                 releasedAmount: escrowSummary[5].toString(), // paidAmount
                 status: getStatusFromNumber(Number(escrowSummary[3])), // status
                 createdAt: Number(escrowSummary[10]) * 1000, // createdAt (convert to milliseconds)
-                duration: (Number(escrowSummary[8]) - Number(escrowSummary[10])) / (24 * 60 * 60), // Convert seconds to days
+                duration: Math.max(
+                  0,
+                  Math.round(
+                    (Number(escrowSummary[8]) - Number(escrowSummary[10])) /
+                      (24 * 60 * 60),
+                  ),
+                ), // Convert seconds to days, ensure non-negative and round to nearest day
                 milestones: [], // Would need to fetch milestones separately
-                projectDescription: escrowSummary[13] || "", // projectTitle
+                projectTitle: escrowSummary[13] || "", // projectTitle
+                projectDescription: escrowSummary[14] || "", // projectDescription
                 isOpenJob: true,
                 applications: [], // Would need to fetch applications separately
                 applicationCount: applicationCount, // Add real application count
@@ -266,7 +353,7 @@ export default function JobsPage() {
   const handleApply = async () => {
     if (!selectedJob || !wallet.isConnected) return;
 
-    // Check if user has already applied to this job
+    // Check if user has already applied to this job (local state)
     if (hasApplied[selectedJob.id]) {
       toast({
         title: "Already Applied",
@@ -282,15 +369,23 @@ export default function JobsPage() {
       if (!contract) return;
 
       // Double-check with blockchain to prevent duplicate applications
+      console.log(
+        "🔍 Checking if user has already applied to job",
+        selectedJob.id,
+      );
+
+      let userHasApplied = false;
+
       try {
+        // First try the hasUserApplied function
         const hasUserAppliedResult = await contract.call(
           "hasUserApplied",
           selectedJob.id,
+          wallet.address,
         );
         console.log("hasUserApplied result:", hasUserAppliedResult);
 
         // Handle different return types including Proxy(Result) objects
-        let userHasApplied = false;
         if (hasUserAppliedResult && typeof hasUserAppliedResult === "object") {
           try {
             const resultValue =
@@ -300,6 +395,7 @@ export default function JobsPage() {
               resultValue === "true" ||
               resultValue === 1 ||
               resultValue === "1";
+            console.log("Parsed hasUserApplied result:", userHasApplied);
           } catch (e) {
             console.log("Error parsing hasUserApplied result:", e);
             userHasApplied = false;
@@ -310,19 +406,54 @@ export default function JobsPage() {
             hasUserAppliedResult === "true" ||
             hasUserAppliedResult === 1;
         }
-
-        if (userHasApplied) {
-          toast({
-            title: "Already Applied",
-            description: "You have already applied to this job.",
-            variant: "destructive",
-          });
-          setApplying(false);
-          return;
-        }
       } catch (checkError) {
-        console.warn("Could not check if user has applied:", checkError);
-        // Continue with application if check fails
+        console.warn("hasUserApplied function failed:", checkError);
+        userHasApplied = false;
+      }
+
+      // If hasUserApplied failed or returned false, try alternative method
+      if (!userHasApplied) {
+        try {
+          console.log(
+            "🔍 Trying alternative method - checking applications directly",
+          );
+          const applications = await contract.call(
+            "getApplicationsPage",
+            selectedJob.id,
+            0, // offset
+            100, // limit
+          );
+          console.log("Applications data:", applications);
+
+          if (applications && Array.isArray(applications)) {
+            // Check if current user is in the applications list
+            userHasApplied = applications.some((app: any) => {
+              const freelancerAddress = app.freelancer || app[0]; // Try different possible structures
+              return (
+                freelancerAddress &&
+                freelancerAddress.toLowerCase() === wallet.address.toLowerCase()
+              );
+            });
+            console.log("Alternative check result:", userHasApplied);
+          }
+        } catch (altError) {
+          console.warn("Alternative application check failed:", altError);
+        }
+      }
+
+      if (userHasApplied) {
+        console.log("❌ User has already applied to this job");
+        toast({
+          title: "Already Applied",
+          description: "You have already applied to this job.",
+          variant: "destructive",
+        });
+        setApplying(false);
+        return;
+      } else {
+        console.log(
+          "✅ User has not applied to this job, proceeding with application",
+        );
       }
 
       // Call the smart contract applyToJob function

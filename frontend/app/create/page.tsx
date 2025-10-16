@@ -31,6 +31,16 @@ export default function CreateEscrowPage() {
   const [useNativeToken, setUseNativeToken] = useState(false);
   const [isOpenJob, setIsOpenJob] = useState(false);
   const [isContractPaused, setIsContractPaused] = useState(false);
+  const [errors, setErrors] = useState<{
+    projectTitle?: string;
+    projectDescription?: string;
+    duration?: string;
+    totalBudget?: string;
+    beneficiary?: string;
+    tokenAddress?: string;
+    milestones?: string;
+    totalMismatch?: string;
+  }>({});
 
   useEffect(() => {
     checkContractPauseStatus();
@@ -147,61 +157,78 @@ export default function CreateEscrowPage() {
   };
 
   const validateStep = () => {
+    const newErrors: typeof errors = {};
+    let hasErrors = false;
+
     if (step === 1) {
       // Validate all required fields for step 1
-      const errors: string[] = [];
-      
       if (!formData.projectTitle || formData.projectTitle.length < 3) {
-        errors.push("Project title must be at least 3 characters");
+        newErrors.projectTitle = "Project title must be at least 3 characters";
+        hasErrors = true;
       }
-      
-      if (!formData.projectDescription || formData.projectDescription.length < 50) {
-        errors.push("Project description must be at least 50 characters");
+
+      if (
+        !formData.projectDescription ||
+        formData.projectDescription.length < 50
+      ) {
+        newErrors.projectDescription =
+          "Project description must be at least 50 characters";
+        hasErrors = true;
       }
-      
-      if (!formData.duration || Number(formData.duration) < 1 || Number(formData.duration) > 365) {
-        errors.push("Duration must be between 1 and 365 days");
+
+      if (
+        !formData.duration ||
+        Number(formData.duration) < 1 ||
+        Number(formData.duration) > 365
+      ) {
+        newErrors.duration = "Duration must be between 1 and 365 days";
+        hasErrors = true;
       }
-      
+
       if (!formData.totalBudget || Number(formData.totalBudget) < 0.01) {
-        errors.push("Total budget must be at least 0.01 tokens");
+        newErrors.totalBudget = "Total budget must be at least 0.01 tokens";
+        hasErrors = true;
       }
-      
-      if (!formData.isOpenJob && (!formData.beneficiary || !/^0x[a-fA-F0-9]{40}$/.test(formData.beneficiary))) {
-        errors.push("Valid beneficiary address is required for direct escrow");
+
+      if (
+        !formData.isOpenJob &&
+        (!formData.beneficiary ||
+          !/^0x[a-fA-F0-9]{40}$/.test(formData.beneficiary))
+      ) {
+        newErrors.beneficiary =
+          "Valid beneficiary address is required for direct escrow";
+        hasErrors = true;
       }
-      
-      if (errors.length > 0) {
-        toast({
-          title: "Missing or invalid information",
-          description: errors.join(", "),
-          variant: "destructive",
-        });
-        return false;
+
+      if (
+        !formData.useNativeToken &&
+        (!formData.token || !/^0x[a-fA-F0-9]{40}$/.test(formData.token))
+      ) {
+        newErrors.tokenAddress =
+          "Valid token address is required for custom ERC20 tokens";
+        hasErrors = true;
       }
     } else if (step === 2) {
       const total = calculateTotalMilestones();
       const targetTotal = Number.parseFloat(formData.totalBudget) || 0;
 
       if (formData.milestones.some((m) => !m.description || !m.amount)) {
-        toast({
-          title: "Incomplete milestones",
-          description: "Please fill in all milestone details",
-          variant: "destructive",
-        });
-        return false;
+        newErrors.milestones = "Please fill in all milestone details";
+        hasErrors = true;
       }
 
       if (Math.abs(total - targetTotal) > 0.01) {
-        toast({
-          title: "Amount mismatch",
-          description: `Milestone amounts (${total}) must equal total amount (${targetTotal})`,
-          variant: "destructive",
-        });
-        return false;
+        newErrors.totalMismatch = `Milestone amounts (${total}) must equal total amount (${targetTotal})`;
+        hasErrors = true;
       }
     }
-    return true;
+
+    setErrors(newErrors);
+    return !hasErrors;
+  };
+
+  const clearErrors = () => {
+    setErrors({});
   };
 
   const nextStep = () => {
@@ -318,9 +345,54 @@ export default function CreateEscrowPage() {
     try {
       if (formData.token !== ZERO_ADDRESS) {
         const tokenContract = getContract(formData.token, ERC20_ABI);
-        const totalAmountInWei = (
-          BigInt(formData.totalBudget) * BigInt(10 ** 18)
+        const totalAmountInWei = BigInt(
+          Math.floor(Number.parseFloat(formData.totalBudget) * 10 ** 18),
         ).toString();
+
+        console.log("ERC20 Approval Details:");
+        console.log("- Token contract:", formData.token);
+        console.log("- SecureFlow contract:", CONTRACTS.SECUREFLOW_ESCROW);
+        console.log("- Approval amount (wei):", totalAmountInWei);
+        console.log("- Approval amount (tokens):", formData.totalBudget);
+
+        // Test if token contract is working
+        try {
+          const tokenName = await tokenContract.call("name");
+          const tokenSymbol = await tokenContract.call("symbol");
+          const tokenDecimals = await tokenContract.call("decimals");
+          console.log("Token info:", {
+            name: tokenName,
+            symbol: tokenSymbol,
+            decimals: tokenDecimals,
+          });
+        } catch (tokenError) {
+          console.error("Token contract error:", tokenError);
+          throw new Error(
+            "Token contract is not working properly. Please check the token address.",
+          );
+        }
+
+        // Check token balance first
+        try {
+          const balance = await tokenContract.call("balanceOf", wallet.address);
+          console.log("Token balance:", balance);
+          console.log(
+            "Balance in tokens:",
+            (Number(balance) / 10 ** 18).toFixed(2),
+          );
+
+          if (Number(balance) < Number(totalAmountInWei)) {
+            throw new Error(
+              `Insufficient token balance. You have ${(Number(balance) / 10 ** 18).toFixed(2)} tokens but need ${formData.totalBudget} tokens.`,
+            );
+          }
+        } catch (balanceError) {
+          console.error("Error checking token balance:", balanceError);
+          throw new Error(
+            "Failed to check token balance. Please ensure you have enough tokens or try using native MON tokens instead.",
+          );
+        }
+
         const approvalTx = await tokenContract.send(
           "approve",
           "no-value", // No native value for ERC20 approval
@@ -343,18 +415,42 @@ export default function CreateEscrowPage() {
       const milestoneDescriptions = formData.milestones.map(
         (m) => m.description,
       );
-      const milestoneAmounts = formData.milestones.map((m) => m.amount);
 
       const beneficiaryAddress = isOpenJob
         ? ZERO_ADDRESS
-        : formData.beneficiary;
+        : formData.beneficiary || ZERO_ADDRESS;
+
+      console.log("Beneficiary address:", beneficiaryAddress);
+      console.log("Is open job:", isOpenJob);
+      console.log("Form beneficiary:", formData.beneficiary);
 
       let txHash;
 
       if (formData.token === ZERO_ADDRESS) {
         // Use createEscrowNative for native MON tokens
         const totalAmountInWei =
-          "0x" + (BigInt(formData.totalBudget) * BigInt(10 ** 18)).toString(16);
+          "0x" +
+          BigInt(
+            Math.floor(Number.parseFloat(formData.totalBudget) * 10 ** 18),
+          ).toString(16);
+
+        // Convert milestone amounts to wei (BigInt)
+        const milestoneAmountsInWei = formData.milestones.map((m) =>
+          BigInt(Math.floor(Number.parseFloat(m.amount) * 10 ** 18)).toString(),
+        );
+
+        console.log("Creating escrow with:");
+        console.log("- Total budget:", formData.totalBudget);
+        console.log(
+          "- Milestone amounts:",
+          formData.milestones.map((m) => m.amount),
+        );
+        console.log("- Milestone amounts in wei:", milestoneAmountsInWei);
+        console.log(
+          "- Total milestone sum:",
+          formData.milestones.reduce((sum, m) => sum + Number(m.amount), 0),
+        );
+
         const arbiters = ["0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41"]; // Default arbiter
         const requiredConfirmations = 1;
 
@@ -367,10 +463,10 @@ export default function CreateEscrowPage() {
           beneficiaryAddress, // beneficiary parameter
           arbiters, // arbiters parameter
           requiredConfirmations, // requiredConfirmations parameter
-          milestoneAmounts, // milestoneAmounts parameter
+          milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
           milestoneDescriptions, // milestoneDescriptions parameter
           durationInSeconds, // duration parameter (in seconds)
-          formData.projectDescription, // projectTitle parameter
+          formData.projectTitle, // projectTitle parameter
           formData.projectDescription, // projectDescription parameter
         );
       } else {
@@ -380,7 +476,19 @@ export default function CreateEscrowPage() {
 
         // Convert milestone amounts to wei for ERC20 tokens
         const milestoneAmountsInWei = formData.milestones.map((m) =>
-          (BigInt(m.amount) * BigInt(10 ** 18)).toString(),
+          BigInt(Math.floor(Number.parseFloat(m.amount) * 10 ** 18)).toString(),
+        );
+
+        console.log("Creating ERC20 escrow with:");
+        console.log("- Total budget:", formData.totalBudget);
+        console.log(
+          "- Milestone amounts:",
+          formData.milestones.map((m) => m.amount),
+        );
+        console.log("- Milestone amounts in wei:", milestoneAmountsInWei);
+        console.log(
+          "- Total milestone sum:",
+          formData.milestones.reduce((sum, m) => sum + Number(m.amount), 0),
         );
 
         // Convert duration from days to seconds
@@ -396,21 +504,62 @@ export default function CreateEscrowPage() {
           milestoneDescriptions, // milestoneDescriptions parameter
           formData.token, // token parameter
           durationInSeconds, // duration parameter (in seconds)
-          formData.projectDescription, // projectTitle parameter
+          formData.projectTitle, // projectTitle parameter
           formData.projectDescription, // projectDescription parameter
         );
       }
 
+      // Wait for transaction confirmation
       toast({
-        title: isOpenJob ? "Job posted!" : "Escrow created!",
-        description: isOpenJob
-          ? "Your job is now live. Freelancers can apply on the Browse Jobs page."
-          : "Your escrow has been successfully created",
+        title: "Transaction submitted",
+        description: "Waiting for blockchain confirmation...",
       });
 
-      setTimeout(() => {
-        router.push(isOpenJob ? "/jobs" : "/dashboard");
-      }, 2000);
+      // Wait for transaction to be mined using polling
+      let receipt;
+      let attempts = 0;
+      const maxAttempts = 30; // 30 attempts * 2 seconds = 1 minute timeout
+
+      while (attempts < maxAttempts) {
+        try {
+          receipt = await window.ethereum.request({
+            method: "eth_getTransactionReceipt",
+            params: [txHash],
+          });
+
+          if (receipt) {
+            break;
+          }
+        } catch (error) {
+          console.log("Waiting for transaction confirmation...", attempts + 1);
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+        attempts++;
+      }
+
+      if (!receipt) {
+        throw new Error(
+          "Transaction timeout - please check the blockchain explorer",
+        );
+      }
+
+      if (receipt.status === "0x1") {
+        // Transaction successful
+        toast({
+          title: isOpenJob ? "Job posted!" : "Escrow created!",
+          description: isOpenJob
+            ? "Your job is now live. Freelancers can apply on the Browse Jobs page."
+            : "Your escrow has been successfully created",
+        });
+
+        setTimeout(() => {
+          router.push(isOpenJob ? "/jobs" : "/dashboard");
+        }, 2000);
+      } else {
+        // Transaction failed
+        throw new Error("Transaction failed on blockchain");
+      }
     } catch (error: any) {
       console.error("Error creating escrow:", error);
       toast({
@@ -474,8 +623,19 @@ export default function CreateEscrowPage() {
               >
                 <ProjectDetailsStep
                   formData={formData}
-                  onUpdate={(data) => setFormData({ ...formData, ...data })}
+                  onUpdate={(data) => {
+                    setFormData({ ...formData, ...data });
+                    clearErrors();
+                  }}
                   isContractPaused={isContractPaused}
+                  errors={{
+                    projectTitle: errors.projectTitle,
+                    projectDescription: errors.projectDescription,
+                    duration: errors.duration,
+                    totalBudget: errors.totalBudget,
+                    beneficiary: errors.beneficiary,
+                    tokenAddress: errors.tokenAddress,
+                  }}
                 />
               </motion.div>
             )}
@@ -490,13 +650,19 @@ export default function CreateEscrowPage() {
               >
                 <MilestonesStep
                   milestones={formData.milestones}
-                  onUpdate={(milestones) =>
-                    setFormData({ ...formData, milestones })
-                  }
+                  onUpdate={(milestones) => {
+                    setFormData({ ...formData, milestones });
+                    clearErrors();
+                  }}
                   showAIWriter={showAIWriter}
                   onToggleAIWriter={setShowAIWriter}
                   currentMilestoneIndex={currentMilestoneIndex}
                   onSetCurrentMilestoneIndex={setCurrentMilestoneIndex}
+                  totalBudget={formData.totalBudget}
+                  errors={{
+                    milestones: errors.milestones,
+                    totalMismatch: errors.totalMismatch,
+                  }}
                 />
               </motion.div>
             )}
@@ -523,7 +689,7 @@ export default function CreateEscrowPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setStep(step - 1)}
+              onClick={prevStep}
               disabled={step === 1}
               className="flex items-center gap-2"
             >
@@ -533,7 +699,7 @@ export default function CreateEscrowPage() {
 
             <Button
               type="button"
-              onClick={() => setStep(step + 1)}
+              onClick={nextStep}
               disabled={step === 3}
               className="flex items-center gap-2"
             >
