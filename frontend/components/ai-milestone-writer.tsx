@@ -1,24 +1,37 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Sparkles, Copy, RefreshCw } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { motion, AnimatePresence } from "framer-motion"
+import { useState } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Sparkles, Copy, RefreshCw, X } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { motion, AnimatePresence } from "framer-motion";
 
-interface AIMilestoneWriterProps {
-  onSelect: (description: string) => void
+interface Milestone {
+  description: string;
+  amount: string;
 }
 
-export function AIMilestoneWriter({ onSelect }: AIMilestoneWriterProps) {
-  const { toast } = useToast()
-  const [prompt, setPrompt] = useState("")
-  const [suggestions, setSuggestions] = useState<string[]>([])
-  const [isGenerating, setIsGenerating] = useState(false)
+interface AIMilestoneWriterProps {
+  onResult: (milestones: Milestone[]) => void;
+  onClose: () => void;
+  currentMilestoneIndex: number | null;
+  existingMilestones: Milestone[];
+}
+
+export function AIMilestoneWriter({
+  onResult,
+  onClose,
+  currentMilestoneIndex,
+  existingMilestones,
+}: AIMilestoneWriterProps) {
+  const { toast } = useToast();
+  const [prompt, setPrompt] = useState("");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const generateSuggestions = async () => {
     if (!prompt.trim()) {
@@ -26,11 +39,11 @@ export function AIMilestoneWriter({ onSelect }: AIMilestoneWriterProps) {
         title: "Enter a prompt",
         description: "Please describe what you need for this milestone",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    setIsGenerating(true)
+    setIsGenerating(true);
 
     // Simulate AI generation - in production, call an AI API
     setTimeout(() => {
@@ -38,27 +51,40 @@ export function AIMilestoneWriter({ onSelect }: AIMilestoneWriterProps) {
         `Complete ${prompt} with comprehensive documentation and testing. Deliverables include source code, test cases, and deployment guide.`,
         `Develop and implement ${prompt} following best practices. Includes code review, unit tests, and integration with existing systems.`,
         `Design and build ${prompt} with focus on scalability and performance. Deliverables include architecture diagrams, implementation, and performance benchmarks.`,
-      ]
-      setSuggestions(mockSuggestions)
-      setIsGenerating(false)
-    }, 1500)
-  }
+      ];
+      setSuggestions(mockSuggestions);
+      setIsGenerating(false);
+    }, 1500);
+  };
 
   const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text)
+    navigator.clipboard.writeText(text);
     toast({
       title: "Copied to clipboard",
       description: "Milestone description copied successfully",
-    })
-  }
+    });
+  };
 
   const handleSelect = (text: string) => {
-    onSelect(text)
+    if (currentMilestoneIndex !== null) {
+      // Update specific milestone
+      const updatedMilestones = [...existingMilestones];
+      updatedMilestones[currentMilestoneIndex] = {
+        ...updatedMilestones[currentMilestoneIndex],
+        description: text,
+      };
+      onResult(updatedMilestones);
+    } else {
+      // Add new milestone
+      const newMilestone = { description: text, amount: "" };
+      onResult([...existingMilestones, newMilestone]);
+    }
+
     toast({
-      title: "Milestone added",
+      title: "Milestone updated",
       description: "AI-generated description has been added to your milestone",
-    })
-  }
+    });
+  };
 
   return (
     <Card className="glass border-accent/20 p-6">
@@ -68,6 +94,14 @@ export function AIMilestoneWriter({ onSelect }: AIMilestoneWriterProps) {
         <Badge variant="outline" className="ml-auto">
           <span className="text-xs">Beta</span>
         </Badge>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClose}
+          className="ml-2 h-8 w-8 p-0"
+        >
+          <X className="h-4 w-4" />
+        </Button>
       </div>
 
       <div className="space-y-4">
@@ -82,7 +116,11 @@ export function AIMilestoneWriter({ onSelect }: AIMilestoneWriterProps) {
           />
         </div>
 
-        <Button onClick={generateSuggestions} disabled={isGenerating} className="w-full gap-2">
+        <Button
+          onClick={generateSuggestions}
+          disabled={isGenerating}
+          className="w-full gap-2"
+        >
           {isGenerating ? (
             <>
               <RefreshCw className="h-4 w-4 animate-spin" />
@@ -115,10 +153,20 @@ export function AIMilestoneWriter({ onSelect }: AIMilestoneWriterProps) {
                   <Card className="p-4 border-muted hover:border-primary/50 transition-colors">
                     <p className="text-sm leading-relaxed mb-3">{suggestion}</p>
                     <div className="flex gap-2">
-                      <Button onClick={() => handleSelect(suggestion)} size="sm" variant="default" className="gap-2">
+                      <Button
+                        onClick={() => handleSelect(suggestion)}
+                        size="sm"
+                        variant="default"
+                        className="gap-2"
+                      >
                         Use This
                       </Button>
-                      <Button onClick={() => handleCopy(suggestion)} size="sm" variant="outline" className="gap-2">
+                      <Button
+                        onClick={() => handleCopy(suggestion)}
+                        size="sm"
+                        variant="outline"
+                        className="gap-2"
+                      >
                         <Copy className="h-3 w-3" />
                         Copy
                       </Button>
@@ -131,5 +179,5 @@ export function AIMilestoneWriter({ onSelect }: AIMilestoneWriterProps) {
         </AnimatePresence>
       </div>
     </Card>
-  )
+  );
 }

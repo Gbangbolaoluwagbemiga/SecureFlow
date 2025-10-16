@@ -62,6 +62,18 @@ export function MilestonesStep({
         <CardTitle>Milestones</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {showAIWriter && (
+          <AIMilestoneWriter
+            onResult={handleAIWriterResult}
+            onClose={() => {
+              onToggleAIWriter(false);
+              onSetCurrentMilestoneIndex(null);
+            }}
+            currentMilestoneIndex={currentMilestoneIndex}
+            existingMilestones={milestones}
+          />
+        )}
+
         {milestones.map((milestone, index) => (
           <div key={index} className="border border-border/40 rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
@@ -146,18 +158,6 @@ export function MilestonesStep({
           <Plus className="h-4 w-4 mr-2" />
           Add Milestone
         </Button>
-
-        {showAIWriter && (
-          <AIMilestoneWriter
-            onResult={handleAIWriterResult}
-            onClose={() => {
-              onToggleAIWriter(false);
-              onSetCurrentMilestoneIndex(null);
-            }}
-            currentMilestoneIndex={currentMilestoneIndex}
-            existingMilestones={milestones}
-          />
-        )}
       </CardContent>
     </Card>
   );
