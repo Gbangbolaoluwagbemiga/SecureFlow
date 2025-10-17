@@ -68,24 +68,26 @@ export default function DashboardPage() {
     return Math.max(0, daysLeft); // Don't show negative days
   };
 
-  const getDaysLeftMessage = (daysLeft: number): { text: string; color: string; bgColor: string } => {
+  const getDaysLeftMessage = (
+    daysLeft: number,
+  ): { text: string; color: string; bgColor: string } => {
     if (daysLeft > 7) {
       return {
         text: `${daysLeft} days`,
         color: "text-red-700 dark:text-red-400",
-        bgColor: "bg-red-50 dark:bg-red-900/20"
+        bgColor: "bg-red-50 dark:bg-red-900/20",
       };
     } else if (daysLeft > 0) {
       return {
         text: `${daysLeft} days`,
         color: "text-orange-700 dark:text-orange-400",
-        bgColor: "bg-orange-50 dark:bg-orange-900/20"
+        bgColor: "bg-orange-50 dark:bg-orange-900/20",
       };
     } else {
       return {
         text: "Deadline passed",
         color: "text-red-700 dark:text-red-400",
-        bgColor: "bg-red-100 dark:bg-red-900/30"
+        bgColor: "bg-red-100 dark:bg-red-900/30",
       };
     }
   };
@@ -1022,6 +1024,7 @@ export default function DashboardPage() {
                 onStartWork={startWork}
                 onDispute={openDispute}
                 calculateDaysLeft={calculateDaysLeft}
+                getDaysLeftMessage={getDaysLeftMessage}
               />
             ))}
           </div>

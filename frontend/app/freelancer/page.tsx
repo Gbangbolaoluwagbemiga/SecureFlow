@@ -894,6 +894,30 @@ export default function FreelancerPage() {
     return Math.max(0, daysLeft); // Don't show negative days
   };
 
+  const getDaysLeftMessage = (
+    daysLeft: number,
+  ): { text: string; color: string; bgColor: string } => {
+    if (daysLeft > 7) {
+      return {
+        text: `${daysLeft} days`,
+        color: "text-red-700 dark:text-red-400",
+        bgColor: "bg-red-50 dark:bg-red-900/20",
+      };
+    } else if (daysLeft > 0) {
+      return {
+        text: `${daysLeft} days`,
+        color: "text-orange-700 dark:text-orange-400",
+        bgColor: "bg-orange-50 dark:bg-orange-900/20",
+      };
+    } else {
+      return {
+        text: "Deadline passed",
+        color: "text-red-700 dark:text-red-400",
+        bgColor: "bg-red-100 dark:bg-red-900/30",
+      };
+    }
+  };
+
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString();
   };
@@ -1025,18 +1049,39 @@ export default function FreelancerPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                      <div
+                        className={`flex items-center gap-2 p-3 rounded-lg ${(() => {
+                          const daysLeft = calculateDaysLeft(
+                            escrow.createdAt,
+                            escrow.duration,
+                          );
+                          const message = getDaysLeftMessage(daysLeft);
+                          return message.bgColor;
+                        })()}`}
+                      >
                         <Clock className="h-5 w-5 text-red-600 dark:text-red-400" />
                         <div>
                           <p className="text-sm text-gray-600 dark:text-gray-400">
                             Days Left
                           </p>
-                          <p className="font-semibold text-red-700 dark:text-red-400">
-                            {calculateDaysLeft(
-                              escrow.createdAt,
-                              escrow.duration,
-                            )}{" "}
-                            days
+                          <p
+                            className={`font-semibold ${(() => {
+                              const daysLeft = calculateDaysLeft(
+                                escrow.createdAt,
+                                escrow.duration,
+                              );
+                              const message = getDaysLeftMessage(daysLeft);
+                              return message.color;
+                            })()}`}
+                          >
+                            {(() => {
+                              const daysLeft = calculateDaysLeft(
+                                escrow.createdAt,
+                                escrow.duration,
+                              );
+                              const message = getDaysLeftMessage(daysLeft);
+                              return message.text;
+                            })()}
                           </p>
                         </div>
                       </div>

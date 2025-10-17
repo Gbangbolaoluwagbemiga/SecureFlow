@@ -23,6 +23,11 @@ interface EscrowCardProps {
   onStartWork: (escrowId: string) => void;
   onDispute: (escrowId: string) => void;
   calculateDaysLeft: (createdAt: number, duration: number) => number;
+  getDaysLeftMessage: (daysLeft: number) => {
+    text: string;
+    color: string;
+    bgColor: string;
+  };
 }
 
 export function EscrowCard({
@@ -38,6 +43,7 @@ export function EscrowCard({
   onStartWork,
   onDispute,
   calculateDaysLeft,
+  getDaysLeftMessage,
 }: EscrowCardProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -161,7 +167,16 @@ export function EscrowCard({
                 <span className="text-gray-600">Days Left:</span>
                 <div className="font-semibold flex items-center gap-1">
                   <Clock className="h-4 w-4" />
-                  {calculateDaysLeft(escrow.createdAt, escrow.duration)} days
+                  {(() => {
+                    const daysLeft = calculateDaysLeft(
+                      escrow.createdAt,
+                      escrow.duration,
+                    );
+                    const message = getDaysLeftMessage(daysLeft);
+                    return (
+                      <span className={message.color}>{message.text}</span>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
