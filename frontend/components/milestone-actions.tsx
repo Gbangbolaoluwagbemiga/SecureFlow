@@ -294,19 +294,18 @@ export function MilestoneActions({
           return null;
         })()}
 
-        {/* Dispute - Only beneficiary can dispute */}
-        {(milestone.status === "submitted" || escrowStatus === "active") &&
-          isBeneficiary && (
-            <Button
-              onClick={() => openDialog("dispute")}
-              size="sm"
-              variant="destructive"
-              className="gap-2"
-            >
-              <AlertTriangle className="h-4 w-4" />
-              Dispute
-            </Button>
-          )}
+        {/* Dispute - Only beneficiary can dispute, and only for submitted milestones */}
+        {milestone.status === "submitted" && isBeneficiary && (
+          <Button
+            onClick={() => openDialog("dispute")}
+            size="sm"
+            variant="destructive"
+            className="gap-2"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            Dispute
+          </Button>
+        )}
       </div>
 
       {/* Confirmation Dialog */}

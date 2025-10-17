@@ -76,6 +76,9 @@ export default function FreelancerPage() {
   const [submittedMilestones, setSubmittedMilestones] = useState<Set<string>>(
     new Set(),
   );
+  const [approvedMilestones, setApprovedMilestones] = useState<Set<string>>(
+    new Set(),
+  );
   const [selectedEscrowId, setSelectedEscrowId] = useState<string | null>(null);
   const [selectedMilestoneIndex, setSelectedMilestoneIndex] = useState<
     number | null
@@ -144,6 +147,14 @@ export default function FreelancerPage() {
               escrowSummary[1].toLowerCase() === wallet.address?.toLowerCase();
 
             if (isBeneficiary) {
+              // Get milestone count from escrow summary first
+              const milestoneCount = Number(escrowSummary[11]) || 0;
+              console.log(
+                `Escrow ${i} milestoneCount from contract:`,
+                escrowSummary[11],
+              );
+              console.log(`Escrow ${i} parsed milestoneCount:`, milestoneCount);
+
               // Fetch milestones for this escrow
               const milestones = await contract.call("getMilestones", i);
               console.log(`Milestones for escrow ${i}:`, milestones);
@@ -152,6 +163,45 @@ export default function FreelancerPage() {
               if (milestones && milestones.length > 0) {
                 console.log(`First milestone:`, milestones[0]);
               }
+
+              // Create all milestones - if we only have 1 milestone but need 3, create placeholders
+              const allMilestones = [];
+              if (milestones && Array.isArray(milestones)) {
+                // Add existing milestones
+                for (let j = 0; j < milestones.length; j++) {
+                  allMilestones.push(milestones[j]);
+                }
+
+                // Create placeholder milestones for the missing ones
+                for (let j = milestones.length; j < milestoneCount; j++) {
+                  console.log(
+                    `Creating placeholder milestone ${j} for escrow ${i}`,
+                  );
+                  allMilestones.push({
+                    description: `Milestone ${j + 1} - To be defined`,
+                    amount: "0",
+                    status: 0, // pending
+                    submittedAt: 0,
+                    approvedAt: 0,
+                  });
+                }
+              } else {
+                // If no milestones returned, create all as placeholders
+                for (let j = 0; j < milestoneCount; j++) {
+                  console.log(
+                    `Creating all placeholder milestones for escrow ${i}`,
+                  );
+                  allMilestones.push({
+                    description: `Milestone ${j + 1} - To be defined`,
+                    amount: "0",
+                    status: 0, // pending
+                    submittedAt: 0,
+                    approvedAt: 0,
+                  });
+                }
+              }
+
+              console.log(`All milestones for escrow ${i}:`, allMilestones);
 
               // Convert contract data to our Escrow type
               const escrow: Escrow = {
@@ -164,194 +214,242 @@ export default function FreelancerPage() {
                 status: getStatusFromNumber(Number(escrowSummary[3])), // status
                 createdAt: Number(escrowSummary[10]) * 1000, // createdAt (convert to milliseconds)
                 duration: Number(escrowSummary[8]) - Number(escrowSummary[10]), // deadline - createdAt (in seconds)
-                milestones:
-                  milestones && Array.isArray(milestones)
-                    ? milestones.map((m: any, index: number) => {
-                        try {
-                          // Handle different milestone data structures
-                          let description = "";
-                          let amount = "0";
-                          let status = 0;
-                          let submittedAt = undefined;
-                          let approvedAt = undefined;
+                milestones: allMilestones.map((m: any, index: number) => {
+                  try {
+                    // Handle milestone data structure from getMilestones
+                    let description = "";
+                    let amount = "0";
+                    let status = 0;
+                    let submittedAt = undefined;
+                    let approvedAt = undefined;
 
-                          if (m && typeof m === "object") {
-                            // If milestone is an object with indexed properties
-                            // Safely access array indices with bounds checking
-                            try {
-                              // Parse description more carefully to avoid raw blockchain data
-                              if (m[0] !== undefined && m[0] !== null) {
-                                const rawDescription = String(m[0]);
-                                // If the description contains comma-separated values (raw blockchain data),
-                                // extract just the first part (the actual description)
-                                if (rawDescription.includes(",")) {
-                                  description = rawDescription
-                                    .split(",")[0]
-                                    .trim();
-                                } else {
-                                  description = rawDescription;
-                                }
-                              } else if (m.description !== undefined) {
-                                description = String(m.description);
-                              } else {
-                                description = `Milestone ${index + 1}`;
-                              }
-
-                              // Clean up the description
-                              if (
-                                description &&
-                                description !== `Milestone ${index + 1}`
-                              ) {
-                                // Remove any remaining raw data patterns
-                                description = description
-                                  .replace(/,\d+.*$/, "")
-                                  .trim();
-                              }
-                            } catch (e) {
-                              console.warn(
-                                `Error parsing milestone ${index} description:`,
-                                e,
-                              );
+                    if (m && typeof m === "object") {
+                      try {
+                        // Check if this is a placeholder milestone
+                        if (
+                          m.description &&
+                          m.description.includes("To be defined")
+                        ) {
+                          // This is a placeholder milestone
+                          description = m.description;
+                          amount = m.amount || "0";
+                          status = m.status || 0;
+                          submittedAt = m.submittedAt || undefined;
+                          approvedAt = m.approvedAt || undefined;
+                          console.log(
+                            `Milestone ${index} is a placeholder milestone`,
+                          );
+                        } else {
+                          // This is a real milestone from the contract
+                          // Handle Proxy(Result) objects properly
+                          try {
+                            // Try direct field access first
+                            if (m.description !== undefined) {
+                              description = String(m.description);
+                            } else if (m[0] !== undefined) {
+                              description = String(m[0]);
+                            } else {
                               description = `Milestone ${index + 1}`;
                             }
 
-                            try {
-                              // Parse amount more carefully to avoid NaN
-                              if (m[1] !== undefined && m[1] !== null) {
-                                const rawAmount = String(m[1]);
-                                // Ensure the amount is a valid number
-                                if (
-                                  !isNaN(Number(rawAmount)) &&
-                                  Number(rawAmount) > 0
-                                ) {
-                                  amount = rawAmount;
-                                } else {
-                                  amount = "0";
-                                }
-                              } else if (
-                                m.amount !== undefined &&
-                                m.amount !== null
-                              ) {
-                                const rawAmount = String(m.amount);
-                                if (
-                                  !isNaN(Number(rawAmount)) &&
-                                  Number(rawAmount) > 0
-                                ) {
-                                  amount = rawAmount;
-                                } else {
-                                  amount = "0";
-                                }
-                              } else {
-                                amount = "0";
-                              }
-                            } catch (e) {
-                              console.warn(
-                                `Error parsing milestone ${index} amount:`,
-                                e,
-                              );
+                            if (m.amount !== undefined) {
+                              amount = String(m.amount);
+                            } else if (m[1] !== undefined) {
+                              amount = String(m[1]);
+                            } else {
                               amount = "0";
                             }
 
-                            try {
-                              status =
-                                m[2] !== undefined && m[2] !== null
-                                  ? Number(m[2])
-                                  : m.status !== undefined && m.status !== null
-                                    ? Number(m.status)
-                                    : 0;
-                            } catch (e) {
-                              console.warn(
-                                `Error parsing milestone ${index} status:`,
-                                e,
-                              );
+                            if (m.status !== undefined) {
+                              status = Number(m.status) || 0;
+                            } else if (m[2] !== undefined) {
+                              status = Number(m[2]) || 0;
+                            } else {
                               status = 0;
                             }
 
-                            console.log(
-                              `Milestone ${index} raw status:`,
-                              m[2],
-                              `Parsed status:`,
-                              status,
+                            if (
+                              m.submittedAt !== undefined &&
+                              Number(m.submittedAt) > 0
+                            ) {
+                              submittedAt = Number(m.submittedAt) * 1000;
+                            } else if (m[3] !== undefined && Number(m[3]) > 0) {
+                              submittedAt = Number(m[3]) * 1000;
+                            }
+
+                            if (
+                              m.approvedAt !== undefined &&
+                              Number(m.approvedAt) > 0
+                            ) {
+                              approvedAt = Number(m.approvedAt) * 1000;
+                            } else if (m[4] !== undefined && Number(m[4]) > 0) {
+                              approvedAt = Number(m[4]) * 1000;
+                            }
+                          } catch (proxyError) {
+                            console.warn(
+                              `Error parsing Proxy(Result) for milestone ${index}:`,
+                              proxyError,
                             );
-
-                            try {
-                              submittedAt =
-                                m[3] !== undefined && m[3] !== null
-                                  ? Number(m[3]) * 1000
-                                  : m.submittedAt !== undefined &&
-                                      m.submittedAt !== null
-                                    ? Number(m.submittedAt) * 1000
-                                    : undefined;
-                            } catch (e) {
-                              console.warn(
-                                `Error parsing milestone ${index} submittedAt:`,
-                                e,
-                              );
-                              submittedAt = undefined;
-                            }
-
-                            try {
-                              approvedAt =
-                                m[4] !== undefined && m[4] !== null
-                                  ? Number(m[4]) * 1000
-                                  : m.approvedAt !== undefined &&
-                                      m.approvedAt !== null
-                                    ? Number(m.approvedAt) * 1000
-                                    : undefined;
-                            } catch (e) {
-                              console.warn(
-                                `Error parsing milestone ${index} approvedAt:`,
-                                e,
-                              );
-                              approvedAt = undefined;
-                            }
-                          } else {
-                            // Fallback for unexpected structure
+                            // Fallback to basic parsing
                             description = `Milestone ${index + 1}`;
                             amount = "0";
                             status = 0;
                           }
-
-                          const finalStatus =
-                            getMilestoneStatusFromNumber(status);
-                          console.log(
-                            `Milestone ${index} final status:`,
-                            finalStatus,
-                          );
-
-                          return {
-                            description,
-                            amount,
-                            status: finalStatus,
-                            submittedAt,
-                            approvedAt,
-                          };
-                        } catch (error) {
-                          console.error(
-                            `Error processing milestone ${index}:`,
-                            error,
-                          );
-                          return {
-                            description: `Milestone ${index + 1}`,
-                            amount: "0",
-                            status: "pending",
-                          };
                         }
-                      })
-                    : [], // Fallback to empty array if milestones is not an array
+                      } catch (e) {
+                        console.warn(
+                          `Error parsing milestone ${index} basic data:`,
+                          e,
+                        );
+                        description = `Milestone ${index + 1}`;
+                        amount = "0";
+                        status = 0;
+                      }
+
+                      // Log the milestone data for debugging
+                      console.log(`Milestone ${index} raw data:`, m);
+                      console.log(`Milestone ${index} parsed:`, {
+                        description,
+                        amount,
+                        status,
+                        submittedAt,
+                        approvedAt,
+                      });
+                    } else {
+                      // Fallback for unexpected structure
+                      description = `Milestone ${index + 1}`;
+                      amount = "0";
+                      status = 0;
+                    }
+
+                    // Determine the actual status based on timestamps and status
+                    let finalStatus = getMilestoneStatusFromNumber(status);
+
+                    // Check if this is a placeholder milestone
+                    const isPlaceholder =
+                      description && description.includes("To be defined");
+
+                    if (isPlaceholder) {
+                      // For placeholder milestones, determine status based on previous milestones
+                      if (index === 0) {
+                        // First milestone - should be pending
+                        finalStatus = "pending";
+                      } else {
+                        // Check if previous milestone is approved
+                        // This will be handled by the UI logic
+                        finalStatus = "pending";
+                      }
+                      console.log(
+                        `Milestone ${index} is placeholder, setting to pending`,
+                      );
+                    } else {
+                      // Real milestone from contract
+                      console.log(`Milestone ${index} status determination:`, {
+                        rawStatus: status,
+                        parsedStatus: getMilestoneStatusFromNumber(status),
+                        submittedAt: submittedAt,
+                        approvedAt: approvedAt,
+                        hasSubmittedAt: submittedAt && submittedAt > 0,
+                        hasApprovedAt: approvedAt && approvedAt > 0,
+                      });
+
+                      // Priority 1: If milestone status is 2 (approved), it's approved
+                      if (status === 2) {
+                        finalStatus = "approved";
+                        console.log(
+                          `Milestone ${index} setting to approved due to status 2`,
+                        );
+                      }
+                      // Priority 2: If milestone has been approved (approvedAt exists), it's approved
+                      else if (approvedAt && approvedAt > 0) {
+                        finalStatus = "approved";
+                        console.log(
+                          `Milestone ${index} setting to approved due to approvedAt: ${approvedAt}`,
+                        );
+                      }
+                      // Priority 3: If milestone has been submitted (submittedAt exists) but not approved, it's submitted
+                      else if (submittedAt && submittedAt > 0) {
+                        finalStatus = "submitted";
+                        console.log(
+                          `Milestone ${index} setting to submitted due to submittedAt: ${submittedAt}`,
+                        );
+                      }
+                      // Priority 4: If milestone status is 1 (submitted), it's submitted
+                      else if (status === 1) {
+                        finalStatus = "submitted";
+                        console.log(
+                          `Milestone ${index} setting to submitted due to status 1`,
+                        );
+                      }
+                      // Special case: If this is the first milestone and funds have been released, it should be approved
+                      else if (
+                        index === 0 &&
+                        escrowSummary[5] &&
+                        Number(escrowSummary[5]) > 0
+                      ) {
+                        finalStatus = "approved";
+                        console.log(
+                          `Milestone ${index} setting to approved due to released funds: ${escrowSummary[5]}`,
+                        );
+                      }
+                      // Otherwise use the parsed status
+                      else {
+                        console.log(
+                          `Milestone ${index} using parsed status: ${finalStatus}`,
+                        );
+                      }
+                    }
+
+                    console.log(
+                      `Milestone ${index} final status:`,
+                      finalStatus,
+                      `(raw status: ${status}, submittedAt: ${submittedAt}, approvedAt: ${approvedAt})`,
+                    );
+
+                    // Track milestone states for submission prevention
+                    const milestoneKey = `${i}-${index}`;
+                    if (finalStatus === "approved") {
+                      setApprovedMilestones(
+                        (prev) => new Set([...prev, milestoneKey]),
+                      );
+                    } else if (finalStatus === "submitted") {
+                      setSubmittedMilestones(
+                        (prev) => new Set([...prev, milestoneKey]),
+                      );
+                    }
+
+                    return {
+                      description,
+                      amount,
+                      status: finalStatus,
+                      submittedAt,
+                      approvedAt,
+                    };
+                  } catch (error) {
+                    console.error(
+                      `Error processing milestone ${index}:`,
+                      error,
+                    );
+                    return {
+                      description: `Milestone ${index + 1}`,
+                      amount: "0",
+                      status: "pending",
+                    };
+                  }
+                }),
                 projectDescription: escrowSummary[14] || "", // projectDescription
-                isOpenJob: Boolean(escrowSummary[13]), // isOpenJob
-                milestoneCount: Number(escrowSummary[12]) || 0, // milestoneCount
+                isOpenJob: Boolean(escrowSummary[12]), // isOpenJob
+                milestoneCount: Number(escrowSummary[11]) || 0, // milestoneCount
               };
 
               // Debug milestone count
               console.log(
                 `Escrow ${i} milestoneCount from contract:`,
-                escrowSummary[12],
+                escrowSummary[11],
               );
               console.log(
                 `Escrow ${i} parsed milestoneCount:`,
-                Number(escrowSummary[12]),
+                Number(escrowSummary[11]),
               );
               console.log(
                 `Escrow ${i} milestones array length:`,
@@ -373,7 +471,13 @@ export default function FreelancerPage() {
       const currentSubmittedMilestones = new Set<string>();
       freelancerEscrows.forEach((escrow) => {
         escrow.milestones.forEach((milestone, index) => {
-          if (milestone.status === "submitted") {
+          // Mark as submitted if milestone is submitted, approved, or has been processed
+          if (
+            milestone.status === "submitted" ||
+            milestone.status === "approved" ||
+            milestone.submittedAt ||
+            milestone.approvedAt
+          ) {
             currentSubmittedMilestones.add(`${escrow.id}-${index}`);
           }
         });
@@ -423,6 +527,52 @@ export default function FreelancerPage() {
   const submitMilestone = async (escrowId: string, milestoneIndex: number) => {
     const milestoneKey = `${escrowId}-${milestoneIndex}`;
     const description = milestoneDescriptions[milestoneKey] || "";
+
+    // Check if milestone has already been submitted
+    if (submittedMilestones.has(milestoneKey)) {
+      toast({
+        title: "Milestone already submitted",
+        description:
+          "This milestone has already been submitted and cannot be submitted again",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if milestone has already been approved
+    if (approvedMilestones.has(milestoneKey)) {
+      toast({
+        title: "Milestone already approved",
+        description:
+          "This milestone has already been approved and cannot be resubmitted",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Additional check: Get the current milestone status from contract
+    try {
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+      const milestones = await contract.call("getMilestones", escrowId);
+
+      if (milestones && milestones.length > milestoneIndex) {
+        const milestone = milestones[milestoneIndex];
+        console.log(`Contract milestone ${milestoneIndex} status:`, milestone);
+
+        // Check if milestone has been submitted (status 1) or approved (status 2)
+        if (milestone && milestone[2] && Number(milestone[2]) > 0) {
+          toast({
+            title: "Milestone already processed",
+            description: `This milestone has already been ${Number(milestone[2]) === 2 ? "approved" : "submitted"} and cannot be submitted again`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn("Could not check milestone status from contract:", error);
+      // Continue with submission attempt
+    }
 
     // Validate milestone description from input field
     if (!description?.trim()) {
@@ -774,41 +924,44 @@ export default function FreelancerPage() {
                       </div>
                     </div>
 
-                    {/* Milestones */}
+                    {/* Milestones - Compact Design */}
                     <div className="mb-6">
                       <h4 className="font-semibold text-gray-900 mb-3">
-                        Milestones
+                        Milestones (
+                        {escrow.milestoneCount || escrow.milestones.length}{" "}
+                        total)
                       </h4>
-                      <div className="space-y-3">
-                        {escrow.milestones.map((milestone, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                          >
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="font-medium">
-                                  Milestone {index + 1} of{" "}
-                                  {escrow.milestoneCount ||
-                                    escrow.milestones.length}
+
+                      {/* Milestone Progress */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        {escrow.milestones.map((milestone, index) => {
+                          const milestoneKey = `${escrow.id}-${index}`;
+                          const isApproved = milestone.status === "approved";
+                          const isSubmitted = milestone.status === "submitted";
+                          const isPending = milestone.status === "pending";
+                          const isCurrent =
+                            isPending &&
+                            (index === 0 ||
+                              escrow.milestones[index - 1]?.status ===
+                                "approved");
+
+                          return (
+                            <div
+                              key={index}
+                              className={`p-4 rounded-lg border-2 ${
+                                isApproved
+                                  ? "bg-green-50 border-green-200"
+                                  : isSubmitted
+                                    ? "bg-yellow-50 border-yellow-200"
+                                    : isCurrent
+                                      ? "bg-blue-50 border-blue-200"
+                                      : "bg-gray-50 border-gray-200"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-medium text-sm">
+                                  Milestone {index + 1}
                                 </span>
-                                {milestone.description &&
-                                  milestone.description !==
-                                    `Milestone ${index + 1}` && (
-                                    <div className="mt-2 p-2 bg-blue-50 rounded-md border-l-4 border-blue-200">
-                                      <div className="text-xs font-medium text-blue-800 mb-1">
-                                        Client Requirements:
-                                      </div>
-                                      <div className="text-sm text-blue-700">
-                                        {milestone.description.length > 100
-                                          ? milestone.description.substring(
-                                              0,
-                                              100,
-                                            ) + "..."
-                                          : milestone.description}
-                                      </div>
-                                    </div>
-                                  )}
                                 <Badge
                                   className={getMilestoneStatusColor(
                                     milestone.status,
@@ -817,129 +970,160 @@ export default function FreelancerPage() {
                                   {milestone.status}
                                 </Badge>
                               </div>
-                              {milestone.status === "pending" ? (
-                                <div className="mb-6">
-                                  <label className="block text-xs font-medium text-gray-700 mb-2">
-                                    Description (Editable)
-                                  </label>
-                                  <Textarea
-                                    value={
-                                      milestoneDescriptions[
-                                        `${escrow.id}-${index}`
-                                      ] || ""
-                                    }
-                                    onChange={(e) =>
-                                      setMilestoneDescriptions((prev) => ({
-                                        ...prev,
-                                        [`${escrow.id}-${index}`]:
-                                          e.target.value,
-                                      }))
-                                    }
-                                    className="text-sm"
-                                    rows={2}
-                                    placeholder="Describe what you'll complete for this milestone..."
-                                  />
-                                </div>
-                              ) : (
-                                <p className="text-sm text-gray-600 mb-1">
-                                  {milestone.description}
-                                </p>
-                              )}
-                              <p className="text-sm font-semibold text-green-600">
+
+                              {/* Client Requirements */}
+                              {milestone.description &&
+                                !milestone.description.includes(
+                                  "To be defined",
+                                ) &&
+                                milestone.description !==
+                                  `Milestone ${index + 1}` && (
+                                  <div className="text-xs text-gray-600 mb-2">
+                                    <span className="font-medium">
+                                      Requirements:
+                                    </span>
+                                    <p className="mt-1 line-clamp-2">
+                                      {milestone.description.length > 80
+                                        ? milestone.description.substring(
+                                            0,
+                                            80,
+                                          ) + "..."
+                                        : milestone.description}
+                                    </p>
+                                  </div>
+                                )}
+
+                              <div className="text-sm font-semibold text-green-600">
                                 {formatAmount(milestone.amount)} tokens
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Current Milestone Submission Form */}
+                      {(() => {
+                        const currentMilestoneIndex =
+                          escrow.milestones.findIndex(
+                            (milestone, index) =>
+                              milestone.status === "pending" &&
+                              (index === 0 ||
+                                escrow.milestones[index - 1]?.status ===
+                                  "approved"),
+                          );
+
+                        if (currentMilestoneIndex === -1) {
+                          return (
+                            <div className="p-4 bg-gray-50 rounded-lg text-center">
+                              <p className="text-gray-600">
+                                All milestones completed or in progress
                               </p>
                             </div>
-                            <div className="flex gap-2 mt-4">
-                              {(milestone.status === "pending" ||
-                                milestone.status === "NotStarted") &&
-                                escrow.status === "InProgress" &&
-                                (index === 0 ||
-                                  escrow.milestones[index - 1]?.status ===
-                                    "approved") && (
+                          );
+                        }
+
+                        const currentMilestone =
+                          escrow.milestones[currentMilestoneIndex];
+                        const milestoneKey = `${escrow.id}-${currentMilestoneIndex}`;
+                        const canSubmit =
+                          currentMilestone.status === "pending" &&
+                          escrow.status === "InProgress" &&
+                          !submittedMilestones.has(milestoneKey) &&
+                          !approvedMilestones.has(milestoneKey);
+
+                        return (
+                          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <h5 className="font-semibold text-blue-900 mb-3">
+                              Submit Milestone {currentMilestoneIndex + 1}
+                            </h5>
+
+                            {/* Client Requirements */}
+                            {currentMilestone.description &&
+                              !currentMilestone.description.includes(
+                                "To be defined",
+                              ) &&
+                              currentMilestone.description !==
+                                `Milestone ${currentMilestoneIndex + 1}` && (
+                                <div className="mb-3 p-3 bg-white rounded border">
+                                  <div className="text-sm font-medium text-blue-800 mb-1">
+                                    Client Requirements:
+                                  </div>
+                                  <div className="text-sm text-blue-700">
+                                    {currentMilestone.description}
+                                  </div>
+                                </div>
+                              )}
+
+                            <div className="space-y-3">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Your Work Description
+                                </label>
+                                <Textarea
+                                  value={
+                                    milestoneDescriptions[milestoneKey] || ""
+                                  }
+                                  onChange={(e) =>
+                                    setMilestoneDescriptions((prev) => ({
+                                      ...prev,
+                                      [milestoneKey]: e.target.value,
+                                    }))
+                                  }
+                                  className="text-sm"
+                                  rows={3}
+                                  placeholder="Describe what you've completed for this milestone..."
+                                />
+                              </div>
+
+                              <div className="flex gap-2">
+                                {canSubmit && (
                                   <Button
                                     size="sm"
                                     onClick={() =>
-                                      submitMilestone(escrow.id, index)
-                                    }
-                                    disabled={
-                                      submittingMilestone ===
-                                        `${escrow.id}-${index}` ||
-                                      submittedMilestones.has(
-                                        `${escrow.id}-${index}`,
+                                      submitMilestone(
+                                        escrow.id,
+                                        currentMilestoneIndex,
                                       )
                                     }
-                                  >
-                                    {submittingMilestone ===
-                                    `${escrow.id}-${index}`
-                                      ? "Submitting..."
-                                      : submittedMilestones.has(
-                                            `${escrow.id}-${index}`,
-                                          )
-                                        ? "Submitted"
-                                        : "Submit"}
-                                  </Button>
-                                )}
-                              {milestone.status === "submitted" && (
-                                <div className="flex gap-2">
-                                  <Badge className="bg-yellow-100 text-yellow-800">
-                                    Submitted
-                                  </Badge>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setSelectedEscrowId(escrow.id);
-                                      setSelectedMilestoneIndex(index);
-                                      setDisputeReason("");
-                                      setShowDisputeDialog(true);
-                                    }}
                                     disabled={
-                                      submittingMilestone ===
-                                      `${escrow.id}-${index}`
+                                      submittingMilestone === milestoneKey ||
+                                      !milestoneDescriptions[
+                                        milestoneKey
+                                      ]?.trim()
                                     }
                                   >
-                                    Dispute
+                                    {submittingMilestone === milestoneKey
+                                      ? "Submitting..."
+                                      : "Submit Milestone"}
                                   </Button>
-                                </div>
-                              )}
-                              {milestone.status === "approved" && (
-                                <Badge className="bg-green-100 text-green-800">
-                                  Approved
-                                </Badge>
-                              )}
-                              {milestone.status === "rejected" && (
-                                <div className="flex gap-2">
-                                  <Badge className="bg-red-100 text-red-800">
-                                    Rejected
-                                  </Badge>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setSelectedEscrowId(escrow.id);
-                                      setSelectedMilestoneIndex(index);
-                                      setDisputeReason("");
-                                      setShowDisputeDialog(true);
-                                    }}
-                                  >
-                                    Dispute
-                                  </Button>
-                                </div>
-                              )}
-                              {milestone.status === "disputed" && (
-                                <Badge className="bg-red-100 text-red-800">
-                                  Under Dispute
-                                </Badge>
-                              )}
-                              {milestone.status === "resolved" && (
-                                <Badge className="bg-blue-100 text-blue-800">
-                                  Resolved
-                                </Badge>
-                              )}
+                                )}
+
+                                {currentMilestone.status === "submitted" && (
+                                  <div className="flex gap-2">
+                                    <Badge className="bg-yellow-100 text-yellow-800">
+                                      Submitted - Awaiting Approval
+                                    </Badge>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setSelectedEscrowId(escrow.id);
+                                        setSelectedMilestoneIndex(
+                                          currentMilestoneIndex,
+                                        );
+                                        setDisputeReason("");
+                                        setShowDisputeDialog(true);
+                                      }}
+                                    >
+                                      Dispute
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Actions */}
