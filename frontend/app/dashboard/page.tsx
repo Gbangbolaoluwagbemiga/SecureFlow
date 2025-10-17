@@ -68,29 +68,92 @@ export default function DashboardPage() {
     return Math.max(0, daysLeft); // Don't show negative days
   };
 
+  const getDaysLeftMessage = (daysLeft: number): { text: string; color: string; bgColor: string } => {
+    if (daysLeft > 7) {
+      return {
+        text: `${daysLeft} days`,
+        color: "text-red-700 dark:text-red-400",
+        bgColor: "bg-red-50 dark:bg-red-900/20"
+      };
+    } else if (daysLeft > 0) {
+      return {
+        text: `${daysLeft} days`,
+        color: "text-orange-700 dark:text-orange-400",
+        bgColor: "bg-orange-50 dark:bg-orange-900/20"
+      };
+    } else {
+      return {
+        text: "Deadline passed",
+        color: "text-red-700 dark:text-red-400",
+        bgColor: "bg-red-100 dark:bg-red-900/30"
+      };
+    }
+  };
+
   const fetchMilestones = async (
     contract: any,
     escrowId: number,
     escrowSummary?: any,
   ) => {
     try {
-      const milestones = await contract.call("getMilestones", escrowId);
-      console.log(`Milestones for escrow ${escrowId}:`, milestones);
-      console.log(`Milestones type:`, typeof milestones);
-      console.log(`Milestones length:`, milestones?.length);
-      if (milestones && Array.isArray(milestones)) {
-        console.log(
-          `Processing ${milestones.length} milestones for escrow ${escrowId}`,
-        );
-        return milestones.map((m: any, index: number) => {
-          try {
-            console.log(`Raw milestone ${index}:`, m);
-            console.log(`Milestone ${index} type:`, typeof m);
-            console.log(`Milestone ${index} keys:`, Object.keys(m || {}));
-            console.log(`Milestone ${index} m[1] (amount):`, m[1]);
-            console.log(`Milestone ${index} m[1] type:`, typeof m[1]);
+      // Get milestone count from escrow summary first
+      const milestoneCount = Number(escrowSummary[11]) || 0;
+      console.log(
+        `Escrow ${escrowId} milestoneCount from contract:`,
+        escrowSummary[11],
+      );
+      console.log(`Escrow ${escrowId} parsed milestoneCount:`, milestoneCount);
 
-            // Handle different milestone data structures
+      // Always try to fetch individual milestones to get accurate data
+      console.log(`Fetching individual milestones for escrow ${escrowId}...`);
+      const allMilestones = [];
+
+      for (let j = 0; j < milestoneCount; j++) {
+        try {
+          const individualMilestone = await contract.call(
+            "milestones",
+            escrowId,
+            j,
+          );
+          console.log(
+            `Individual milestone ${j} for escrow ${escrowId}:`,
+            individualMilestone,
+          );
+          console.log(`Milestone ${j} structure:`, {
+            type: typeof individualMilestone,
+            keys: Object.keys(individualMilestone || {}),
+            description: individualMilestone?.description,
+            amount: individualMilestone?.amount,
+            status: individualMilestone?.status,
+            submittedAt: individualMilestone?.submittedAt,
+            approvedAt: individualMilestone?.approvedAt,
+          });
+          allMilestones.push(individualMilestone);
+        } catch (error) {
+          console.warn(
+            `Could not fetch individual milestone ${j} for escrow ${escrowId}:`,
+            error,
+          );
+          // Only create placeholder if we absolutely can't fetch the data
+          allMilestones.push({
+            description: `Milestone ${j + 1} - To be defined`,
+            amount: "0",
+            status: 0, // pending
+            submittedAt: 0,
+            approvedAt: 0,
+          });
+        }
+      }
+
+      console.log(`All milestones for escrow ${escrowId}:`, allMilestones);
+
+      if (allMilestones.length > 0) {
+        console.log(
+          `Processing ${allMilestones.length} milestones for escrow ${escrowId}`,
+        );
+        return allMilestones.map((m: any, index: number) => {
+          try {
+            // Handle milestone data structure from getMilestones
             let description = "";
             let amount = "0";
             let status = 0;
@@ -98,298 +161,146 @@ export default function DashboardPage() {
             let approvedAt = undefined;
 
             if (m && typeof m === "object") {
-              // Try to access properties safely
               try {
-                // Handle different possible data structures
-                // The milestone data structure from contract is: [description, amount, status, submittedAt, approvedAt]
-                if (m[0] !== undefined) {
-                  // Check if m[0] is another Proxy object (nested structure)
-                  if (
-                    m[0] &&
-                    typeof m[0] === "object" &&
-                    m[0][0] !== undefined
-                  ) {
-                    // Nested structure: m[0][0] contains the description
-                    const rawDescription = String(m[0][0]);
-                    const cleanDescription = rawDescription
-                      .split(",")[0]
-                      .trim();
-                    description = cleanDescription || `Milestone ${index + 1}`;
-                  } else {
-                    // Direct structure: m[0] contains the description
-                    const rawDescription = String(m[0]);
-                    const cleanDescription = rawDescription
-                      .split(",")[0]
-                      .trim();
-                    description = cleanDescription || `Milestone ${index + 1}`;
-                  }
-                } else if (m.description !== undefined) {
-                  description = String(
-                    m.description || `Milestone ${index + 1}`,
-                  );
+                // Check if this is a placeholder milestone
+                if (m.description && m.description.includes("To be defined")) {
+                  // This is a placeholder milestone
+                  description = m.description;
+                  amount = m.amount || "0";
+                  status = m.status || 0;
+                  submittedAt = m.submittedAt || undefined;
+                  approvedAt = m.approvedAt || undefined;
+                  console.log(`Milestone ${index} is a placeholder milestone`);
                 } else {
-                  description = `Milestone ${index + 1}`;
-                }
-              } catch (e) {
-                description = `Milestone ${index + 1}`;
-              }
+                  // This is a real milestone from the contract
+                  // Handle Proxy(Result) objects properly
+                  try {
+                    console.log(`Parsing milestone ${index} raw data:`, m);
+                    console.log(`Milestone ${index} data type:`, typeof m);
+                    console.log(
+                      `Milestone ${index} data keys:`,
+                      Object.keys(m || {}),
+                    );
 
-              try {
-                // Handle amount parsing more carefully
-                if (m[1] !== undefined) {
-                  // Check if m[1] is another Proxy object (nested structure)
-                  if (
-                    m[1] &&
-                    typeof m[1] === "object" &&
-                    m[1][1] !== undefined
-                  ) {
-                    // Nested structure: m[1][1] contains the amount
-                    const amountValue = m[1][1];
-                    if (
-                      typeof amountValue === "number" ||
-                      typeof amountValue === "bigint"
-                    ) {
-                      amount = amountValue.toString();
-                    } else if (typeof amountValue === "string") {
-                      amount = amountValue;
+                    // Try direct field access first (for struct fields)
+                    if (m.description !== undefined) {
+                      description = String(m.description);
+                      console.log(
+                        `Milestone ${index} description from m.description:`,
+                        description,
+                      );
+                    } else if (m[0] !== undefined) {
+                      description = String(m[0]);
+                      console.log(
+                        `Milestone ${index} description from m[0]:`,
+                        description,
+                      );
+                    } else {
+                      description = `Milestone ${index + 1}`;
+                      console.log(
+                        `Milestone ${index} using default description`,
+                      );
+                    }
+
+                    if (m.amount !== undefined) {
+                      amount = String(m.amount);
+                      console.log(
+                        `Milestone ${index} amount from m.amount:`,
+                        amount,
+                      );
+                    } else if (m[1] !== undefined) {
+                      amount = String(m[1]);
+                      console.log(
+                        `Milestone ${index} amount from m[1]:`,
+                        amount,
+                      );
                     } else {
                       amount = "0";
+                      console.log(`Milestone ${index} using default amount`);
                     }
-                  } else {
-                    // Direct structure: m[1] contains the amount
-                    const amountValue = m[1];
-                    if (
-                      typeof amountValue === "number" ||
-                      typeof amountValue === "bigint"
-                    ) {
-                      amount = amountValue.toString();
-                    } else if (typeof amountValue === "string") {
-                      amount = amountValue;
+
+                    if (m.status !== undefined) {
+                      status = Number(m.status) || 0;
+                      console.log(
+                        `Milestone ${index} status from m.status:`,
+                        status,
+                      );
+                    } else if (m[2] !== undefined) {
+                      status = Number(m[2]) || 0;
+                      console.log(
+                        `Milestone ${index} status from m[2]:`,
+                        status,
+                      );
                     } else {
-                      amount = "0";
+                      status = 0;
+                      console.log(`Milestone ${index} using default status`);
                     }
-                  }
-                } else if (m.amount !== undefined) {
-                  const amountValue = m.amount;
-                  if (
-                    typeof amountValue === "number" ||
-                    typeof amountValue === "bigint"
-                  ) {
-                    amount = amountValue.toString();
-                  } else if (typeof amountValue === "string") {
-                    amount = amountValue;
-                  } else {
+
+                    if (
+                      m.submittedAt !== undefined &&
+                      Number(m.submittedAt) > 0
+                    ) {
+                      submittedAt = Number(m.submittedAt) * 1000;
+                      console.log(
+                        `Milestone ${index} submittedAt from m.submittedAt:`,
+                        submittedAt,
+                      );
+                    } else if (m[3] !== undefined && Number(m[3]) > 0) {
+                      submittedAt = Number(m[3]) * 1000;
+                      console.log(
+                        `Milestone ${index} submittedAt from m[3]:`,
+                        submittedAt,
+                      );
+                    }
+
+                    if (
+                      m.approvedAt !== undefined &&
+                      Number(m.approvedAt) > 0
+                    ) {
+                      approvedAt = Number(m.approvedAt) * 1000;
+                      console.log(
+                        `Milestone ${index} approvedAt from m.approvedAt:`,
+                        approvedAt,
+                      );
+                    } else if (m[4] !== undefined && Number(m[4]) > 0) {
+                      approvedAt = Number(m[4]) * 1000;
+                      console.log(
+                        `Milestone ${index} approvedAt from m[4]:`,
+                        approvedAt,
+                      );
+                    }
+
+                    console.log(`Milestone ${index} parsed values:`, {
+                      description,
+                      amount,
+                      status,
+                      submittedAt,
+                      approvedAt,
+                    });
+
+                    // Debug amount conversion
+                    const amountInTokens = (Number(amount) / 1e18).toFixed(2);
+                    console.log(`Milestone ${index} amount conversion:`, {
+                      rawAmount: amount,
+                      amountInTokens: amountInTokens,
+                      isZero: amount === "0" || amount === "0x0",
+                    });
+                  } catch (proxyError) {
+                    console.warn(
+                      `Error parsing Proxy(Result) for milestone ${index}:`,
+                      proxyError,
+                    );
+                    // Fallback to basic parsing
+                    description = `Milestone ${index + 1}`;
                     amount = "0";
+                    status = 0;
                   }
-                } else {
-                  // If no amount is set in milestone data, calculate it from escrow total
-                  // This is a fallback - ideally milestone amounts should be set during creation
-                  const escrowTotal =
-                    Number.parseFloat(escrowSummary[4].toString()) || 0;
-                  const milestoneCount = Number(escrowSummary[11]) || 1;
-                  const calculatedAmount = Math.floor(
-                    escrowTotal / milestoneCount,
-                  );
-                  amount = calculatedAmount.toString();
-                  console.log(
-                    `Calculated milestone amount: escrowTotal=${escrowTotal}, milestoneCount=${milestoneCount}, calculatedAmount=${calculatedAmount}`,
-                  );
                 }
               } catch (e) {
+                console.warn(`Error parsing milestone ${index} basic data:`, e);
+                description = `Milestone ${index + 1}`;
                 amount = "0";
-              }
-
-              try {
-                // Handle status parsing with proper nested Proxy access
-                console.log(`Raw milestone ${index} data:`, m);
-                console.log(`Milestone ${index} m[0]:`, m[0]);
-                console.log(`Milestone ${index} m[1]:`, m[1]);
-                console.log(`Milestone ${index} m[2]:`, m[2]);
-
-                // Try to access nested Proxy structure
-                let statusValue = null;
-
-                // Check if m[0] is a Proxy with nested data
-                if (m[0] && typeof m[0] === "object" && m[0][2] !== undefined) {
-                  statusValue = m[0][2];
-                  console.log(
-                    `Milestone ${index} found status in m[0][2]:`,
-                    statusValue,
-                  );
-                }
-                // Check if m[1] is a Proxy with nested data
-                else if (
-                  m[1] &&
-                  typeof m[1] === "object" &&
-                  m[1][2] !== undefined
-                ) {
-                  statusValue = m[1][2];
-                  console.log(
-                    `Milestone ${index} found status in m[1][2]:`,
-                    statusValue,
-                  );
-                }
-                // Check if m[2] exists directly
-                else if (m[2] !== undefined) {
-                  statusValue = m[2];
-                  console.log(
-                    `Milestone ${index} found status in m[2]:`,
-                    statusValue,
-                  );
-                }
-                // Check if m.status exists
-                else if (m.status !== undefined) {
-                  statusValue = m.status;
-                  console.log(
-                    `Milestone ${index} found status in m.status:`,
-                    statusValue,
-                  );
-                }
-
-                if (statusValue !== null) {
-                  status = Number(statusValue) || 0;
-                  console.log(
-                    `Milestone ${index} final parsed status:`,
-                    status,
-                  );
-                } else {
-                  status = 0;
-                  console.log(
-                    `Milestone ${index} using default status:`,
-                    status,
-                  );
-                }
-              } catch (e) {
-                console.error(`Error parsing milestone ${index} status:`, e);
                 status = 0;
-              }
-
-              try {
-                // Handle submittedAt parsing with proper nested Proxy access
-                console.log(`Milestone ${index} checking submittedAt...`);
-                console.log(`Milestone ${index} m[0]:`, m[0]);
-                console.log(`Milestone ${index} m[1]:`, m[1]);
-                console.log(`Milestone ${index} m[3]:`, m[3]);
-
-                let submittedValue = null;
-
-                // Check if m[0] is a Proxy with nested data (submittedAt at index 3)
-                if (m[0] && typeof m[0] === "object" && m[0][3] !== undefined) {
-                  submittedValue = m[0][3];
-                  console.log(
-                    `Milestone ${index} found submittedAt in m[0][3]:`,
-                    submittedValue,
-                  );
-                }
-                // Check if m[1] is a Proxy with nested data
-                else if (
-                  m[1] &&
-                  typeof m[1] === "object" &&
-                  m[1][3] !== undefined
-                ) {
-                  submittedValue = m[1][3];
-                  console.log(
-                    `Milestone ${index} found submittedAt in m[1][3]:`,
-                    submittedValue,
-                  );
-                }
-                // Check if m[3] exists directly
-                else if (m[3] !== undefined) {
-                  submittedValue = m[3];
-                  console.log(
-                    `Milestone ${index} found submittedAt in m[3]:`,
-                    submittedValue,
-                  );
-                }
-                // Check if m.submittedAt exists
-                else if (m.submittedAt !== undefined) {
-                  submittedValue = m.submittedAt;
-                  console.log(
-                    `Milestone ${index} found submittedAt in m.submittedAt:`,
-                    submittedValue,
-                  );
-                }
-
-                if (submittedValue && submittedValue !== 0) {
-                  submittedAt = Number(submittedValue) * 1000;
-                  console.log(
-                    `Milestone ${index} parsed submittedAt:`,
-                    submittedAt,
-                  );
-                } else {
-                  submittedAt = undefined;
-                  console.log(`Milestone ${index} no submittedAt found`);
-                }
-              } catch (e) {
-                console.error(
-                  `Error parsing milestone ${index} submittedAt:`,
-                  e,
-                );
-                submittedAt = undefined;
-              }
-
-              try {
-                // Handle approvedAt parsing with proper nested Proxy access
-                console.log(`Milestone ${index} checking approvedAt...`);
-                console.log(`Milestone ${index} m[0]:`, m[0]);
-                console.log(`Milestone ${index} m[1]:`, m[1]);
-                console.log(`Milestone ${index} m[4]:`, m[4]);
-
-                let approvedValue = null;
-
-                // Check if m[0] is a Proxy with nested data (approvedAt at index 4)
-                if (m[0] && typeof m[0] === "object" && m[0][4] !== undefined) {
-                  approvedValue = m[0][4];
-                  console.log(
-                    `Milestone ${index} found approvedAt in m[0][4]:`,
-                    approvedValue,
-                  );
-                }
-                // Check if m[1] is a Proxy with nested data
-                else if (
-                  m[1] &&
-                  typeof m[1] === "object" &&
-                  m[1][4] !== undefined
-                ) {
-                  approvedValue = m[1][4];
-                  console.log(
-                    `Milestone ${index} found approvedAt in m[1][4]:`,
-                    approvedValue,
-                  );
-                }
-                // Check if m[4] exists directly
-                else if (m[4] !== undefined) {
-                  approvedValue = m[4];
-                  console.log(
-                    `Milestone ${index} found approvedAt in m[4]:`,
-                    approvedValue,
-                  );
-                }
-                // Check if m.approvedAt exists
-                else if (m.approvedAt !== undefined) {
-                  approvedValue = m.approvedAt;
-                  console.log(
-                    `Milestone ${index} found approvedAt in m.approvedAt:`,
-                    approvedValue,
-                  );
-                }
-
-                if (approvedValue && approvedValue !== 0) {
-                  approvedAt = Number(approvedValue) * 1000;
-                  console.log(
-                    `Milestone ${index} parsed approvedAt:`,
-                    approvedAt,
-                  );
-                } else {
-                  approvedAt = undefined;
-                  console.log(`Milestone ${index} no approvedAt found`);
-                }
-              } catch (e) {
-                console.error(
-                  `Error parsing milestone ${index} approvedAt:`,
-                  e,
-                );
-                approvedAt = undefined;
               }
             } else {
               // Fallback for unexpected structure
@@ -398,49 +309,97 @@ export default function DashboardPage() {
               status = 0;
             }
 
-            // Check if milestone was actually submitted by looking at submittedAt
-            const isActuallySubmitted =
-              submittedAt !== undefined && submittedAt > 0;
-            const finalStatus = isActuallySubmitted
-              ? "submitted"
-              : getMilestoneStatusFromNumber(status);
+            // Determine the actual status based on timestamps and status
+            let finalStatus = getMilestoneStatusFromNumber(status);
 
-            console.log(`Milestone ${index} submittedAt:`, submittedAt);
+            // Check if this is a placeholder milestone
+            const isPlaceholder =
+              description && description.includes("To be defined");
+
+            if (isPlaceholder) {
+              // For placeholder milestones, determine status based on previous milestones
+              if (index === 0) {
+                // First milestone - should be pending
+                finalStatus = "pending";
+              } else {
+                // Check if previous milestone is approved
+                // This will be handled by the UI logic
+                finalStatus = "pending";
+              }
+              console.log(
+                `Milestone ${index} is placeholder, setting to pending`,
+              );
+            } else {
+              // Real milestone from contract
+              console.log(`Milestone ${index} status determination:`, {
+                rawStatus: status,
+                parsedStatus: getMilestoneStatusFromNumber(status),
+                submittedAt: submittedAt,
+                approvedAt: approvedAt,
+                hasSubmittedAt: submittedAt && submittedAt > 0,
+                hasApprovedAt: approvedAt && approvedAt > 0,
+              });
+
+              // Priority 1: If milestone status is 2 (approved), it's approved
+              if (status === 2) {
+                finalStatus = "approved";
+                console.log(
+                  `Milestone ${index} setting to approved due to status 2`,
+                );
+              }
+              // Priority 2: If milestone has been approved (approvedAt exists), it's approved
+              else if (approvedAt && approvedAt > 0) {
+                finalStatus = "approved";
+                console.log(
+                  `Milestone ${index} setting to approved due to approvedAt: ${approvedAt}`,
+                );
+              }
+              // Priority 3: If milestone has been submitted (submittedAt exists) but not approved, it's submitted
+              else if (submittedAt && submittedAt > 0) {
+                finalStatus = "submitted";
+                console.log(
+                  `Milestone ${index} setting to submitted due to submittedAt: ${submittedAt}`,
+                );
+              }
+              // Priority 4: If milestone status is 1 (submitted), it's submitted
+              else if (status === 1) {
+                finalStatus = "submitted";
+                console.log(
+                  `Milestone ${index} setting to submitted due to status 1`,
+                );
+              }
+              // Special case: If this is the first milestone and funds have been released, it should be approved
+              else if (
+                index === 0 &&
+                escrowSummary[5] &&
+                Number(escrowSummary[5]) > 0
+              ) {
+                finalStatus = "approved";
+                console.log(
+                  `Milestone ${index} setting to approved due to released funds: ${escrowSummary[5]}`,
+                );
+              }
+              // Otherwise use the parsed status
+              else {
+                console.log(
+                  `Milestone ${index} using parsed status: ${finalStatus}`,
+                );
+              }
+            }
+
             console.log(
-              `Milestone ${index} isActuallySubmitted:`,
-              isActuallySubmitted,
+              `Milestone ${index} final status:`,
+              finalStatus,
+              `(raw status: ${status}, submittedAt: ${submittedAt}, approvedAt: ${approvedAt})`,
             );
-            console.log(`Milestone ${index} finalStatus:`, finalStatus);
 
-            const milestoneData = {
+            return {
               description,
               amount,
               status: finalStatus,
               submittedAt,
               approvedAt,
             };
-            console.log(`Parsed milestone ${index}:`, milestoneData);
-
-            // Debug milestone amount parsing
-            const parsedAmount = Number.parseFloat(amount) / 1e18;
-            console.log(`Milestone ${index} final parsed amount:`, amount);
-            console.log(`Milestone ${index} amount in tokens:`, parsedAmount);
-            console.log(
-              `Milestone ${index} expected to be 40?`,
-              parsedAmount === 40,
-            );
-            console.log(
-              `Milestone ${index} raw status: ${status}, mapped to: ${getMilestoneStatusFromNumber(status)}`,
-            );
-            console.log(`Milestone ${index} raw milestone data:`, m);
-            console.log(`Milestone ${index} approvedAt:`, approvedAt);
-            console.log(
-              `Milestone ${index} raw amount:`,
-              amount,
-              "Converted:",
-              (Number.parseFloat(amount) / 1e18).toFixed(2),
-            );
-            return milestoneData;
           } catch (error) {
             console.error(`Error processing milestone ${index}:`, error);
             return {

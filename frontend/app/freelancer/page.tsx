@@ -40,6 +40,7 @@ import {
   Calendar,
   Play,
   RefreshCw,
+  Clock,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -885,6 +886,14 @@ export default function FreelancerPage() {
     }
   };
 
+  const calculateDaysLeft = (createdAt: number, duration: number): number => {
+    const now = Date.now();
+    // Duration is already in seconds from the contract, convert to milliseconds
+    const projectEndTime = createdAt + duration * 1000;
+    const daysLeft = Math.ceil((projectEndTime - now) / (24 * 60 * 60 * 1000));
+    return Math.max(0, daysLeft); // Don't show negative days
+  };
+
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString();
   };
@@ -970,7 +979,7 @@ export default function FreelancerPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                       <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
                         <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
                         <div>
@@ -1013,6 +1022,21 @@ export default function FreelancerPage() {
                           <p className="font-semibold text-orange-700 dark:text-orange-400">
                             {escrow.milestoneCount || escrow.milestones.length}{" "}
                             total
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                        <Clock className="h-5 w-5 text-red-600 dark:text-red-400" />
+                        <div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Days Left
+                          </p>
+                          <p className="font-semibold text-red-700 dark:text-red-400">
+                            {calculateDaysLeft(
+                              escrow.createdAt,
+                              escrow.duration,
+                            )}{" "}
+                            days
                           </p>
                         </div>
                       </div>
