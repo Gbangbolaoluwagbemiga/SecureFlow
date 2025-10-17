@@ -23,6 +23,8 @@ export interface Escrow {
   applications?: Application[];
   applicationCount?: number; // real count from blockchain
   isJobCreator?: boolean; // true if current user is the job creator
+  isClient?: boolean; // true if current user is the client (payer)
+  isFreelancer?: boolean; // true if current user is the freelancer (beneficiary)
 }
 
 export interface EscrowStats {

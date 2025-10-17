@@ -85,7 +85,7 @@ export function EscrowCard({
       : 0;
 
   const completedMilestones = escrow.milestones.filter(
-    (m) => m.status === "Approved",
+    (m) => m.status === "approved",
   ).length;
   const totalMilestones = escrow.milestones.length;
 

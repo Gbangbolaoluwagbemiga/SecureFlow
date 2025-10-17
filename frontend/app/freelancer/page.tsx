@@ -99,12 +99,18 @@ export default function FreelancerPage() {
       fetchFreelancerEscrows();
     };
 
+    const handleMilestoneApproved = () => {
+      fetchFreelancerEscrows();
+    };
+
     window.addEventListener("milestoneSubmitted", handleMilestoneSubmitted);
+    window.addEventListener("milestoneApproved", handleMilestoneApproved);
     return () => {
       window.removeEventListener(
         "milestoneSubmitted",
         handleMilestoneSubmitted,
       );
+      window.removeEventListener("milestoneApproved", handleMilestoneApproved);
     };
   }, []);
 
@@ -172,22 +178,48 @@ export default function FreelancerPage() {
                           if (m && typeof m === "object") {
                             // If milestone is an object with indexed properties
                             // Safely access array indices with bounds checking
-                            description =
-                              m[0] !== undefined && m[0] !== null
-                                ? String(m[0])
-                                : m.description || "";
-                            amount =
-                              m[1] !== undefined && m[1] !== null
-                                ? String(m[1])
-                                : m.amount !== undefined && m.amount !== null
-                                  ? String(m.amount)
-                                  : "0";
-                            status =
-                              m[2] !== undefined && m[2] !== null
-                                ? Number(m[2])
-                                : m.status !== undefined && m.status !== null
-                                  ? Number(m.status)
-                                  : 0;
+                            try {
+                              description =
+                                m[0] !== undefined && m[0] !== null
+                                  ? String(m[0])
+                                  : m.description || "";
+                            } catch (e) {
+                              console.warn(
+                                `Error parsing milestone ${index} description:`,
+                                e,
+                              );
+                              description = `Milestone ${index + 1}`;
+                            }
+
+                            try {
+                              amount =
+                                m[1] !== undefined && m[1] !== null
+                                  ? String(m[1])
+                                  : m.amount !== undefined && m.amount !== null
+                                    ? String(m.amount)
+                                    : "0";
+                            } catch (e) {
+                              console.warn(
+                                `Error parsing milestone ${index} amount:`,
+                                e,
+                              );
+                              amount = "0";
+                            }
+
+                            try {
+                              status =
+                                m[2] !== undefined && m[2] !== null
+                                  ? Number(m[2])
+                                  : m.status !== undefined && m.status !== null
+                                    ? Number(m.status)
+                                    : 0;
+                            } catch (e) {
+                              console.warn(
+                                `Error parsing milestone ${index} status:`,
+                                e,
+                              );
+                              status = 0;
+                            }
 
                             console.log(
                               `Milestone ${index} raw status:`,
@@ -195,20 +227,38 @@ export default function FreelancerPage() {
                               `Parsed status:`,
                               status,
                             );
-                            submittedAt =
-                              m[3] !== undefined && m[3] !== null
-                                ? Number(m[3]) * 1000
-                                : m.submittedAt !== undefined &&
-                                    m.submittedAt !== null
-                                  ? Number(m.submittedAt) * 1000
-                                  : undefined;
-                            approvedAt =
-                              m[4] !== undefined && m[4] !== null
-                                ? Number(m[4]) * 1000
-                                : m.approvedAt !== undefined &&
-                                    m.approvedAt !== null
-                                  ? Number(m.approvedAt) * 1000
-                                  : undefined;
+
+                            try {
+                              submittedAt =
+                                m[3] !== undefined && m[3] !== null
+                                  ? Number(m[3]) * 1000
+                                  : m.submittedAt !== undefined &&
+                                      m.submittedAt !== null
+                                    ? Number(m.submittedAt) * 1000
+                                    : undefined;
+                            } catch (e) {
+                              console.warn(
+                                `Error parsing milestone ${index} submittedAt:`,
+                                e,
+                              );
+                              submittedAt = undefined;
+                            }
+
+                            try {
+                              approvedAt =
+                                m[4] !== undefined && m[4] !== null
+                                  ? Number(m[4]) * 1000
+                                  : m.approvedAt !== undefined &&
+                                      m.approvedAt !== null
+                                    ? Number(m.approvedAt) * 1000
+                                    : undefined;
+                            } catch (e) {
+                              console.warn(
+                                `Error parsing milestone ${index} approvedAt:`,
+                                e,
+                              );
+                              approvedAt = undefined;
+                            }
                           } else {
                             // Fallback for unexpected structure
                             description = `Milestone ${index + 1}`;
@@ -653,8 +703,26 @@ export default function FreelancerPage() {
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="font-medium">
-                                  Milestone {index + 1}
+                                  Milestone {index + 1} of{" "}
+                                  {escrow.milestones.length}
                                 </span>
+                                {milestone.description &&
+                                  milestone.description !==
+                                    `Milestone ${index + 1}` && (
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      <div className="font-medium text-gray-700">
+                                        Client Requirements:
+                                      </div>
+                                      <div className="italic">
+                                        {milestone.description.length > 50
+                                          ? milestone.description.substring(
+                                              0,
+                                              50,
+                                            ) + "..."
+                                          : milestone.description}
+                                      </div>
+                                    </div>
+                                  )}
                                 <Badge
                                   className={getMilestoneStatusColor(
                                     milestone.status,
@@ -695,9 +763,13 @@ export default function FreelancerPage() {
                                 {formatAmount(milestone.amount)} tokens
                               </p>
                             </div>
-                            <div className="flex gap-2 mt-4">
-                              {milestone.status === "pending" &&
-                                escrow.status === "InProgress" && (
+                            <div className="flex gap-2 mt-6">
+                              {(milestone.status === "pending" ||
+                                milestone.status === "NotStarted") &&
+                                escrow.status === "InProgress" &&
+                                (index === 0 ||
+                                  escrow.milestones[index - 1]?.status ===
+                                    "approved") && (
                                   <Button
                                     size="sm"
                                     onClick={() =>

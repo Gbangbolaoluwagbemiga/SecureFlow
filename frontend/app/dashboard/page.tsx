@@ -76,10 +76,19 @@ export default function DashboardPage() {
     try {
       const milestones = await contract.call("getMilestones", escrowId);
       console.log(`Milestones for escrow ${escrowId}:`, milestones);
+      console.log(`Milestones type:`, typeof milestones);
+      console.log(`Milestones length:`, milestones?.length);
       if (milestones && Array.isArray(milestones)) {
+        console.log(
+          `Processing ${milestones.length} milestones for escrow ${escrowId}`,
+        );
         return milestones.map((m: any, index: number) => {
           try {
             console.log(`Raw milestone ${index}:`, m);
+            console.log(`Milestone ${index} type:`, typeof m);
+            console.log(`Milestone ${index} keys:`, Object.keys(m || {}));
+            console.log(`Milestone ${index} m[1] (amount):`, m[1]);
+            console.log(`Milestone ${index} m[1] type:`, typeof m[1]);
 
             // Handle different milestone data structures
             let description = "";
@@ -411,6 +420,15 @@ export default function DashboardPage() {
               approvedAt,
             };
             console.log(`Parsed milestone ${index}:`, milestoneData);
+
+            // Debug milestone amount parsing
+            const parsedAmount = Number.parseFloat(amount) / 1e18;
+            console.log(`Milestone ${index} final parsed amount:`, amount);
+            console.log(`Milestone ${index} amount in tokens:`, parsedAmount);
+            console.log(
+              `Milestone ${index} expected to be 40?`,
+              parsedAmount === 40,
+            );
             console.log(
               `Milestone ${index} raw status: ${status}, mapped to: ${getMilestoneStatusFromNumber(status)}`,
             );
@@ -484,12 +502,15 @@ export default function DashboardPage() {
             const isBeneficiary =
               escrowSummary[1].toLowerCase() === wallet.address?.toLowerCase();
 
+            // Show escrows for both clients and freelancers, but with different functionality
             if (isPayer || isBeneficiary) {
               // Convert contract data to our Escrow type
               const escrow: Escrow = {
                 id: i.toString(),
                 payer: escrowSummary[0], // depositor
                 beneficiary: escrowSummary[1], // beneficiary
+                isClient: isPayer, // Track if current user is the client (payer)
+                isFreelancer: isBeneficiary, // Track if current user is the freelancer (beneficiary)
                 token: escrowSummary[7], // token
                 totalAmount: escrowSummary[4].toString(), // totalAmount
                 releasedAmount: escrowSummary[5].toString(), // paidAmount
@@ -757,6 +778,20 @@ export default function DashboardPage() {
 
   const approveMilestone = async (escrowId: string, milestoneIndex: number) => {
     try {
+      // SECURITY: Double-check that user is the depositor
+      const escrow = escrows.find((e) => e.id === escrowId);
+      if (
+        !escrow ||
+        escrow.payer.toLowerCase() !== wallet.address?.toLowerCase()
+      ) {
+        toast({
+          title: "Access Denied",
+          description: "Only the job creator can approve milestones",
+          variant: "destructive",
+        });
+        return;
+      }
+
       setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       if (!contract) return;
@@ -803,7 +838,43 @@ export default function DashboardPage() {
           title: "Milestone Approved!",
           description: "Payment has been sent to the freelancer",
         });
+
+        // Wait a moment for blockchain state to update
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+
+        // Add debugging for payment tracking
+        console.log("🔍 Debugging payment after milestone approval:");
+        console.log("- Raw milestone amount:", milestone.amount);
+        console.log(
+          "- Milestone amount (tokens):",
+          (Number.parseFloat(milestone.amount) / 1e18).toFixed(2),
+        );
+        console.log(
+          "- Current released amount:",
+          (Number.parseFloat(escrow.releasedAmount) / 1e18).toFixed(2),
+        );
+        console.log(
+          "- Expected released amount:",
+          (
+            Number.parseFloat(escrow.releasedAmount) / 1e18 +
+            Number.parseFloat(milestone.amount) / 1e18
+          ).toFixed(2),
+          "tokens",
+        );
+
+        // Check if milestone amount is being parsed correctly
+        const milestoneAmountInTokens =
+          Number.parseFloat(milestone.amount) / 1e18;
+        console.log("- Milestone amount in tokens:", milestoneAmountInTokens);
+        console.log(
+          "- Is milestone amount correct?",
+          milestoneAmountInTokens === 40,
+        );
+
         await fetchUserEscrows();
+
+        // Dispatch event to notify other components
+        window.dispatchEvent(new CustomEvent("milestoneApproved"));
       } else {
         throw new Error("Transaction failed on blockchain");
       }
@@ -825,6 +896,20 @@ export default function DashboardPage() {
     reason: string,
   ) => {
     try {
+      // SECURITY: Double-check that user is the depositor
+      const escrow = escrows.find((e) => e.id === escrowId);
+      if (
+        !escrow ||
+        escrow.payer.toLowerCase() !== wallet.address?.toLowerCase()
+      ) {
+        toast({
+          title: "Access Denied",
+          description: "Only the job creator can reject milestones",
+          variant: "destructive",
+        });
+        return;
+      }
+
       setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       if (!contract) return;

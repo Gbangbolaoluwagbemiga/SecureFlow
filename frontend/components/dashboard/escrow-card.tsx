@@ -193,30 +193,35 @@ export function EscrowCard({
                           {milestone.status}
                         </Badge>
                         <MilestoneActions
-                          escrow={escrow}
-                          milestone={milestone}
+                          escrowId={escrow.id}
                           milestoneIndex={idx}
-                          onSubmitMilestone={onSubmitMilestone}
-                          onApproveMilestone={onApproveMilestone}
-                          onRejectMilestone={onRejectMilestone}
-                          onDisputeMilestone={onDisputeMilestone}
-                          onStartWork={onStartWork}
-                          onDispute={onDispute}
-                          submittingMilestone={submittingMilestone}
+                          milestone={milestone}
+                          isPayer={escrow.isClient || false}
+                          isBeneficiary={escrow.isFreelancer || false}
+                          escrowStatus={escrow.status}
+                          onSuccess={() => {
+                            // Refresh the escrow data
+                            window.dispatchEvent(
+                              new CustomEvent("escrowUpdated"),
+                            );
+                          }}
                         />
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="pt-4 border-t">
-                  <MilestoneApprovalPanel
-                    escrow={escrow}
-                    onApproveMilestone={onApproveMilestone}
-                    onRejectMilestone={onRejectMilestone}
-                    submittingMilestone={submittingMilestone}
-                  />
-                </div>
+                {/* Only show milestone approval panel for clients (payers) */}
+                {escrow.isClient && (
+                  <div className="pt-4 border-t">
+                    <MilestoneApprovalPanel
+                      escrow={escrow}
+                      onApproveMilestone={onApproveMilestone}
+                      onRejectMilestone={onRejectMilestone}
+                      submittingMilestone={submittingMilestone}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>
