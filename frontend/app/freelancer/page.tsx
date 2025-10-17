@@ -637,6 +637,84 @@ export default function FreelancerPage() {
       return;
     }
 
+    // Check if this is the correct milestone to submit (sequential order)
+    const escrow = escrows.find((e) => e.id === escrowId);
+    if (escrow) {
+      // Find the current milestone that should be submitted
+      let expectedMilestoneIndex = -1;
+
+      for (let i = 0; i < escrow.milestones.length; i++) {
+        const milestone = escrow.milestones[i];
+        const milestoneKey = `${escrowId}-${i}`;
+
+        // Check if this milestone is pending and can be submitted
+        if (
+          milestone.status === "pending" &&
+          !submittedMilestones.has(milestoneKey) &&
+          !approvedMilestones.has(milestoneKey)
+        ) {
+          // For the first milestone, it can always be submitted if pending
+          if (i === 0) {
+            expectedMilestoneIndex = i;
+            break;
+          }
+
+          // For subsequent milestones, check if the previous one is approved
+          const previousMilestone = escrow.milestones[i - 1];
+          const previousMilestoneKey = `${escrowId}-${i - 1}`;
+
+          // Check if previous milestone is approved
+          const isPreviousApproved =
+            previousMilestone &&
+            (previousMilestone.status === "approved" ||
+              approvedMilestones.has(previousMilestoneKey));
+
+          // Check if there are any submitted milestones before this one that aren't approved
+          let hasUnapprovedSubmitted = false;
+          for (let j = 0; j < i; j++) {
+            const prevMilestone = escrow.milestones[j];
+            const prevMilestoneKey = `${escrowId}-${j}`;
+            const isPrevSubmitted =
+              prevMilestone.status === "submitted" ||
+              submittedMilestones.has(prevMilestoneKey);
+            const isPrevApproved =
+              prevMilestone.status === "approved" ||
+              approvedMilestones.has(prevMilestoneKey);
+
+            if (isPrevSubmitted && !isPrevApproved) {
+              hasUnapprovedSubmitted = true;
+              break;
+            }
+          }
+
+          // Only allow submission if previous milestone is approved AND no submitted milestones are pending
+          if (isPreviousApproved && !hasUnapprovedSubmitted) {
+            expectedMilestoneIndex = i;
+            break;
+          }
+        }
+      }
+
+      // Check if the milestone being submitted is the expected one
+      if (expectedMilestoneIndex !== milestoneIndex) {
+        if (expectedMilestoneIndex === -1) {
+          toast({
+            title: "No milestone available for submission",
+            description:
+              "All milestones are either completed or in progress. Please wait for the current milestone to be approved.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Wrong milestone sequence",
+            description: `You can only submit milestone ${expectedMilestoneIndex + 1} at this time. Please complete the previous milestones first.`,
+            variant: "destructive",
+          });
+        }
+        return;
+      }
+    }
+
     // Additional check: Get the current milestone status from contract
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
@@ -1099,14 +1177,65 @@ export default function FreelancerPage() {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         {escrow.milestones.map((milestone, index) => {
                           const milestoneKey = `${escrow.id}-${index}`;
-                          const isApproved = milestone.status === "approved";
-                          const isSubmitted = milestone.status === "submitted";
-                          const isPending = milestone.status === "pending";
-                          const isCurrent =
-                            isPending &&
-                            (index === 0 ||
-                              escrow.milestones[index - 1]?.status ===
-                                "approved");
+                          const isApproved =
+                            milestone.status === "approved" ||
+                            approvedMilestones.has(milestoneKey);
+                          const isSubmitted =
+                            milestone.status === "submitted" ||
+                            submittedMilestones.has(milestoneKey);
+                          const isPending =
+                            milestone.status === "pending" &&
+                            !submittedMilestones.has(milestoneKey) &&
+                            !approvedMilestones.has(milestoneKey);
+
+                          // Determine if this is the current milestone that can be submitted
+                          let isCurrent = false;
+                          let isBlocked = false;
+                          if (isPending) {
+                            // For the first milestone, it can always be current if pending
+                            if (index === 0) {
+                              isCurrent = true;
+                            } else {
+                              // For subsequent milestones, check if the previous one is approved
+                              const previousMilestone =
+                                escrow.milestones[index - 1];
+                              const previousMilestoneKey = `${escrow.id}-${index - 1}`;
+
+                              // Check if previous milestone is approved
+                              const isPreviousApproved =
+                                previousMilestone &&
+                                (previousMilestone.status === "approved" ||
+                                  approvedMilestones.has(previousMilestoneKey));
+
+                              // Check if there are any submitted milestones before this one that aren't approved
+                              let hasUnapprovedSubmitted = false;
+                              for (let j = 0; j < index; j++) {
+                                const prevMilestone = escrow.milestones[j];
+                                const prevMilestoneKey = `${escrow.id}-${j}`;
+                                const isPrevSubmitted =
+                                  prevMilestone.status === "submitted" ||
+                                  submittedMilestones.has(prevMilestoneKey);
+                                const isPrevApproved =
+                                  prevMilestone.status === "approved" ||
+                                  approvedMilestones.has(prevMilestoneKey);
+
+                                if (isPrevSubmitted && !isPrevApproved) {
+                                  hasUnapprovedSubmitted = true;
+                                  break;
+                                }
+                              }
+
+                              // Only allow submission if previous milestone is approved AND no submitted milestones are pending
+                              if (
+                                isPreviousApproved &&
+                                !hasUnapprovedSubmitted
+                              ) {
+                                isCurrent = true;
+                              } else if (hasUnapprovedSubmitted) {
+                                isBlocked = true;
+                              }
+                            }
+                          }
 
                           return (
                             <div
@@ -1118,20 +1247,34 @@ export default function FreelancerPage() {
                                     ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800"
                                     : isCurrent
                                       ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
-                                      : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
+                                      : isBlocked
+                                        ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+                                        : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
                               }`}
                             >
                               <div className="flex items-center justify-between mb-2">
                                 <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
                                   Milestone {index + 1}
                                 </span>
-                                <Badge
-                                  className={getMilestoneStatusColor(
-                                    milestone.status,
+                                <div className="flex gap-1">
+                                  {isCurrent && (
+                                    <Badge className="bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200">
+                                      Current
+                                    </Badge>
                                   )}
-                                >
-                                  {milestone.status}
-                                </Badge>
+                                  {isBlocked && (
+                                    <Badge className="bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200">
+                                      Blocked
+                                    </Badge>
+                                  )}
+                                  <Badge
+                                    className={getMilestoneStatusColor(
+                                      milestone.status,
+                                    )}
+                                  >
+                                    {milestone.status}
+                                  </Badge>
+                                </div>
                               </div>
 
                               {/* Client Requirements */}
@@ -1166,14 +1309,79 @@ export default function FreelancerPage() {
 
                       {/* Current Milestone Submission Form */}
                       {(() => {
-                        const currentMilestoneIndex =
-                          escrow.milestones.findIndex(
-                            (milestone, index) =>
-                              milestone.status === "pending" &&
-                              (index === 0 ||
-                                escrow.milestones[index - 1]?.status ===
-                                  "approved"),
-                          );
+                        // Find the current milestone that can be submitted
+                        // Only allow submission of the next milestone in sequence
+                        let currentMilestoneIndex = -1;
+
+                        for (let i = 0; i < escrow.milestones.length; i++) {
+                          const milestone = escrow.milestones[i];
+                          const milestoneKey = `${escrow.id}-${i}`;
+
+                          // Check if this milestone is pending and can be submitted
+                          if (
+                            milestone.status === "pending" &&
+                            !submittedMilestones.has(milestoneKey) &&
+                            !approvedMilestones.has(milestoneKey)
+                          ) {
+                            // For the first milestone, it can always be submitted if pending
+                            if (i === 0) {
+                              currentMilestoneIndex = i;
+                              break;
+                            }
+
+                            // For subsequent milestones, check if the previous one is approved
+                            const previousMilestone = escrow.milestones[i - 1];
+                            const previousMilestoneKey = `${escrow.id}-${i - 1}`;
+
+                            // Check if previous milestone is approved
+                            const isPreviousApproved =
+                              previousMilestone &&
+                              (previousMilestone.status === "approved" ||
+                                approvedMilestones.has(previousMilestoneKey));
+
+                            // Check if there are any submitted milestones before this one that aren't approved
+                            let hasUnapprovedSubmitted = false;
+                            for (let j = 0; j < i; j++) {
+                              const prevMilestone = escrow.milestones[j];
+                              const prevMilestoneKey = `${escrow.id}-${j}`;
+                              const isPrevSubmitted =
+                                prevMilestone.status === "submitted" ||
+                                submittedMilestones.has(prevMilestoneKey);
+                              const isPrevApproved =
+                                prevMilestone.status === "approved" ||
+                                approvedMilestones.has(prevMilestoneKey);
+
+                              if (isPrevSubmitted && !isPrevApproved) {
+                                hasUnapprovedSubmitted = true;
+                                break;
+                              }
+                            }
+
+                            // Only allow submission if previous milestone is approved AND no submitted milestones are pending
+                            if (isPreviousApproved && !hasUnapprovedSubmitted) {
+                              currentMilestoneIndex = i;
+                              break;
+                            }
+                          }
+                        }
+
+                        console.log(
+                          `Escrow ${escrow.id} current milestone index:`,
+                          currentMilestoneIndex,
+                        );
+                        console.log(
+                          `Escrow ${escrow.id} milestone statuses:`,
+                          escrow.milestones.map((m, i) => ({
+                            index: i,
+                            status: m.status,
+                            submitted: submittedMilestones.has(
+                              `${escrow.id}-${i}`,
+                            ),
+                            approved: approvedMilestones.has(
+                              `${escrow.id}-${i}`,
+                            ),
+                          })),
+                        );
 
                         if (currentMilestoneIndex === -1) {
                           return (

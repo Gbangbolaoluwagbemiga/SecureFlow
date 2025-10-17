@@ -12,6 +12,7 @@ interface JobCardProps {
   index: number;
   hasApplied: boolean;
   isContractPaused: boolean;
+  ongoingProjectsCount: number;
   onApply: (job: Escrow) => void;
 }
 
@@ -20,6 +21,7 @@ export function JobCard({
   index,
   hasApplied,
   isContractPaused,
+  ongoingProjectsCount,
   onApply,
 }: JobCardProps) {
   console.log(
@@ -101,7 +103,12 @@ export function JobCard({
 
             <Button
               onClick={() => onApply(job)}
-              disabled={hasApplied || isContractPaused || job.isJobCreator}
+              disabled={
+                hasApplied ||
+                isContractPaused ||
+                job.isJobCreator ||
+                ongoingProjectsCount >= 3
+              }
               className="w-full lg:w-auto min-w-[140px]"
             >
               {isContractPaused ? (
@@ -113,6 +120,11 @@ export function JobCard({
                 "Your Job"
               ) : hasApplied ? (
                 "Applied"
+              ) : ongoingProjectsCount >= 3 ? (
+                <>
+                  <AlertCircle className="h-4 w-4 mr-2" />
+                  Project Limit (3/3)
+                </>
               ) : (
                 "Apply Now"
               )}

@@ -25,6 +25,7 @@ interface MilestoneActionsProps {
   isBeneficiary: boolean;
   escrowStatus: string;
   onSuccess: () => void;
+  allMilestones?: Milestone[]; // Add all milestones for sequential validation
 }
 
 export function MilestoneActions({
@@ -35,6 +36,7 @@ export function MilestoneActions({
   isBeneficiary,
   escrowStatus,
   onSuccess,
+  allMilestones = [],
 }: MilestoneActionsProps) {
   const { getContract } = useWeb3();
   const { toast } = useToast();
@@ -44,6 +46,44 @@ export function MilestoneActions({
     "start" | "submit" | "approve" | "reject" | "dispute" | "resolve" | null
   >(null);
   const [rejectionReason, setRejectionReason] = useState("");
+
+  // Check if this milestone can be submitted (sequential validation)
+  const canSubmitMilestone = () => {
+    if (
+      milestone.status !== "pending" ||
+      !isBeneficiary ||
+      escrowStatus !== "active"
+    ) {
+      return false;
+    }
+
+    // For the first milestone, it can always be submitted if pending
+    if (milestoneIndex === 0) {
+      return true;
+    }
+
+    // For subsequent milestones, check if the previous one is approved
+    const previousMilestone = allMilestones[milestoneIndex - 1];
+    if (!previousMilestone) {
+      return false;
+    }
+
+    // Check if previous milestone is approved
+    const isPreviousApproved = previousMilestone.status === "approved";
+
+    // Check if there are any submitted milestones before this one that aren't approved
+    let hasUnapprovedSubmitted = false;
+    for (let i = 0; i < milestoneIndex; i++) {
+      const prevMilestone = allMilestones[i];
+      if (prevMilestone && prevMilestone.status === "submitted") {
+        hasUnapprovedSubmitted = true;
+        break;
+      }
+    }
+
+    // Only allow submission if previous milestone is approved AND no submitted milestones are pending
+    return isPreviousApproved && !hasUnapprovedSubmitted;
+  };
 
   const openDialog = (type: typeof actionType) => {
     setActionType(type);
@@ -237,20 +277,18 @@ export function MilestoneActions({
           </Button>
         )}
 
-        {/* Submit Milestone - Only beneficiary for pending milestones */}
-        {milestone.status === "pending" &&
-          isBeneficiary &&
-          escrowStatus === "active" && (
-            <Button
-              onClick={() => openDialog("submit")}
-              size="sm"
-              variant="default"
-              className="gap-2"
-            >
-              <Send className="h-4 w-4" />
-              Submit
-            </Button>
-          )}
+        {/* Submit Milestone - Only beneficiary for pending milestones that can be submitted */}
+        {canSubmitMilestone() && (
+          <Button
+            onClick={() => openDialog("submit")}
+            size="sm"
+            variant="default"
+            className="gap-2"
+          >
+            <Send className="h-4 w-4" />
+            Submit
+          </Button>
+        )}
 
         {/* Approve Milestone - Only payer for submitted milestones */}
         {milestone.status === "submitted" && isPayer && (

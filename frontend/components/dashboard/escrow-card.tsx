@@ -214,6 +214,7 @@ export function EscrowCard({
                           isPayer={escrow.isClient || false}
                           isBeneficiary={escrow.isFreelancer || false}
                           escrowStatus={escrow.status}
+                          allMilestones={escrow.milestones}
                           onSuccess={() => {
                             // Refresh the escrow data
                             window.dispatchEvent(
