@@ -7,8 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { motion } from "framer-motion";
 import { Clock, DollarSign, ChevronDown, ChevronUp } from "lucide-react";
 import { MilestoneActions } from "@/components/milestone-actions";
-import { ReputationScore } from "@/components/reputation-score";
-import { EscrowNFTBadge } from "@/components/escrow-nft-badge";
+import { MilestoneApprovalPanel } from "@/components/milestone-approval-panel";
 import type { Escrow, Milestone } from "@/lib/web3/types";
 
 interface EscrowCardProps {
@@ -23,6 +22,7 @@ interface EscrowCardProps {
   onDisputeMilestone: (escrowId: string, milestoneIndex: number) => void;
   onStartWork: (escrowId: string) => void;
   onDispute: (escrowId: string) => void;
+  calculateDaysLeft: (createdAt: number, duration: number) => number;
 }
 
 export function EscrowCard({
@@ -37,6 +37,7 @@ export function EscrowCard({
   onDisputeMilestone,
   onStartWork,
   onDispute,
+  calculateDaysLeft,
 }: EscrowCardProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -141,7 +142,7 @@ export function EscrowCard({
               <Progress value={progressPercentage} className="h-2" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-3 gap-4 text-sm">
               <div>
                 <span className="text-gray-600">Total Amount:</span>
                 <div className="font-semibold">
@@ -154,6 +155,13 @@ export function EscrowCard({
                 <div className="font-semibold">
                   {(Number.parseFloat(escrow.releasedAmount) / 1e18).toFixed(2)}{" "}
                   tokens
+                </div>
+              </div>
+              <div>
+                <span className="text-gray-600">Days Left:</span>
+                <div className="font-semibold flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  {calculateDaysLeft(escrow.createdAt, escrow.duration)} days
                 </div>
               </div>
             </div>
@@ -201,11 +209,13 @@ export function EscrowCard({
                   ))}
                 </div>
 
-                <div className="flex items-center justify-between pt-4 border-t">
-                  <div className="flex items-center gap-4">
-                    <ReputationScore score={85} role="client" />
-                    <EscrowNFTBadge escrowId={escrow.id} />
-                  </div>
+                <div className="pt-4 border-t">
+                  <MilestoneApprovalPanel
+                    escrow={escrow}
+                    onApproveMilestone={onApproveMilestone}
+                    onRejectMilestone={onRejectMilestone}
+                    submittingMilestone={submittingMilestone}
+                  />
                 </div>
               </div>
             )}

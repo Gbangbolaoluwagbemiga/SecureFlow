@@ -47,16 +47,25 @@ export default function DashboardPage() {
 
   const getMilestoneStatusFromNumber = (status: number): string => {
     const statuses = [
-      "pending",
-      "submitted",
-      "approved",
-      "disputed",
-      "resolved",
+      "pending", // 0 - Not started
+      "submitted", // 1 - Submitted by freelancer
+      "approved", // 2 - Approved by client
+      "rejected", // 3 - Rejected by client
+      "disputed", // 4 - Under dispute
+      "resolved", // 5 - Dispute resolved
     ];
     console.log(
       `Milestone status number: ${status}, mapped to: ${statuses[status] || "pending"}`,
     );
     return statuses[status] || "pending";
+  };
+
+  const calculateDaysLeft = (createdAt: number, duration: number): number => {
+    const now = Date.now();
+    // Duration is already in seconds from the contract, convert to milliseconds
+    const projectEndTime = createdAt + duration * 1000;
+    const daysLeft = Math.ceil((projectEndTime - now) / (24 * 60 * 60 * 1000));
+    return Math.max(0, daysLeft); // Don't show negative days
   };
 
   const fetchMilestones = async (
@@ -182,88 +191,195 @@ export default function DashboardPage() {
               }
 
               try {
-                // Handle status parsing
-                if (m[2] !== undefined) {
-                  // Check if m[2] is another Proxy object (nested structure)
-                  if (
-                    m[2] &&
-                    typeof m[2] === "object" &&
-                    m[2][2] !== undefined
-                  ) {
-                    // Nested structure: m[2][2] contains the status
-                    status = Number(m[2][2]) || 0;
-                  } else {
-                    // Direct structure: m[2] contains the status
-                    status = Number(m[2]) || 0;
-                  }
-                } else if (m.status !== undefined) {
-                  status = Number(m.status) || 0;
+                // Handle status parsing with proper nested Proxy access
+                console.log(`Raw milestone ${index} data:`, m);
+                console.log(`Milestone ${index} m[0]:`, m[0]);
+                console.log(`Milestone ${index} m[1]:`, m[1]);
+                console.log(`Milestone ${index} m[2]:`, m[2]);
+
+                // Try to access nested Proxy structure
+                let statusValue = null;
+
+                // Check if m[0] is a Proxy with nested data
+                if (m[0] && typeof m[0] === "object" && m[0][2] !== undefined) {
+                  statusValue = m[0][2];
+                  console.log(
+                    `Milestone ${index} found status in m[0][2]:`,
+                    statusValue,
+                  );
+                }
+                // Check if m[1] is a Proxy with nested data
+                else if (
+                  m[1] &&
+                  typeof m[1] === "object" &&
+                  m[1][2] !== undefined
+                ) {
+                  statusValue = m[1][2];
+                  console.log(
+                    `Milestone ${index} found status in m[1][2]:`,
+                    statusValue,
+                  );
+                }
+                // Check if m[2] exists directly
+                else if (m[2] !== undefined) {
+                  statusValue = m[2];
+                  console.log(
+                    `Milestone ${index} found status in m[2]:`,
+                    statusValue,
+                  );
+                }
+                // Check if m.status exists
+                else if (m.status !== undefined) {
+                  statusValue = m.status;
+                  console.log(
+                    `Milestone ${index} found status in m.status:`,
+                    statusValue,
+                  );
+                }
+
+                if (statusValue !== null) {
+                  status = Number(statusValue) || 0;
+                  console.log(
+                    `Milestone ${index} final parsed status:`,
+                    status,
+                  );
                 } else {
                   status = 0;
+                  console.log(
+                    `Milestone ${index} using default status:`,
+                    status,
+                  );
                 }
               } catch (e) {
+                console.error(`Error parsing milestone ${index} status:`, e);
                 status = 0;
               }
 
               try {
-                // Handle submittedAt parsing
-                if (m[3] !== undefined) {
-                  // Check if m[3] is another Proxy object (nested structure)
-                  if (
-                    m[3] &&
-                    typeof m[3] === "object" &&
-                    m[3][3] !== undefined
-                  ) {
-                    // Nested structure: m[3][3] contains the submittedAt
-                    const submittedValue = m[3][3];
-                    if (submittedValue && submittedValue !== 0) {
-                      submittedAt = Number(submittedValue) * 1000;
-                    }
-                  } else {
-                    // Direct structure: m[3] contains the submittedAt
-                    const submittedValue = m[3];
-                    if (submittedValue && submittedValue !== 0) {
-                      submittedAt = Number(submittedValue) * 1000;
-                    }
-                  }
-                } else if (m.submittedAt !== undefined) {
-                  const submittedValue = m.submittedAt;
-                  if (submittedValue && submittedValue !== 0) {
-                    submittedAt = Number(submittedValue) * 1000;
-                  }
+                // Handle submittedAt parsing with proper nested Proxy access
+                console.log(`Milestone ${index} checking submittedAt...`);
+                console.log(`Milestone ${index} m[0]:`, m[0]);
+                console.log(`Milestone ${index} m[1]:`, m[1]);
+                console.log(`Milestone ${index} m[3]:`, m[3]);
+
+                let submittedValue = null;
+
+                // Check if m[0] is a Proxy with nested data (submittedAt at index 3)
+                if (m[0] && typeof m[0] === "object" && m[0][3] !== undefined) {
+                  submittedValue = m[0][3];
+                  console.log(
+                    `Milestone ${index} found submittedAt in m[0][3]:`,
+                    submittedValue,
+                  );
+                }
+                // Check if m[1] is a Proxy with nested data
+                else if (
+                  m[1] &&
+                  typeof m[1] === "object" &&
+                  m[1][3] !== undefined
+                ) {
+                  submittedValue = m[1][3];
+                  console.log(
+                    `Milestone ${index} found submittedAt in m[1][3]:`,
+                    submittedValue,
+                  );
+                }
+                // Check if m[3] exists directly
+                else if (m[3] !== undefined) {
+                  submittedValue = m[3];
+                  console.log(
+                    `Milestone ${index} found submittedAt in m[3]:`,
+                    submittedValue,
+                  );
+                }
+                // Check if m.submittedAt exists
+                else if (m.submittedAt !== undefined) {
+                  submittedValue = m.submittedAt;
+                  console.log(
+                    `Milestone ${index} found submittedAt in m.submittedAt:`,
+                    submittedValue,
+                  );
+                }
+
+                if (submittedValue && submittedValue !== 0) {
+                  submittedAt = Number(submittedValue) * 1000;
+                  console.log(
+                    `Milestone ${index} parsed submittedAt:`,
+                    submittedAt,
+                  );
+                } else {
+                  submittedAt = undefined;
+                  console.log(`Milestone ${index} no submittedAt found`);
                 }
               } catch (e) {
+                console.error(
+                  `Error parsing milestone ${index} submittedAt:`,
+                  e,
+                );
                 submittedAt = undefined;
               }
 
               try {
-                // Handle approvedAt parsing
-                if (m[4] !== undefined) {
-                  // Check if m[4] is another Proxy object (nested structure)
-                  if (
-                    m[4] &&
-                    typeof m[4] === "object" &&
-                    m[4][4] !== undefined
-                  ) {
-                    // Nested structure: m[4][4] contains the approvedAt
-                    const approvedValue = m[4][4];
-                    if (approvedValue && approvedValue !== 0) {
-                      approvedAt = Number(approvedValue) * 1000;
-                    }
-                  } else {
-                    // Direct structure: m[4] contains the approvedAt
-                    const approvedValue = m[4];
-                    if (approvedValue && approvedValue !== 0) {
-                      approvedAt = Number(approvedValue) * 1000;
-                    }
-                  }
-                } else if (m.approvedAt !== undefined) {
-                  const approvedValue = m.approvedAt;
-                  if (approvedValue && approvedValue !== 0) {
-                    approvedAt = Number(approvedValue) * 1000;
-                  }
+                // Handle approvedAt parsing with proper nested Proxy access
+                console.log(`Milestone ${index} checking approvedAt...`);
+                console.log(`Milestone ${index} m[0]:`, m[0]);
+                console.log(`Milestone ${index} m[1]:`, m[1]);
+                console.log(`Milestone ${index} m[4]:`, m[4]);
+
+                let approvedValue = null;
+
+                // Check if m[0] is a Proxy with nested data (approvedAt at index 4)
+                if (m[0] && typeof m[0] === "object" && m[0][4] !== undefined) {
+                  approvedValue = m[0][4];
+                  console.log(
+                    `Milestone ${index} found approvedAt in m[0][4]:`,
+                    approvedValue,
+                  );
+                }
+                // Check if m[1] is a Proxy with nested data
+                else if (
+                  m[1] &&
+                  typeof m[1] === "object" &&
+                  m[1][4] !== undefined
+                ) {
+                  approvedValue = m[1][4];
+                  console.log(
+                    `Milestone ${index} found approvedAt in m[1][4]:`,
+                    approvedValue,
+                  );
+                }
+                // Check if m[4] exists directly
+                else if (m[4] !== undefined) {
+                  approvedValue = m[4];
+                  console.log(
+                    `Milestone ${index} found approvedAt in m[4]:`,
+                    approvedValue,
+                  );
+                }
+                // Check if m.approvedAt exists
+                else if (m.approvedAt !== undefined) {
+                  approvedValue = m.approvedAt;
+                  console.log(
+                    `Milestone ${index} found approvedAt in m.approvedAt:`,
+                    approvedValue,
+                  );
+                }
+
+                if (approvedValue && approvedValue !== 0) {
+                  approvedAt = Number(approvedValue) * 1000;
+                  console.log(
+                    `Milestone ${index} parsed approvedAt:`,
+                    approvedAt,
+                  );
+                } else {
+                  approvedAt = undefined;
+                  console.log(`Milestone ${index} no approvedAt found`);
                 }
               } catch (e) {
+                console.error(
+                  `Error parsing milestone ${index} approvedAt:`,
+                  e,
+                );
                 approvedAt = undefined;
               }
             } else {
@@ -273,10 +389,24 @@ export default function DashboardPage() {
               status = 0;
             }
 
+            // Check if milestone was actually submitted by looking at submittedAt
+            const isActuallySubmitted =
+              submittedAt !== undefined && submittedAt > 0;
+            const finalStatus = isActuallySubmitted
+              ? "submitted"
+              : getMilestoneStatusFromNumber(status);
+
+            console.log(`Milestone ${index} submittedAt:`, submittedAt);
+            console.log(
+              `Milestone ${index} isActuallySubmitted:`,
+              isActuallySubmitted,
+            );
+            console.log(`Milestone ${index} finalStatus:`, finalStatus);
+
             const milestoneData = {
               description,
               amount,
-              status: getMilestoneStatusFromNumber(status),
+              status: finalStatus,
               submittedAt,
               approvedAt,
             };
@@ -284,6 +414,7 @@ export default function DashboardPage() {
             console.log(
               `Milestone ${index} raw status: ${status}, mapped to: ${getMilestoneStatusFromNumber(status)}`,
             );
+            console.log(`Milestone ${index} raw milestone data:`, m);
             console.log(`Milestone ${index} approvedAt:`, approvedAt);
             console.log(
               `Milestone ${index} raw amount:`,
@@ -538,26 +669,218 @@ export default function DashboardPage() {
     return escrows.filter((e) => e.status === filter);
   };
 
-  const approveMilestone = async (escrowId: string, milestoneIndex: number) => {
+  const disputeMilestone = async (escrowId: string, milestoneIndex: number) => {
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       if (!contract) return;
 
       setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
-      await contract.send("approveMilestone", escrowId, milestoneIndex);
+      await contract.send(
+        "disputeMilestone",
+        escrowId,
+        milestoneIndex,
+        "Disputed by client",
+      );
       toast({
-        title: "Milestone Approved",
-        description: "The milestone has been approved and payment released",
+        title: "Milestone Disputed",
+        description: "A dispute has been opened for this milestone",
       });
 
       // Wait a moment for blockchain state to update
       await new Promise((resolve) => setTimeout(resolve, 2000));
       await fetchUserEscrows();
     } catch (error) {
+      console.error("Error disputing milestone:", error);
+      toast({
+        title: "Dispute Failed",
+        description: "Could not open dispute. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingMilestone(null);
+    }
+  };
+
+  const startWork = async (escrowId: string) => {
+    try {
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+      if (!contract) return;
+
+      setSubmittingMilestone(escrowId);
+      await contract.send("startWork", escrowId);
+      toast({
+        title: "Work Started",
+        description: "You have started work on this escrow",
+      });
+
+      // Wait a moment for blockchain state to update
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await fetchUserEscrows();
+    } catch (error) {
+      console.error("Error starting work:", error);
+      toast({
+        title: "Start Work Failed",
+        description: "Could not start work. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingMilestone(null);
+    }
+  };
+
+  const openDispute = async (escrowId: string) => {
+    try {
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+      if (!contract) return;
+
+      setSubmittingMilestone(escrowId);
+      await contract.send("disputeMilestone", escrowId, 0, "General dispute");
+      toast({
+        title: "Dispute Opened",
+        description: "A dispute has been opened for this escrow",
+      });
+
+      // Wait a moment for blockchain state to update
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await fetchUserEscrows();
+    } catch (error) {
+      console.error("Error opening dispute:", error);
+      toast({
+        title: "Dispute Failed",
+        description: "Could not open dispute. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingMilestone(null);
+    }
+  };
+
+  const approveMilestone = async (escrowId: string, milestoneIndex: number) => {
+    try {
+      setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+      if (!contract) return;
+
+      toast({
+        title: "Approving milestone...",
+        description: "Please confirm the transaction in your wallet",
+      });
+
+      const txHash = await contract.send(
+        "approveMilestone",
+        "no-value",
+        escrowId,
+        milestoneIndex,
+      );
+
+      // Wait for transaction confirmation
+      let receipt;
+      let attempts = 0;
+      const maxAttempts = 30;
+
+      while (attempts < maxAttempts) {
+        try {
+          receipt = await window.ethereum.request({
+            method: "eth_getTransactionReceipt",
+            params: [txHash],
+          });
+          if (receipt) break;
+        } catch (error) {
+          console.log("Waiting for transaction confirmation...", attempts + 1);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        attempts++;
+      }
+
+      if (!receipt) {
+        throw new Error(
+          "Transaction timeout - please check the blockchain explorer",
+        );
+      }
+
+      if (receipt.status === "0x1") {
+        toast({
+          title: "Milestone Approved!",
+          description: "Payment has been sent to the freelancer",
+        });
+        await fetchUserEscrows();
+      } else {
+        throw new Error("Transaction failed on blockchain");
+      }
+    } catch (error: any) {
       console.error("Error approving milestone:", error);
       toast({
         title: "Approval Failed",
-        description: "Could not approve milestone. Please try again.",
+        description: error.message || "Failed to approve milestone",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingMilestone(null);
+    }
+  };
+
+  const rejectMilestone = async (
+    escrowId: string,
+    milestoneIndex: number,
+    reason: string,
+  ) => {
+    try {
+      setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+      if (!contract) return;
+
+      toast({
+        title: "Rejecting milestone...",
+        description: "Please confirm the transaction in your wallet",
+      });
+
+      const txHash = await contract.send(
+        "rejectMilestone",
+        "no-value",
+        escrowId,
+        milestoneIndex,
+        reason,
+      );
+
+      // Wait for transaction confirmation
+      let receipt;
+      let attempts = 0;
+      const maxAttempts = 30;
+
+      while (attempts < maxAttempts) {
+        try {
+          receipt = await window.ethereum.request({
+            method: "eth_getTransactionReceipt",
+            params: [txHash],
+          });
+          if (receipt) break;
+        } catch (error) {
+          console.log("Waiting for transaction confirmation...", attempts + 1);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        attempts++;
+      }
+
+      if (!receipt) {
+        throw new Error(
+          "Transaction timeout - please check the blockchain explorer",
+        );
+      }
+
+      if (receipt.status === "0x1") {
+        toast({
+          title: "Milestone Rejected",
+          description: "The freelancer has been notified and can resubmit",
+        });
+        await fetchUserEscrows();
+      } else {
+        throw new Error("Transaction failed on blockchain");
+      }
+    } catch (error: any) {
+      console.error("Error rejecting milestone:", error);
+      toast({
+        title: "Rejection Failed",
+        description: error.message || "Failed to reject milestone",
         variant: "destructive",
       });
     } finally {
@@ -641,19 +964,20 @@ export default function DashboardPage() {
                 key={escrow.id}
                 escrow={escrow}
                 index={index}
-                expanded={expandedEscrow === escrow.id}
+                expandedEscrow={expandedEscrow}
+                submittingMilestone={submittingMilestone === escrow.id}
                 onToggleExpanded={() =>
                   setExpandedEscrow(
                     expandedEscrow === escrow.id ? null : escrow.id,
                   )
                 }
                 onSubmitMilestone={handleSubmitMilestone}
-                submittingMilestone={submittingMilestone === escrow.id}
-                formatAmount={formatAmount}
-                getTokenInfo={getTokenInfo}
-                getStatusColor={getStatusColor}
-                getMilestoneStatusColor={getMilestoneStatusColor}
-                calculateProgress={calculateProgress}
+                onApproveMilestone={approveMilestone}
+                onRejectMilestone={rejectMilestone}
+                onDisputeMilestone={disputeMilestone}
+                onStartWork={startWork}
+                onDispute={openDispute}
+                calculateDaysLeft={calculateDaysLeft}
               />
             ))}
           </div>

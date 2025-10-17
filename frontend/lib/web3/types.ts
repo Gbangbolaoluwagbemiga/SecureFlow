@@ -1,9 +1,10 @@
 export interface Milestone {
   description: string;
   amount: string;
-  status: "pending" | "submitted" | "approved" | "disputed";
+  status: "pending" | "submitted" | "approved" | "rejected" | "disputed";
   submittedAt?: number;
   approvedAt?: number;
+  rejectionReason?: string;
 }
 
 export interface Escrow {

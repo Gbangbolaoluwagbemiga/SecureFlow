@@ -80,7 +80,9 @@ export default function FreelancerPage() {
   const [selectedMilestoneIndex, setSelectedMilestoneIndex] = useState<
     number | null
   >(null);
-  const [milestoneDescription, setMilestoneDescription] = useState("");
+  const [milestoneDescriptions, setMilestoneDescriptions] = useState<
+    Record<string, string>
+  >({});
   const [showDisputeDialog, setShowDisputeDialog] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
   const { toast } = useToast();
@@ -90,6 +92,21 @@ export default function FreelancerPage() {
       fetchFreelancerEscrows();
     }
   }, [wallet.isConnected]);
+
+  // Listen for milestone submission events
+  useEffect(() => {
+    const handleMilestoneSubmitted = () => {
+      fetchFreelancerEscrows();
+    };
+
+    window.addEventListener("milestoneSubmitted", handleMilestoneSubmitted);
+    return () => {
+      window.removeEventListener(
+        "milestoneSubmitted",
+        handleMilestoneSubmitted,
+      );
+    };
+  }, []);
 
   const fetchFreelancerEscrows = async () => {
     setLoading(true);
@@ -171,6 +188,13 @@ export default function FreelancerPage() {
                                 : m.status !== undefined && m.status !== null
                                   ? Number(m.status)
                                   : 0;
+
+                            console.log(
+                              `Milestone ${index} raw status:`,
+                              m[2],
+                              `Parsed status:`,
+                              status,
+                            );
                             submittedAt =
                               m[3] !== undefined && m[3] !== null
                                 ? Number(m[3]) * 1000
@@ -192,10 +216,17 @@ export default function FreelancerPage() {
                             status = 0;
                           }
 
+                          const finalStatus =
+                            getMilestoneStatusFromNumber(status);
+                          console.log(
+                            `Milestone ${index} final status:`,
+                            finalStatus,
+                          );
+
                           return {
                             description,
                             amount,
-                            status: getMilestoneStatusFromNumber(status),
+                            status: finalStatus,
                             submittedAt,
                             approvedAt,
                           };
@@ -207,7 +238,7 @@ export default function FreelancerPage() {
                           return {
                             description: `Milestone ${index + 1}`,
                             amount: "0",
-                            status: "NotStarted",
+                            status: "pending",
                           };
                         }
                       })
@@ -231,7 +262,7 @@ export default function FreelancerPage() {
       const currentSubmittedMilestones = new Set<string>();
       freelancerEscrows.forEach((escrow) => {
         escrow.milestones.forEach((milestone, index) => {
-          if (milestone.status === "Submitted") {
+          if (milestone.status === "submitted") {
             currentSubmittedMilestones.add(`${escrow.id}-${index}`);
           }
         });
@@ -279,8 +310,11 @@ export default function FreelancerPage() {
   };
 
   const submitMilestone = async (escrowId: string, milestoneIndex: number) => {
+    const milestoneKey = `${escrowId}-${milestoneIndex}`;
+    const description = milestoneDescriptions[milestoneKey] || "";
+
     // Validate milestone description from input field
-    if (!milestoneDescription?.trim()) {
+    if (!description?.trim()) {
       toast({
         title: "Description required",
         description: "Please provide a description of your work",
@@ -303,24 +337,70 @@ export default function FreelancerPage() {
         "no-value",
         escrowId,
         milestoneIndex,
-        milestoneDescription,
+        description,
       );
 
+      // Wait for transaction confirmation
       toast({
-        title: "Milestone submitted!",
-        description: "Your milestone has been submitted for review",
+        title: "Transaction submitted",
+        description: "Waiting for blockchain confirmation...",
       });
 
-      // Mark this milestone as submitted to prevent double submission
-      const milestoneKey = `${escrowId}-${milestoneIndex}`;
-      setSubmittedMilestones((prev) => new Set([...prev, milestoneKey]));
+      // Wait for transaction to be mined using polling
+      let receipt;
+      let attempts = 0;
+      const maxAttempts = 30; // 30 attempts * 2 seconds = 1 minute timeout
 
-      // Clear form
-      setMilestoneDescription("");
-      setSelectedEscrowId(null);
+      while (attempts < maxAttempts) {
+        try {
+          receipt = await window.ethereum.request({
+            method: "eth_getTransactionReceipt",
+            params: [txHash],
+          });
 
-      // Refresh escrows
-      await fetchFreelancerEscrows();
+          if (receipt) {
+            break;
+          }
+        } catch (error) {
+          console.log("Waiting for transaction confirmation...", attempts + 1);
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+        attempts++;
+      }
+
+      if (!receipt) {
+        throw new Error(
+          "Transaction timeout - please check the blockchain explorer",
+        );
+      }
+
+      if (receipt.status === "0x1") {
+        toast({
+          title: "Milestone submitted!",
+          description: "Your milestone has been submitted for review",
+        });
+
+        // Mark this milestone as submitted to prevent double submission
+        const milestoneKey = `${escrowId}-${milestoneIndex}`;
+        setSubmittedMilestones((prev) => new Set([...prev, milestoneKey]));
+
+        // Clear form
+        setMilestoneDescriptions((prev) => {
+          const updated = { ...prev };
+          delete updated[milestoneKey];
+          return updated;
+        });
+        setSelectedEscrowId(null);
+
+        // Refresh escrows
+        await fetchFreelancerEscrows();
+
+        // Dispatch event to notify other components
+        window.dispatchEvent(new CustomEvent("milestoneSubmitted"));
+      } else {
+        throw new Error("Transaction failed on blockchain");
+      }
     } catch (error) {
       console.error("Error submitting milestone:", error);
       toast({
@@ -397,26 +477,29 @@ export default function FreelancerPage() {
 
   const getMilestoneStatusFromNumber = (status: number): string => {
     const statuses = [
-      "pending",     // 0 - Not started
-      "submitted",   // 1 - Submitted by freelancer
-      "approved",    // 2 - Approved by client
-      "disputed",    // 3 - Under dispute
-      "resolved",    // 4 - Dispute resolved
+      "pending", // 0 - Not started
+      "submitted", // 1 - Submitted by freelancer
+      "approved", // 2 - Approved by client
+      "rejected", // 3 - Rejected by client
+      "disputed", // 4 - Under dispute
+      "resolved", // 5 - Dispute resolved
     ];
     return statuses[status] || "pending";
   };
 
   const getMilestoneStatusColor = (status: string) => {
     switch (status) {
-      case "NotStarted":
+      case "pending":
         return "bg-gray-100 text-gray-800";
-      case "Submitted":
+      case "submitted":
         return "bg-yellow-100 text-yellow-800";
-      case "Approved":
+      case "approved":
         return "bg-green-100 text-green-800";
-      case "Disputed":
+      case "rejected":
         return "bg-red-100 text-red-800";
-      case "Resolved":
+      case "disputed":
+        return "bg-red-100 text-red-800";
+      case "resolved":
         return "bg-blue-100 text-blue-800";
       default:
         return "bg-gray-100 text-gray-800";
@@ -469,13 +552,23 @@ export default function FreelancerPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Freelancer Dashboard
-          </h1>
-          <p className="text-gray-600">
-            Manage your assigned projects and track your earnings
-          </p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Freelancer Dashboard
+            </h1>
+            <p className="text-gray-600">
+              Manage your assigned projects and track your earnings
+            </p>
+          </div>
+          <Button
+            onClick={fetchFreelancerEscrows}
+            variant="outline"
+            size="sm"
+            disabled={loading}
+          >
+            {loading ? "Refreshing..." : "Refresh"}
+          </Button>
         </div>
 
         {loading ? (
@@ -570,15 +663,23 @@ export default function FreelancerPage() {
                                   {milestone.status}
                                 </Badge>
                               </div>
-                              {milestone.status === "NotStarted" ? (
-                                <div className="mb-2">
+                              {milestone.status === "pending" ? (
+                                <div className="mb-4">
                                   <label className="block text-xs font-medium text-gray-700 mb-1">
                                     Description (Editable)
                                   </label>
                                   <Textarea
-                                    value={milestoneDescription}
+                                    value={
+                                      milestoneDescriptions[
+                                        `${escrow.id}-${index}`
+                                      ] || ""
+                                    }
                                     onChange={(e) =>
-                                      setMilestoneDescription(e.target.value)
+                                      setMilestoneDescriptions((prev) => ({
+                                        ...prev,
+                                        [`${escrow.id}-${index}`]:
+                                          e.target.value,
+                                      }))
                                     }
                                     className="text-sm"
                                     rows={2}
@@ -594,8 +695,8 @@ export default function FreelancerPage() {
                                 {formatAmount(milestone.amount)} tokens
                               </p>
                             </div>
-                            <div className="flex gap-2 mt-2">
-                              {milestone.status === "NotStarted" &&
+                            <div className="flex gap-2 mt-4">
+                              {milestone.status === "pending" &&
                                 escrow.status === "InProgress" && (
                                   <Button
                                     size="sm"
@@ -620,7 +721,7 @@ export default function FreelancerPage() {
                                         : "Submit"}
                                   </Button>
                                 )}
-                              {milestone.status === "Submitted" && (
+                              {milestone.status === "submitted" && (
                                 <div className="flex gap-2">
                                   <Badge className="bg-yellow-100 text-yellow-800">
                                     Submitted
@@ -643,12 +744,12 @@ export default function FreelancerPage() {
                                   </Button>
                                 </div>
                               )}
-                              {milestone.status === "Approved" && (
+                              {milestone.status === "approved" && (
                                 <Badge className="bg-green-100 text-green-800">
                                   Approved
                                 </Badge>
                               )}
-                              {milestone.status === "Rejected" && (
+                              {milestone.status === "rejected" && (
                                 <div className="flex gap-2">
                                   <Badge className="bg-red-100 text-red-800">
                                     Rejected
@@ -667,12 +768,12 @@ export default function FreelancerPage() {
                                   </Button>
                                 </div>
                               )}
-                              {milestone.status === "Disputed" && (
+                              {milestone.status === "disputed" && (
                                 <Badge className="bg-red-100 text-red-800">
                                   Under Dispute
                                 </Badge>
                               )}
-                              {milestone.status === "Resolved" && (
+                              {milestone.status === "resolved" && (
                                 <Badge className="bg-blue-100 text-blue-800">
                                   Resolved
                                 </Badge>
