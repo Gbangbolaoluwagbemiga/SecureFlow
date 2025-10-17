@@ -25,6 +25,7 @@ export interface Escrow {
   isJobCreator?: boolean; // true if current user is the job creator
   isClient?: boolean; // true if current user is the client (payer)
   isFreelancer?: boolean; // true if current user is the freelancer (beneficiary)
+  milestoneCount?: number; // total number of milestones for this escrow
 }
 
 export interface EscrowStats {

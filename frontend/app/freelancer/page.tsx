@@ -179,10 +179,34 @@ export default function FreelancerPage() {
                             // If milestone is an object with indexed properties
                             // Safely access array indices with bounds checking
                             try {
-                              description =
-                                m[0] !== undefined && m[0] !== null
-                                  ? String(m[0])
-                                  : m.description || "";
+                              // Parse description more carefully to avoid raw blockchain data
+                              if (m[0] !== undefined && m[0] !== null) {
+                                const rawDescription = String(m[0]);
+                                // If the description contains comma-separated values (raw blockchain data),
+                                // extract just the first part (the actual description)
+                                if (rawDescription.includes(",")) {
+                                  description = rawDescription
+                                    .split(",")[0]
+                                    .trim();
+                                } else {
+                                  description = rawDescription;
+                                }
+                              } else if (m.description !== undefined) {
+                                description = String(m.description);
+                              } else {
+                                description = `Milestone ${index + 1}`;
+                              }
+
+                              // Clean up the description
+                              if (
+                                description &&
+                                description !== `Milestone ${index + 1}`
+                              ) {
+                                // Remove any remaining raw data patterns
+                                description = description
+                                  .replace(/,\d+.*$/, "")
+                                  .trim();
+                              }
                             } catch (e) {
                               console.warn(
                                 `Error parsing milestone ${index} description:`,
@@ -192,12 +216,34 @@ export default function FreelancerPage() {
                             }
 
                             try {
-                              amount =
-                                m[1] !== undefined && m[1] !== null
-                                  ? String(m[1])
-                                  : m.amount !== undefined && m.amount !== null
-                                    ? String(m.amount)
-                                    : "0";
+                              // Parse amount more carefully to avoid NaN
+                              if (m[1] !== undefined && m[1] !== null) {
+                                const rawAmount = String(m[1]);
+                                // Ensure the amount is a valid number
+                                if (
+                                  !isNaN(Number(rawAmount)) &&
+                                  Number(rawAmount) > 0
+                                ) {
+                                  amount = rawAmount;
+                                } else {
+                                  amount = "0";
+                                }
+                              } else if (
+                                m.amount !== undefined &&
+                                m.amount !== null
+                              ) {
+                                const rawAmount = String(m.amount);
+                                if (
+                                  !isNaN(Number(rawAmount)) &&
+                                  Number(rawAmount) > 0
+                                ) {
+                                  amount = rawAmount;
+                                } else {
+                                  amount = "0";
+                                }
+                              } else {
+                                amount = "0";
+                              }
                             } catch (e) {
                               console.warn(
                                 `Error parsing milestone ${index} amount:`,
@@ -293,9 +339,24 @@ export default function FreelancerPage() {
                         }
                       })
                     : [], // Fallback to empty array if milestones is not an array
-                projectDescription: escrowSummary[13] || "", // projectTitle
-                isOpenJob: Boolean(escrowSummary[12]), // isOpenJob
+                projectDescription: escrowSummary[14] || "", // projectDescription
+                isOpenJob: Boolean(escrowSummary[13]), // isOpenJob
+                milestoneCount: Number(escrowSummary[12]) || 0, // milestoneCount
               };
+
+              // Debug milestone count
+              console.log(
+                `Escrow ${i} milestoneCount from contract:`,
+                escrowSummary[12],
+              );
+              console.log(
+                `Escrow ${i} parsed milestoneCount:`,
+                Number(escrowSummary[12]),
+              );
+              console.log(
+                `Escrow ${i} milestones array length:`,
+                milestones?.length,
+              );
 
               freelancerEscrows.push(escrow);
             }
@@ -576,8 +637,16 @@ export default function FreelancerPage() {
   };
 
   const formatAmount = (amount: string) => {
-    const num = Number(amount) / 1e18;
-    return num.toFixed(2);
+    try {
+      const num = Number(amount) / 1e18;
+      if (isNaN(num) || num < 0) {
+        return "0.00";
+      }
+      return num.toFixed(2);
+    } catch (error) {
+      console.warn("Error formatting amount:", amount, error);
+      return "0.00";
+    }
   };
 
   const formatDate = (timestamp: number) => {
@@ -665,27 +734,43 @@ export default function FreelancerPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-4 w-4 text-green-600" />
-                        <span className="text-sm text-gray-600">Total:</span>
-                        <span className="font-semibold">
-                          {formatAmount(escrow.totalAmount)} tokens
-                        </span>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                      <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
+                        <DollarSign className="h-5 w-5 text-green-600" />
+                        <div>
+                          <p className="text-sm text-gray-600">Total Value</p>
+                          <p className="font-semibold text-green-700">
+                            {formatAmount(escrow.totalAmount)} tokens
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-blue-600" />
-                        <span className="text-sm text-gray-600">Paid:</span>
-                        <span className="font-semibold">
-                          {formatAmount(escrow.releasedAmount)} tokens
-                        </span>
+                      <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
+                        <CheckCircle className="h-5 w-5 text-blue-600" />
+                        <div>
+                          <p className="text-sm text-gray-600">Released</p>
+                          <p className="font-semibold text-blue-700">
+                            {formatAmount(escrow.releasedAmount)} tokens
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-gray-600" />
-                        <span className="text-sm text-gray-600">Created:</span>
-                        <span className="font-semibold">
-                          {formatDate(escrow.createdAt)}
-                        </span>
+                      <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg">
+                        <Calendar className="h-5 w-5 text-purple-600" />
+                        <div>
+                          <p className="text-sm text-gray-600">Created</p>
+                          <p className="font-semibold text-purple-700">
+                            {formatDate(escrow.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
+                        <FileText className="h-5 w-5 text-orange-600" />
+                        <div>
+                          <p className="text-sm text-gray-600">Milestones</p>
+                          <p className="font-semibold text-orange-700">
+                            {escrow.milestoneCount || escrow.milestones.length}{" "}
+                            total
+                          </p>
+                        </div>
                       </div>
                     </div>
 
@@ -704,20 +789,21 @@ export default function FreelancerPage() {
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="font-medium">
                                   Milestone {index + 1} of{" "}
-                                  {escrow.milestones.length}
+                                  {escrow.milestoneCount ||
+                                    escrow.milestones.length}
                                 </span>
                                 {milestone.description &&
                                   milestone.description !==
                                     `Milestone ${index + 1}` && (
-                                    <div className="text-xs text-gray-500 mt-1">
-                                      <div className="font-medium text-gray-700">
+                                    <div className="mt-2 p-2 bg-blue-50 rounded-md border-l-4 border-blue-200">
+                                      <div className="text-xs font-medium text-blue-800 mb-1">
                                         Client Requirements:
                                       </div>
-                                      <div className="italic">
-                                        {milestone.description.length > 50
+                                      <div className="text-sm text-blue-700">
+                                        {milestone.description.length > 100
                                           ? milestone.description.substring(
                                               0,
-                                              50,
+                                              100,
                                             ) + "..."
                                           : milestone.description}
                                       </div>
@@ -732,8 +818,8 @@ export default function FreelancerPage() {
                                 </Badge>
                               </div>
                               {milestone.status === "pending" ? (
-                                <div className="mb-4">
-                                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                                <div className="mb-6">
+                                  <label className="block text-xs font-medium text-gray-700 mb-2">
                                     Description (Editable)
                                   </label>
                                   <Textarea
@@ -763,7 +849,7 @@ export default function FreelancerPage() {
                                 {formatAmount(milestone.amount)} tokens
                               </p>
                             </div>
-                            <div className="flex gap-2 mt-6">
+                            <div className="flex gap-2 mt-4">
                               {(milestone.status === "pending" ||
                                 milestone.status === "NotStarted") &&
                                 escrow.status === "InProgress" &&
