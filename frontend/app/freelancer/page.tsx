@@ -164,33 +164,38 @@ export default function FreelancerPage() {
                 console.log(`First milestone:`, milestones[0]);
               }
 
-              // Create all milestones - if we only have 1 milestone but need 3, create placeholders
+              // Try to get individual milestones if getMilestones doesn't return all
               const allMilestones = [];
-              if (milestones && Array.isArray(milestones)) {
-                // Add existing milestones
-                for (let j = 0; j < milestones.length; j++) {
-                  allMilestones.push(milestones[j]);
-                }
 
-                // Create placeholder milestones for the missing ones
-                for (let j = milestones.length; j < milestoneCount; j++) {
-                  console.log(
-                    `Creating placeholder milestone ${j} for escrow ${i}`,
+              // Always try to fetch individual milestones to get accurate data
+              console.log(`Fetching individual milestones for escrow ${i}...`);
+              for (let j = 0; j < milestoneCount; j++) {
+                try {
+                  const individualMilestone = await contract.call(
+                    "milestones",
+                    i,
+                    j,
                   );
-                  allMilestones.push({
-                    description: `Milestone ${j + 1} - To be defined`,
-                    amount: "0",
-                    status: 0, // pending
-                    submittedAt: 0,
-                    approvedAt: 0,
+                  console.log(
+                    `Individual milestone ${j} for escrow ${i}:`,
+                    individualMilestone,
+                  );
+                  console.log(`Milestone ${j} structure:`, {
+                    type: typeof individualMilestone,
+                    keys: Object.keys(individualMilestone || {}),
+                    description: individualMilestone?.description,
+                    amount: individualMilestone?.amount,
+                    status: individualMilestone?.status,
+                    submittedAt: individualMilestone?.submittedAt,
+                    approvedAt: individualMilestone?.approvedAt,
                   });
-                }
-              } else {
-                // If no milestones returned, create all as placeholders
-                for (let j = 0; j < milestoneCount; j++) {
-                  console.log(
-                    `Creating all placeholder milestones for escrow ${i}`,
+                  allMilestones.push(individualMilestone);
+                } catch (error) {
+                  console.warn(
+                    `Could not fetch individual milestone ${j} for escrow ${i}:`,
+                    error,
                   );
+                  // Only create placeholder if we absolutely can't fetch the data
                   allMilestones.push({
                     description: `Milestone ${j + 1} - To be defined`,
                     amount: "0",
@@ -243,29 +248,75 @@ export default function FreelancerPage() {
                           // This is a real milestone from the contract
                           // Handle Proxy(Result) objects properly
                           try {
-                            // Try direct field access first
+                            console.log(
+                              `Parsing milestone ${index} raw data:`,
+                              m,
+                            );
+                            console.log(
+                              `Milestone ${index} data type:`,
+                              typeof m,
+                            );
+                            console.log(
+                              `Milestone ${index} data keys:`,
+                              Object.keys(m || {}),
+                            );
+
+                            // Try direct field access first (for struct fields)
                             if (m.description !== undefined) {
                               description = String(m.description);
+                              console.log(
+                                `Milestone ${index} description from m.description:`,
+                                description,
+                              );
                             } else if (m[0] !== undefined) {
                               description = String(m[0]);
+                              console.log(
+                                `Milestone ${index} description from m[0]:`,
+                                description,
+                              );
                             } else {
                               description = `Milestone ${index + 1}`;
+                              console.log(
+                                `Milestone ${index} using default description`,
+                              );
                             }
 
                             if (m.amount !== undefined) {
                               amount = String(m.amount);
+                              console.log(
+                                `Milestone ${index} amount from m.amount:`,
+                                amount,
+                              );
                             } else if (m[1] !== undefined) {
                               amount = String(m[1]);
+                              console.log(
+                                `Milestone ${index} amount from m[1]:`,
+                                amount,
+                              );
                             } else {
                               amount = "0";
+                              console.log(
+                                `Milestone ${index} using default amount`,
+                              );
                             }
 
                             if (m.status !== undefined) {
                               status = Number(m.status) || 0;
+                              console.log(
+                                `Milestone ${index} status from m.status:`,
+                                status,
+                              );
                             } else if (m[2] !== undefined) {
                               status = Number(m[2]) || 0;
+                              console.log(
+                                `Milestone ${index} status from m[2]:`,
+                                status,
+                              );
                             } else {
                               status = 0;
+                              console.log(
+                                `Milestone ${index} using default status`,
+                              );
                             }
 
                             if (
@@ -273,8 +324,16 @@ export default function FreelancerPage() {
                               Number(m.submittedAt) > 0
                             ) {
                               submittedAt = Number(m.submittedAt) * 1000;
+                              console.log(
+                                `Milestone ${index} submittedAt from m.submittedAt:`,
+                                submittedAt,
+                              );
                             } else if (m[3] !== undefined && Number(m[3]) > 0) {
                               submittedAt = Number(m[3]) * 1000;
+                              console.log(
+                                `Milestone ${index} submittedAt from m[3]:`,
+                                submittedAt,
+                              );
                             }
 
                             if (
@@ -282,9 +341,36 @@ export default function FreelancerPage() {
                               Number(m.approvedAt) > 0
                             ) {
                               approvedAt = Number(m.approvedAt) * 1000;
+                              console.log(
+                                `Milestone ${index} approvedAt from m.approvedAt:`,
+                                approvedAt,
+                              );
                             } else if (m[4] !== undefined && Number(m[4]) > 0) {
                               approvedAt = Number(m[4]) * 1000;
+                              console.log(
+                                `Milestone ${index} approvedAt from m[4]:`,
+                                approvedAt,
+                              );
                             }
+
+                            console.log(`Milestone ${index} parsed values:`, {
+                              description,
+                              amount,
+                              status,
+                              submittedAt,
+                              approvedAt,
+                            });
+
+                            // Debug amount conversion
+                            const amountInTokens = formatAmount(amount);
+                            console.log(
+                              `Milestone ${index} amount conversion:`,
+                              {
+                                rawAmount: amount,
+                                amountInTokens: amountInTokens,
+                                isZero: amount === "0" || amount === "0x0",
+                              },
+                            );
                           } catch (proxyError) {
                             console.warn(
                               `Error parsing Proxy(Result) for milestone ${index}:`,
@@ -751,19 +837,19 @@ export default function FreelancerPage() {
   const getMilestoneStatusColor = (status: string) => {
     switch (status) {
       case "pending":
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200";
       case "submitted":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200";
       case "approved":
-        return "bg-green-100 text-green-800";
+        return "bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200";
       case "rejected":
-        return "bg-red-100 text-red-800";
+        return "bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200";
       case "disputed":
-        return "bg-red-100 text-red-800";
+        return "bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200";
       case "resolved":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200";
     }
   };
 
@@ -819,14 +905,14 @@ export default function FreelancerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
               Freelancer Dashboard
             </h1>
-            <p className="text-gray-600">
+            <p className="text-gray-600 dark:text-gray-400">
               Manage your assigned projects and track your earnings
             </p>
           </div>
@@ -842,16 +928,16 @@ export default function FreelancerPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
           </div>
         ) : escrows.length === 0 ? (
-          <Card>
+          <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <FileText className="h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <FileText className="h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 No assigned projects
               </h3>
-              <p className="text-gray-600 text-center">
+              <p className="text-gray-600 dark:text-gray-400 text-center">
                 You don't have any assigned projects yet. Check the jobs page to
                 find open opportunities.
               </p>
@@ -866,15 +952,15 @@ export default function FreelancerPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <Card>
+                <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div>
-                        <CardTitle className="flex items-center gap-2">
+                        <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
                           <User className="h-5 w-5" />
                           Project #{escrow.id}
                         </CardTitle>
-                        <CardDescription className="mt-1">
+                        <CardDescription className="mt-1 text-gray-600 dark:text-gray-400">
                           {escrow.projectDescription}
                         </CardDescription>
                       </div>
@@ -885,38 +971,46 @@ export default function FreelancerPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                      <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
-                        <DollarSign className="h-5 w-5 text-green-600" />
+                      <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
                         <div>
-                          <p className="text-sm text-gray-600">Total Value</p>
-                          <p className="font-semibold text-green-700">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Total Value
+                          </p>
+                          <p className="font-semibold text-green-700 dark:text-green-400">
                             {formatAmount(escrow.totalAmount)} tokens
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
-                        <CheckCircle className="h-5 w-5 text-blue-600" />
+                      <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                         <div>
-                          <p className="text-sm text-gray-600">Released</p>
-                          <p className="font-semibold text-blue-700">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Released
+                          </p>
+                          <p className="font-semibold text-blue-700 dark:text-blue-400">
                             {formatAmount(escrow.releasedAmount)} tokens
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg">
-                        <Calendar className="h-5 w-5 text-purple-600" />
+                      <div className="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                        <Calendar className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                         <div>
-                          <p className="text-sm text-gray-600">Created</p>
-                          <p className="font-semibold text-purple-700">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Created
+                          </p>
+                          <p className="font-semibold text-purple-700 dark:text-purple-400">
                             {formatDate(escrow.createdAt)}
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
-                        <FileText className="h-5 w-5 text-orange-600" />
+                      <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                        <FileText className="h-5 w-5 text-orange-600 dark:text-orange-400" />
                         <div>
-                          <p className="text-sm text-gray-600">Milestones</p>
-                          <p className="font-semibold text-orange-700">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Milestones
+                          </p>
+                          <p className="font-semibold text-orange-700 dark:text-orange-400">
                             {escrow.milestoneCount || escrow.milestones.length}{" "}
                             total
                           </p>
@@ -926,7 +1020,7 @@ export default function FreelancerPage() {
 
                     {/* Milestones - Compact Design */}
                     <div className="mb-6">
-                      <h4 className="font-semibold text-gray-900 mb-3">
+                      <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">
                         Milestones (
                         {escrow.milestoneCount || escrow.milestones.length}{" "}
                         total)
@@ -950,16 +1044,16 @@ export default function FreelancerPage() {
                               key={index}
                               className={`p-4 rounded-lg border-2 ${
                                 isApproved
-                                  ? "bg-green-50 border-green-200"
+                                  ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
                                   : isSubmitted
-                                    ? "bg-yellow-50 border-yellow-200"
+                                    ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800"
                                     : isCurrent
-                                      ? "bg-blue-50 border-blue-200"
-                                      : "bg-gray-50 border-gray-200"
+                                      ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
+                                      : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
                               }`}
                             >
                               <div className="flex items-center justify-between mb-2">
-                                <span className="font-medium text-sm">
+                                <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
                                   Milestone {index + 1}
                                 </span>
                                 <Badge
@@ -978,7 +1072,7 @@ export default function FreelancerPage() {
                                 ) &&
                                 milestone.description !==
                                   `Milestone ${index + 1}` && (
-                                  <div className="text-xs text-gray-600 mb-2">
+                                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">
                                     <span className="font-medium">
                                       Requirements:
                                     </span>
@@ -993,7 +1087,7 @@ export default function FreelancerPage() {
                                   </div>
                                 )}
 
-                              <div className="text-sm font-semibold text-green-600">
+                              <div className="text-sm font-semibold text-green-600 dark:text-green-400">
                                 {formatAmount(milestone.amount)} tokens
                               </div>
                             </div>
@@ -1014,8 +1108,8 @@ export default function FreelancerPage() {
 
                         if (currentMilestoneIndex === -1) {
                           return (
-                            <div className="p-4 bg-gray-50 rounded-lg text-center">
-                              <p className="text-gray-600">
+                            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-center">
+                              <p className="text-gray-600 dark:text-gray-400">
                                 All milestones completed or in progress
                               </p>
                             </div>
@@ -1025,15 +1119,56 @@ export default function FreelancerPage() {
                         const currentMilestone =
                           escrow.milestones[currentMilestoneIndex];
                         const milestoneKey = `${escrow.id}-${currentMilestoneIndex}`;
+                        const isSubmitted =
+                          currentMilestone.status === "submitted" ||
+                          submittedMilestones.has(milestoneKey);
                         const canSubmit =
                           currentMilestone.status === "pending" &&
                           escrow.status === "InProgress" &&
                           !submittedMilestones.has(milestoneKey) &&
                           !approvedMilestones.has(milestoneKey);
 
+                        // Don't show form if milestone is already submitted
+                        if (isSubmitted) {
+                          return (
+                            <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h5 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-1">
+                                    Milestone {currentMilestoneIndex + 1}{" "}
+                                    Submitted
+                                  </h5>
+                                  <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                                    Awaiting client approval...
+                                  </p>
+                                </div>
+                                <div className="flex gap-2">
+                                  <Badge className="bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-100">
+                                    Submitted
+                                  </Badge>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedEscrowId(escrow.id);
+                                      setSelectedMilestoneIndex(
+                                        currentMilestoneIndex,
+                                      );
+                                      setDisputeReason("");
+                                      setShowDisputeDialog(true);
+                                    }}
+                                  >
+                                    Dispute
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+
                         return (
-                          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                            <h5 className="font-semibold text-blue-900 mb-3">
+                          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <h5 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">
                               Submit Milestone {currentMilestoneIndex + 1}
                             </h5>
 
@@ -1044,83 +1179,94 @@ export default function FreelancerPage() {
                               ) &&
                               currentMilestone.description !==
                                 `Milestone ${currentMilestoneIndex + 1}` && (
-                                <div className="mb-3 p-3 bg-white rounded border">
-                                  <div className="text-sm font-medium text-blue-800 mb-1">
+                                <div className="mb-3 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                                  <div className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">
                                     Client Requirements:
                                   </div>
-                                  <div className="text-sm text-blue-700">
+                                  <div className="text-sm text-blue-700 dark:text-blue-300">
                                     {currentMilestone.description}
                                   </div>
                                 </div>
                               )}
 
-                            <div className="space-y-3">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                  Your Work Description
-                                </label>
-                                <Textarea
-                                  value={
-                                    milestoneDescriptions[milestoneKey] || ""
-                                  }
-                                  onChange={(e) =>
-                                    setMilestoneDescriptions((prev) => ({
-                                      ...prev,
-                                      [milestoneKey]: e.target.value,
-                                    }))
-                                  }
-                                  className="text-sm"
-                                  rows={3}
-                                  placeholder="Describe what you've completed for this milestone..."
-                                />
-                              </div>
-
-                              <div className="flex gap-2">
-                                {canSubmit && (
-                                  <Button
-                                    size="sm"
-                                    onClick={() =>
-                                      submitMilestone(
-                                        escrow.id,
-                                        currentMilestoneIndex,
-                                      )
+                            {/* Show input form only if not submitted */}
+                            {!isSubmitted && (
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Your Work Description
+                                  </label>
+                                  <Textarea
+                                    value={
+                                      milestoneDescriptions[milestoneKey] || ""
                                     }
-                                    disabled={
-                                      submittingMilestone === milestoneKey ||
-                                      !milestoneDescriptions[
-                                        milestoneKey
-                                      ]?.trim()
+                                    onChange={(e) =>
+                                      setMilestoneDescriptions((prev) => ({
+                                        ...prev,
+                                        [milestoneKey]: e.target.value,
+                                      }))
                                     }
-                                  >
-                                    {submittingMilestone === milestoneKey
-                                      ? "Submitting..."
-                                      : "Submit Milestone"}
-                                  </Button>
-                                )}
+                                    className="text-sm bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
+                                    rows={3}
+                                    placeholder="Describe what you've completed for this milestone..."
+                                  />
+                                </div>
 
-                                {currentMilestone.status === "submitted" && (
-                                  <div className="flex gap-2">
-                                    <Badge className="bg-yellow-100 text-yellow-800">
-                                      Submitted - Awaiting Approval
-                                    </Badge>
+                                <div className="flex gap-2">
+                                  {canSubmit && (
                                     <Button
                                       size="sm"
-                                      variant="outline"
-                                      onClick={() => {
-                                        setSelectedEscrowId(escrow.id);
-                                        setSelectedMilestoneIndex(
+                                      onClick={() =>
+                                        submitMilestone(
+                                          escrow.id,
                                           currentMilestoneIndex,
-                                        );
-                                        setDisputeReason("");
-                                        setShowDisputeDialog(true);
-                                      }}
+                                        )
+                                      }
+                                      disabled={
+                                        submittingMilestone === milestoneKey ||
+                                        !milestoneDescriptions[
+                                          milestoneKey
+                                        ]?.trim()
+                                      }
                                     >
-                                      Dispute
+                                      {submittingMilestone === milestoneKey
+                                        ? "Submitting..."
+                                        : "Submit Milestone"}
                                     </Button>
-                                  </div>
-                                )}
+                                  )}
+                                </div>
                               </div>
-                            </div>
+                            )}
+
+                            {/* Show submitted status if milestone is submitted */}
+                            {isSubmitted && (
+                              <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Badge className="bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200">
+                                    Submitted - Awaiting Approval
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-3">
+                                  Your milestone has been submitted and is
+                                  waiting for client approval.
+                                </p>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSelectedEscrowId(escrow.id);
+                                    setSelectedMilestoneIndex(
+                                      currentMilestoneIndex,
+                                    );
+                                    setDisputeReason("");
+                                    setShowDisputeDialog(true);
+                                  }}
+                                  className="border-yellow-300 dark:border-yellow-600 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-800"
+                                >
+                                  Dispute
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
