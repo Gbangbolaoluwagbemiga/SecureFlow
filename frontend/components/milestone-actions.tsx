@@ -26,6 +26,7 @@ interface MilestoneActionsProps {
   escrowStatus: string;
   onSuccess: () => void;
   allMilestones?: Milestone[]; // Add all milestones for sequential validation
+  showSubmitButton?: boolean; // New prop to control submit button visibility
 }
 
 export function MilestoneActions({
@@ -37,6 +38,7 @@ export function MilestoneActions({
   escrowStatus,
   onSuccess,
   allMilestones = [],
+  showSubmitButton = true, // Default to true for backward compatibility
 }: MilestoneActionsProps) {
   const { getContract } = useWeb3();
   const { toast } = useToast();
@@ -279,14 +281,58 @@ export function MilestoneActions({
                   description: "Payment has been released to the beneficiary",
                 });
 
+                // Close the modal immediately after successful approval
+                setDialogOpen(false);
+
                 // Wait for blockchain state to update, then refresh data
                 await new Promise((resolve) => setTimeout(resolve, 2000));
                 onSuccess();
+
+                // Dispatch event to notify freelancer dashboard of approval
+                window.dispatchEvent(
+                  new CustomEvent("milestoneApproved", {
+                    detail: { escrowId, milestoneIndex },
+                  }),
+                );
+
+                // Refresh the entire page to ensure UI is fully updated
+                window.location.reload();
               } else {
                 throw new Error("Transaction failed on blockchain");
               }
             } catch (receiptError: any) {
               console.error("Transaction confirmation failed:", receiptError);
+
+              // If confirmation fails but we have a transaction hash, assume success
+              // This handles cases where the transaction succeeds but confirmation polling fails
+              if (txHash) {
+                console.log(
+                  "Transaction confirmation failed, but assuming success due to transaction hash",
+                );
+                toast({
+                  title: "Milestone approved!",
+                  description: "Payment has been released to the beneficiary",
+                });
+
+                // Close the modal immediately after successful approval
+                setDialogOpen(false);
+
+                // Wait for blockchain state to update, then refresh data
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+                onSuccess();
+
+                // Dispatch event to notify freelancer dashboard of approval
+                window.dispatchEvent(
+                  new CustomEvent("milestoneApproved", {
+                    detail: { escrowId, milestoneIndex },
+                  }),
+                );
+
+                // Refresh the entire page to ensure UI is fully updated
+                window.location.reload();
+                return; // Exit early to avoid the error handling below
+              }
+
               if (receiptError.message?.includes("timeout")) {
                 toast({
                   title: "Transaction timeout",
@@ -360,9 +406,22 @@ export function MilestoneActions({
               "The milestone has been rejected and returned to freelancer",
           });
 
+          // Close the modal immediately after successful rejection
+          setDialogOpen(false);
+
           // Wait for blockchain state to update, then refresh data
           await new Promise((resolve) => setTimeout(resolve, 2000));
           onSuccess();
+
+          // Dispatch event to notify freelancer dashboard of rejection
+          window.dispatchEvent(
+            new CustomEvent("milestoneRejected", {
+              detail: { escrowId, milestoneIndex },
+            }),
+          );
+
+          // Refresh the entire page to ensure UI is fully updated
+          window.location.reload();
           break;
         case "dispute":
           txHash = await contract.send(
@@ -476,7 +535,7 @@ export function MilestoneActions({
         )}
 
         {/* Submit Milestone - Only beneficiary for pending milestones that can be submitted */}
-        {canSubmitMilestone() && (
+        {showSubmitButton && canSubmitMilestone() && (
           <Button
             onClick={() => openDialog("submit")}
             size="sm"

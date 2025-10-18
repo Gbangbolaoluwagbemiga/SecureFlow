@@ -7,7 +7,6 @@ import { Progress } from "@/components/ui/progress";
 import { motion } from "framer-motion";
 import { Clock, DollarSign, ChevronDown, ChevronUp } from "lucide-react";
 import { MilestoneActions } from "@/components/milestone-actions";
-import { MilestoneApprovalPanel } from "@/components/milestone-approval-panel";
 import type { Escrow, Milestone } from "@/lib/web3/types";
 
 interface EscrowCardProps {
@@ -213,6 +212,7 @@ export function EscrowCard({
                           isBeneficiary={escrow.isFreelancer || false}
                           escrowStatus={escrow.status}
                           allMilestones={escrow.milestones}
+                          showSubmitButton={false} // Hide submit buttons on dashboard
                           onSuccess={() => {
                             // Refresh the escrow data
                             window.dispatchEvent(
@@ -224,18 +224,6 @@ export function EscrowCard({
                     </div>
                   ))}
                 </div>
-
-                {/* Only show milestone approval panel for clients (payers) */}
-                {escrow.isClient && (
-                  <div className="pt-4 border-t">
-                    <MilestoneApprovalPanel
-                      escrow={escrow}
-                      onApproveMilestone={onApproveMilestone}
-                      onRejectMilestone={onRejectMilestone}
-                      submittingMilestone={submittingMilestone}
-                    />
-                  </div>
-                )}
               </div>
             )}
           </div>

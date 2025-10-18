@@ -107,14 +107,20 @@ export default function FreelancerPage() {
       fetchFreelancerEscrows();
     };
 
+    const handleMilestoneRejected = () => {
+      fetchFreelancerEscrows();
+    };
+
     window.addEventListener("milestoneSubmitted", handleMilestoneSubmitted);
     window.addEventListener("milestoneApproved", handleMilestoneApproved);
+    window.addEventListener("milestoneRejected", handleMilestoneRejected);
     return () => {
       window.removeEventListener(
         "milestoneSubmitted",
         handleMilestoneSubmitted,
       );
       window.removeEventListener("milestoneApproved", handleMilestoneApproved);
+      window.removeEventListener("milestoneRejected", handleMilestoneRejected);
     };
   }, []);
 
