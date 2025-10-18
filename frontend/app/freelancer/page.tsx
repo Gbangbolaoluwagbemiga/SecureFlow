@@ -107,7 +107,11 @@ export default function FreelancerPage() {
       fetchFreelancerEscrows();
     };
 
-    const handleMilestoneRejected = () => {
+    const handleMilestoneRejected = (event: any) => {
+      console.log(
+        "🎯 FREELANCER: Milestone rejected event received!",
+        event.detail,
+      );
       fetchFreelancerEscrows();
     };
 
@@ -498,6 +502,13 @@ export default function FreelancerPage() {
                       finalStatus,
                       `(raw status: ${status}, submittedAt: ${submittedAt}, approvedAt: ${approvedAt})`,
                     );
+
+                    // Special debugging for rejected milestones
+                    if (finalStatus === "rejected") {
+                      console.log(
+                        `🎯 FREELANCER: REJECTED MILESTONE DETECTED! Milestone ${index} status: ${finalStatus}`,
+                      );
+                    }
 
                     // Track milestone states for submission prevention
                     const milestoneKey = `${i}-${index}`;
@@ -913,7 +924,7 @@ export default function FreelancerPage() {
       "submitted", // 1 - Submitted by freelancer
       "approved", // 2 - Approved by client
       "rejected", // 3 - Rejected by client
-      "disputed", // 4 - Under dispute
+      "rejected", // 4 - Under dispute (treating as rejected for UI)
       "resolved", // 5 - Dispute resolved
     ];
     return statuses[status] || "pending";
@@ -1562,6 +1573,52 @@ export default function FreelancerPage() {
                                   >
                                     Dispute
                                   </Button>
+                                </div>
+                              )}
+
+                              {/* Show rejected status if milestone is rejected or disputed */}
+                              {(milestone.status === "rejected" ||
+                                milestone.status === "disputed") && (
+                                <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Badge className="bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200">
+                                      Rejected - Needs Improvement
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+                                    Your milestone has been rejected by the
+                                    client. Please review the feedback and
+                                    resubmit with improvements.
+                                  </p>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        // TODO: Show rejection reason modal
+                                        console.log(
+                                          "Show rejection reason for milestone",
+                                          currentMilestoneIndex,
+                                        );
+                                      }}
+                                      className="border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800"
+                                    >
+                                      View Feedback
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => {
+                                        // TODO: Allow resubmission
+                                        console.log(
+                                          "Resubmit milestone",
+                                          currentMilestoneIndex,
+                                        );
+                                      }}
+                                      className="bg-red-600 hover:bg-red-700 text-white"
+                                    >
+                                      Resubmit
+                                    </Button>
+                                  </div>
                                 </div>
                               )}
                             </div>

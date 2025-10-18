@@ -339,7 +339,8 @@ export function Web3Provider({ children }: { children: ReactNode }) {
               } else if (
                 method === "submitMilestone" ||
                 method === "approveMilestone" ||
-                method === "rejectMilestone"
+                method === "rejectMilestone" ||
+                method === "disputeMilestone"
               ) {
                 gasLimit = "0x30000"; // 196,608 gas - reduced for milestone functions
                 console.log(

@@ -39,7 +39,7 @@ export default function DashboardPage() {
       case 3:
         return "disputed";
       case 4:
-        return "cancelled";
+        return "active"; // Changed from "cancelled" to "active" for disputed escrows
       default:
         return "pending";
     }
@@ -51,13 +51,22 @@ export default function DashboardPage() {
       "submitted", // 1 - Submitted by freelancer
       "approved", // 2 - Approved by client
       "rejected", // 3 - Rejected by client
-      "disputed", // 4 - Under dispute
+      "rejected", // 4 - Under dispute (treating as rejected for UI)
       "resolved", // 5 - Dispute resolved
     ];
+    const mappedStatus = statuses[status] || "pending";
     console.log(
-      `Milestone status number: ${status}, mapped to: ${statuses[status] || "pending"}`,
+      `Milestone status number: ${status}, mapped to: ${mappedStatus}`,
     );
-    return statuses[status] || "pending";
+
+    // Special debugging for rejected status
+    if (status === 3 || status === 4) {
+      console.log(
+        `🎯 REJECTED MILESTONE DETECTED! Status: ${status} -> ${mappedStatus}`,
+      );
+    }
+
+    return mappedStatus;
   };
 
   const calculateDaysLeft = (createdAt: number, duration: number): number => {
@@ -340,6 +349,10 @@ export default function DashboardPage() {
                 approvedAt: approvedAt,
                 hasSubmittedAt: submittedAt && submittedAt > 0,
                 hasApprovedAt: approvedAt && approvedAt > 0,
+                isRejected: status === 3,
+                isSubmitted: status === 1,
+                isApproved: status === 2,
+                isPending: status === 0,
               });
 
               // Priority 1: If milestone status is 2 (approved), it's approved

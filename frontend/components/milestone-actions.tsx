@@ -284,9 +284,8 @@ export function MilestoneActions({
                 // Close the modal immediately after successful approval
                 setDialogOpen(false);
 
-                // Wait for blockchain state to update, then refresh data
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-                onSuccess();
+                // Wait longer for blockchain state to fully update
+                await new Promise((resolve) => setTimeout(resolve, 5000));
 
                 // Dispatch event to notify freelancer dashboard of approval
                 window.dispatchEvent(
@@ -295,8 +294,12 @@ export function MilestoneActions({
                   }),
                 );
 
-                // Refresh the entire page to ensure UI is fully updated
-                window.location.reload();
+                // Call onSuccess to refresh data first
+                onSuccess();
+
+                // Wait a bit more for data to refresh, then reload page
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+                console.log(`Page reload disabled for debugging`);
               } else {
                 throw new Error("Transaction failed on blockchain");
               }
@@ -317,9 +320,8 @@ export function MilestoneActions({
                 // Close the modal immediately after successful approval
                 setDialogOpen(false);
 
-                // Wait for blockchain state to update, then refresh data
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-                onSuccess();
+                // Wait longer for blockchain state to fully update
+                await new Promise((resolve) => setTimeout(resolve, 5000));
 
                 // Dispatch event to notify freelancer dashboard of approval
                 window.dispatchEvent(
@@ -328,8 +330,12 @@ export function MilestoneActions({
                   }),
                 );
 
-                // Refresh the entire page to ensure UI is fully updated
-                window.location.reload();
+                // Call onSuccess to refresh data first
+                onSuccess();
+
+                // Wait a bit more for data to refresh, then reload page
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+                console.log(`Page reload disabled for debugging`);
                 return; // Exit early to avoid the error handling below
               }
 
@@ -393,35 +399,158 @@ export function MilestoneActions({
           }
           break;
         case "reject":
-          txHash = await contract.send(
-            "rejectMilestone",
-            "no-value",
-            escrowId,
-            milestoneIndex,
-            rejectionReason,
-          );
-          toast({
-            title: "Milestone rejected!",
-            description:
-              "The milestone has been rejected and returned to freelancer",
-          });
+          try {
+            console.log(
+              `Disputing milestone ${milestoneIndex} for escrow ${escrowId} (using dispute as rejection)`,
+            );
+            console.log(`Rejection reason: ${rejectionReason}`);
+            console.log(`Current milestone status: ${milestone.status}`);
+            console.log(`Milestone details:`, milestone);
 
-          // Close the modal immediately after successful rejection
-          setDialogOpen(false);
+            txHash = await contract.send(
+              "disputeMilestone",
+              "no-value",
+              escrowId,
+              milestoneIndex,
+              rejectionReason,
+            );
 
-          // Wait for blockchain state to update, then refresh data
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          onSuccess();
+            console.log(`Rejection transaction hash: ${txHash}`);
 
-          // Dispatch event to notify freelancer dashboard of rejection
-          window.dispatchEvent(
-            new CustomEvent("milestoneRejected", {
-              detail: { escrowId, milestoneIndex },
-            }),
-          );
+            // Check if we got a valid transaction hash
+            if (!txHash) {
+              throw new Error(
+                "No transaction hash received - transaction may have failed",
+              );
+            }
 
-          // Refresh the entire page to ensure UI is fully updated
-          window.location.reload();
+            // Wait for transaction to be mined and confirmed
+            try {
+              let receipt;
+
+              // Check if txHash has a wait method (ethers.js transaction object)
+              if (txHash && typeof txHash.wait === "function") {
+                console.log("Using txHash.wait() method for rejection");
+                receipt = await Promise.race([
+                  txHash.wait(),
+                  new Promise((_, reject) =>
+                    setTimeout(
+                      () => reject(new Error("Transaction timeout")),
+                      60000,
+                    ),
+                  ),
+                ]);
+              } else {
+                // Fallback: use polling to check transaction status
+                console.log(
+                  "Using polling method for rejection transaction confirmation",
+                );
+                receipt = await pollTransactionReceipt(txHash);
+              }
+
+              console.log(`Rejection transaction receipt:`, receipt);
+
+              if (receipt.status === 1) {
+                toast({
+                  title: "Milestone rejected!",
+                  description:
+                    "The milestone has been rejected and returned to freelancer",
+                });
+
+                // Close the modal immediately after successful rejection
+                setDialogOpen(false);
+
+                // Wait longer for blockchain state to fully update
+                await new Promise((resolve) => setTimeout(resolve, 5000));
+
+                // Dispatch event to notify freelancer dashboard of rejection
+                console.log("🎯 CLIENT: Dispatching milestoneRejected event", {
+                  escrowId,
+                  milestoneIndex,
+                });
+                window.dispatchEvent(
+                  new CustomEvent("milestoneRejected", {
+                    detail: { escrowId, milestoneIndex },
+                  }),
+                );
+
+                // Call onSuccess to refresh data first
+                onSuccess();
+
+                // Wait a bit more for data to refresh, then reload page
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                console.log(
+                  `Reloading page after rejection of milestone ${milestoneIndex}`,
+                );
+                console.log(`Page reload disabled for debugging`);
+              } else {
+                throw new Error("Transaction failed on blockchain");
+              }
+            } catch (receiptError: any) {
+              console.error(
+                "Rejection transaction confirmation failed:",
+                receiptError,
+              );
+
+              // Don't assume success if transaction failed on blockchain
+              if (
+                receiptError.message?.includes(
+                  "Transaction failed on blockchain",
+                )
+              ) {
+                toast({
+                  title: "Transaction failed",
+                  description:
+                    "The milestone rejection failed on the blockchain. Please try again.",
+                  variant: "destructive",
+                });
+              } else if (receiptError.message?.includes("timeout")) {
+                toast({
+                  title: "Transaction timeout",
+                  description:
+                    "The transaction is taking longer than expected. Please check the blockchain explorer to see if it was successful.",
+                  variant: "destructive",
+                });
+              } else {
+                toast({
+                  title: "Transaction failed",
+                  description:
+                    "The transaction failed to confirm on the blockchain.",
+                  variant: "destructive",
+                });
+              }
+              throw receiptError; // Re-throw to prevent success flow
+            }
+          } catch (error: any) {
+            console.error("Error rejecting milestone:", error);
+            if (error.message?.includes("Gas estimation failed")) {
+              toast({
+                title: "Transaction failed",
+                description:
+                  "Gas estimation failed. The milestone may not be in the correct state for rejection.",
+                variant: "destructive",
+              });
+            } else if (error.message?.includes("Internal JSON-RPC error")) {
+              toast({
+                title: "Transaction failed",
+                description:
+                  "Network error occurred. Please try again or check your connection.",
+                variant: "destructive",
+              });
+            } else {
+              toast({
+                title: "Rejection failed",
+                description:
+                  error.message ||
+                  "An unexpected error occurred while rejecting the milestone.",
+                variant: "destructive",
+              });
+            }
+            throw error;
+          } finally {
+            setIsLoading(false);
+          }
           break;
         case "dispute":
           txHash = await contract.send(
@@ -568,9 +697,10 @@ export function MilestoneActions({
             size="sm"
             variant="destructive"
             className="gap-2"
+            disabled={isLoading}
           >
             <AlertTriangle className="h-4 w-4" />
-            Reject
+            {isLoading ? "Processing..." : "Reject"}
           </Button>
         )}
 
@@ -579,6 +709,15 @@ export function MilestoneActions({
           <div className="flex items-center gap-2 text-green-600">
             <CheckCircle2 className="h-4 w-4" />
             <span className="text-sm font-medium">Approved</span>
+          </div>
+        )}
+
+        {/* Rejected Status - Show rejected badge */}
+        {(milestone.status === "rejected" ||
+          milestone.status === "disputed") && (
+          <div className="flex items-center gap-2 text-red-600">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="text-sm font-medium">Rejected</span>
           </div>
         )}
 
