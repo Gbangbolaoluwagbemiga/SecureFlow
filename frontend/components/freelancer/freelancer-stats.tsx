@@ -1,13 +1,16 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, FileText, CheckCircle, Clock } from "lucide-react";
+import { DollarSign, FileText, CheckCircle, Clock, Pause } from "lucide-react";
 
 interface FreelancerStatsProps {
   escrows: Array<{
     totalAmount: string;
     releasedAmount: string;
     status: string;
+    milestones: Array<{
+      status: string;
+    }>;
   }>;
 }
 
@@ -22,15 +25,35 @@ export function FreelancerStats({ escrows }: FreelancerStatsProps) {
     0,
   );
 
-  const completedProjects = escrows.filter(
-    (escrow) => escrow.status === "completed",
-  ).length;
-  const activeProjects = escrows.filter(
-    (escrow) => escrow.status === "active",
-  ).length;
+  const completedProjects = escrows.filter((escrow) => {
+    // A project is completed if all milestones are approved
+    if (escrow.milestones.length === 0) return false;
+    return escrow.milestones.every(
+      (milestone) => milestone.status === "approved",
+    );
+  }).length;
+  const activeProjects = escrows.filter((escrow) => {
+    // A project is active if it has milestones but not all are approved
+    if (escrow.milestones.length === 0) return false;
+    const hasApprovedMilestones = escrow.milestones.some(
+      (milestone) => milestone.status === "approved",
+    );
+    const allMilestonesApproved = escrow.milestones.every(
+      (milestone) => milestone.status === "approved",
+    );
+    return hasApprovedMilestones && !allMilestonesApproved;
+  }).length;
+
+  const pendingProjects = escrows.filter((escrow) => {
+    // A project is pending if no milestones have been approved yet
+    if (escrow.milestones.length === 0) return false;
+    return escrow.milestones.every(
+      (milestone) => milestone.status === "pending",
+    );
+  }).length;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mb-8">
       <Card className="glass border-primary/20 p-4 md:p-6">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
@@ -75,6 +98,17 @@ export function FreelancerStats({ escrows }: FreelancerStatsProps) {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{activeProjects}</div>
+          <p className="text-xs text-muted-foreground">projects</p>
+        </CardContent>
+      </Card>
+
+      <Card className="glass border-primary/20 p-4 md:p-6">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Pending</CardTitle>
+          <Pause className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{pendingProjects}</div>
           <p className="text-xs text-muted-foreground">projects</p>
         </CardContent>
       </Card>

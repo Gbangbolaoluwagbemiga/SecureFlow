@@ -611,41 +611,6 @@ export default function DashboardPage() {
     }
   };
 
-  const handleSubmitMilestone = async (
-    escrowId: string,
-    milestoneIndex: number,
-    description: string,
-  ) => {
-    try {
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-      setSubmittingMilestone(escrowId);
-
-      const txHash = await contract.send(
-        "submitMilestone",
-        "no-value",
-        Number(escrowId),
-        milestoneIndex,
-        description,
-      );
-
-      toast({
-        title: "Milestone Submitted",
-        description: `Transaction: ${txHash}`,
-      });
-
-      await fetchUserEscrows();
-    } catch (error) {
-      console.error("Error submitting milestone:", error);
-      toast({
-        title: "Error",
-        description: "Failed to submit milestone",
-        variant: "destructive",
-      });
-    } finally {
-      setSubmittingMilestone(null);
-    }
-  };
-
   const filterEscrows = (filter: string) => {
     if (filter === "all") return escrows;
     return escrows.filter((e) => e.status === filter);
@@ -1017,7 +982,6 @@ export default function DashboardPage() {
                     expandedEscrow === escrow.id ? null : escrow.id,
                   )
                 }
-                onSubmitMilestone={handleSubmitMilestone}
                 onApproveMilestone={approveMilestone}
                 onRejectMilestone={rejectMilestone}
                 onDisputeMilestone={disputeMilestone}

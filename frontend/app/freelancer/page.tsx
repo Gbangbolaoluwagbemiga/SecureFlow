@@ -1055,151 +1055,292 @@ export default function FreelancerPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-6">
-            {escrows.map((escrow) => (
-              <motion.div
-                key={escrow.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                          <User className="h-5 w-5" />
-                          Project #{escrow.id}
-                        </CardTitle>
-                        <CardDescription className="mt-1 text-gray-600 dark:text-gray-400">
-                          {escrow.projectDescription}
-                        </CardDescription>
-                      </div>
-                      <Badge className={getStatusColor(escrow.status)}>
-                        {escrow.status}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-                      <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
-                        <div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Total Value
-                          </p>
-                          <p className="font-semibold text-green-700 dark:text-green-400">
-                            {formatAmount(escrow.totalAmount)} tokens
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                        <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                        <div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Released
-                          </p>
-                          <p className="font-semibold text-blue-700 dark:text-blue-400">
-                            {formatAmount(escrow.releasedAmount)} tokens
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                        <Calendar className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                        <div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Created
-                          </p>
-                          <p className="font-semibold text-purple-700 dark:text-purple-400">
-                            {formatDate(escrow.createdAt)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                        <FileText className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                        <div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Milestones
-                          </p>
-                          <p className="font-semibold text-orange-700 dark:text-orange-400">
-                            {escrow.milestoneCount || escrow.milestones.length}{" "}
-                            total
-                          </p>
-                        </div>
-                      </div>
-                      <div
-                        className={`flex items-center gap-2 p-3 rounded-lg ${(() => {
-                          const daysLeft = calculateDaysLeft(
-                            escrow.createdAt,
-                            escrow.duration,
-                          );
-                          const message = getDaysLeftMessage(daysLeft);
-                          return message.bgColor;
-                        })()}`}
-                      >
-                        <Clock className="h-5 w-5 text-red-600 dark:text-red-400" />
-                        <div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Days Left
-                          </p>
-                          <p
-                            className={`font-semibold ${(() => {
-                              const daysLeft = calculateDaysLeft(
-                                escrow.createdAt,
-                                escrow.duration,
-                              );
-                              const message = getDaysLeftMessage(daysLeft);
-                              return message.color;
-                            })()}`}
-                          >
-                            {(() => {
-                              const daysLeft = calculateDaysLeft(
-                                escrow.createdAt,
-                                escrow.duration,
-                              );
-                              const message = getDaysLeftMessage(daysLeft);
-                              return message.text;
-                            })()}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+          <div className="space-y-6">
+            {/* Stats Section */}
+            <FreelancerStats escrows={escrows} />
 
-                    {/* Milestones - Compact Design */}
-                    <div className="mb-6">
-                      <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                        Milestones (
-                        {escrow.milestoneCount || escrow.milestones.length}{" "}
-                        total)
-                      </h4>
+            {/* Projects Section */}
+            <div className="grid gap-6">
+              {escrows.map((escrow) => (
+                <motion.div
+                  key={escrow.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+                            <User className="h-5 w-5" />
+                            Project #{escrow.id}
+                          </CardTitle>
+                          <CardDescription className="mt-1 text-gray-600 dark:text-gray-400">
+                            {escrow.projectDescription}
+                          </CardDescription>
+                        </div>
+                        <Badge className={getStatusColor(escrow.status)}>
+                          {escrow.status}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+                        <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                          <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
+                          <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Total Value
+                            </p>
+                            <p className="font-semibold text-green-700 dark:text-green-400">
+                              {formatAmount(escrow.totalAmount)} tokens
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                          <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                          <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Released
+                            </p>
+                            <p className="font-semibold text-blue-700 dark:text-blue-400">
+                              {formatAmount(escrow.releasedAmount)} tokens
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                          <Calendar className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                          <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Created
+                            </p>
+                            <p className="font-semibold text-purple-700 dark:text-purple-400">
+                              {formatDate(escrow.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                          <FileText className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                          <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Milestones
+                            </p>
+                            <p className="font-semibold text-orange-700 dark:text-orange-400">
+                              {escrow.milestoneCount ||
+                                escrow.milestones.length}{" "}
+                              total
+                            </p>
+                          </div>
+                        </div>
+                        <div
+                          className={`flex items-center gap-2 p-3 rounded-lg ${(() => {
+                            const daysLeft = calculateDaysLeft(
+                              escrow.createdAt,
+                              escrow.duration,
+                            );
+                            const message = getDaysLeftMessage(daysLeft);
+                            return message.bgColor;
+                          })()}`}
+                        >
+                          <Clock className="h-5 w-5 text-red-600 dark:text-red-400" />
+                          <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Days Left
+                            </p>
+                            <p
+                              className={`font-semibold ${(() => {
+                                const daysLeft = calculateDaysLeft(
+                                  escrow.createdAt,
+                                  escrow.duration,
+                                );
+                                const message = getDaysLeftMessage(daysLeft);
+                                return message.color;
+                              })()}`}
+                            >
+                              {(() => {
+                                const daysLeft = calculateDaysLeft(
+                                  escrow.createdAt,
+                                  escrow.duration,
+                                );
+                                const message = getDaysLeftMessage(daysLeft);
+                                return message.text;
+                              })()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
 
-                      {/* Milestone Progress */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        {escrow.milestones.map((milestone, index) => {
-                          const milestoneKey = `${escrow.id}-${index}`;
-                          const isApproved =
-                            milestone.status === "approved" ||
-                            approvedMilestones.has(milestoneKey);
-                          const isSubmitted =
-                            milestone.status === "submitted" ||
-                            submittedMilestones.has(milestoneKey);
-                          const isPending =
-                            milestone.status === "pending" &&
-                            !submittedMilestones.has(milestoneKey) &&
-                            !approvedMilestones.has(milestoneKey);
+                      {/* Milestones - Compact Design */}
+                      <div className="mb-6">
+                        <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                          Milestones (
+                          {escrow.milestoneCount || escrow.milestones.length}{" "}
+                          total)
+                        </h4>
 
-                          // Determine if this is the current milestone that can be submitted
-                          let isCurrent = false;
-                          let isBlocked = false;
-                          if (isPending) {
-                            // For the first milestone, it can always be current if pending
-                            if (index === 0) {
-                              isCurrent = true;
-                            } else {
+                        {/* Milestone Progress */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                          {escrow.milestones.map((milestone, index) => {
+                            const milestoneKey = `${escrow.id}-${index}`;
+                            const isApproved =
+                              milestone.status === "approved" ||
+                              approvedMilestones.has(milestoneKey);
+                            const isSubmitted =
+                              milestone.status === "submitted" ||
+                              submittedMilestones.has(milestoneKey);
+                            const isPending =
+                              milestone.status === "pending" &&
+                              !submittedMilestones.has(milestoneKey) &&
+                              !approvedMilestones.has(milestoneKey);
+
+                            // Determine if this is the current milestone that can be submitted
+                            let isCurrent = false;
+                            let isBlocked = false;
+                            if (isPending) {
+                              // For the first milestone, it can always be current if pending
+                              if (index === 0) {
+                                isCurrent = true;
+                              } else {
+                                // For subsequent milestones, check if the previous one is approved
+                                const previousMilestone =
+                                  escrow.milestones[index - 1];
+                                const previousMilestoneKey = `${escrow.id}-${index - 1}`;
+
+                                // Check if previous milestone is approved
+                                const isPreviousApproved =
+                                  previousMilestone &&
+                                  (previousMilestone.status === "approved" ||
+                                    approvedMilestones.has(
+                                      previousMilestoneKey,
+                                    ));
+
+                                // Check if there are any submitted milestones before this one that aren't approved
+                                let hasUnapprovedSubmitted = false;
+                                for (let j = 0; j < index; j++) {
+                                  const prevMilestone = escrow.milestones[j];
+                                  const prevMilestoneKey = `${escrow.id}-${j}`;
+                                  const isPrevSubmitted =
+                                    prevMilestone.status === "submitted" ||
+                                    submittedMilestones.has(prevMilestoneKey);
+                                  const isPrevApproved =
+                                    prevMilestone.status === "approved" ||
+                                    approvedMilestones.has(prevMilestoneKey);
+
+                                  if (isPrevSubmitted && !isPrevApproved) {
+                                    hasUnapprovedSubmitted = true;
+                                    break;
+                                  }
+                                }
+
+                                // Only allow submission if previous milestone is approved AND no submitted milestones are pending
+                                if (
+                                  isPreviousApproved &&
+                                  !hasUnapprovedSubmitted
+                                ) {
+                                  isCurrent = true;
+                                } else if (hasUnapprovedSubmitted) {
+                                  isBlocked = true;
+                                }
+                              }
+                            }
+
+                            return (
+                              <div
+                                key={index}
+                                className={`p-4 rounded-lg border-2 ${
+                                  isApproved
+                                    ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                                    : isSubmitted
+                                      ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800"
+                                      : isCurrent
+                                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
+                                        : isBlocked
+                                          ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+                                          : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                                    Milestone {index + 1}
+                                  </span>
+                                  <div className="flex gap-1">
+                                    {isCurrent && (
+                                      <Badge className="bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200">
+                                        Current
+                                      </Badge>
+                                    )}
+                                    {isBlocked && (
+                                      <Badge className="bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200">
+                                        Blocked
+                                      </Badge>
+                                    )}
+                                    <Badge
+                                      className={getMilestoneStatusColor(
+                                        milestone.status,
+                                      )}
+                                    >
+                                      {milestone.status}
+                                    </Badge>
+                                  </div>
+                                </div>
+
+                                {/* Client Requirements */}
+                                {milestone.description &&
+                                  !milestone.description.includes(
+                                    "To be defined",
+                                  ) &&
+                                  milestone.description !==
+                                    `Milestone ${index + 1}` && (
+                                    <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                                      <span className="font-medium">
+                                        Requirements:
+                                      </span>
+                                      <p className="mt-1 line-clamp-2">
+                                        {milestone.description.length > 80
+                                          ? milestone.description.substring(
+                                              0,
+                                              80,
+                                            ) + "..."
+                                          : milestone.description}
+                                      </p>
+                                    </div>
+                                  )}
+
+                                <div className="text-sm font-semibold text-green-600 dark:text-green-400">
+                                  {formatAmount(milestone.amount)} tokens
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Current Milestone Submission Form */}
+                        {(() => {
+                          // Find the current milestone that can be submitted
+                          // Only allow submission of the next milestone in sequence
+                          let currentMilestoneIndex = -1;
+
+                          for (let i = 0; i < escrow.milestones.length; i++) {
+                            const milestone = escrow.milestones[i];
+                            const milestoneKey = `${escrow.id}-${i}`;
+
+                            // Check if this milestone is pending and can be submitted
+                            if (
+                              milestone.status === "pending" &&
+                              !submittedMilestones.has(milestoneKey) &&
+                              !approvedMilestones.has(milestoneKey)
+                            ) {
+                              // For the first milestone, it can always be submitted if pending
+                              if (i === 0) {
+                                currentMilestoneIndex = i;
+                                break;
+                              }
+
                               // For subsequent milestones, check if the previous one is approved
                               const previousMilestone =
-                                escrow.milestones[index - 1];
-                              const previousMilestoneKey = `${escrow.id}-${index - 1}`;
+                                escrow.milestones[i - 1];
+                              const previousMilestoneKey = `${escrow.id}-${i - 1}`;
 
                               // Check if previous milestone is approved
                               const isPreviousApproved =
@@ -1209,7 +1350,7 @@ export default function FreelancerPage() {
 
                               // Check if there are any submitted milestones before this one that aren't approved
                               let hasUnapprovedSubmitted = false;
-                              for (let j = 0; j < index; j++) {
+                              for (let j = 0; j < i; j++) {
                                 const prevMilestone = escrow.milestones[j];
                                 const prevMilestoneKey = `${escrow.id}-${j}`;
                                 const isPrevSubmitted =
@@ -1230,199 +1371,176 @@ export default function FreelancerPage() {
                                 isPreviousApproved &&
                                 !hasUnapprovedSubmitted
                               ) {
-                                isCurrent = true;
-                              } else if (hasUnapprovedSubmitted) {
-                                isBlocked = true;
-                              }
-                            }
-                          }
-
-                          return (
-                            <div
-                              key={index}
-                              className={`p-4 rounded-lg border-2 ${
-                                isApproved
-                                  ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                                  : isSubmitted
-                                    ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800"
-                                    : isCurrent
-                                      ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
-                                      : isBlocked
-                                        ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
-                                        : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
-                                  Milestone {index + 1}
-                                </span>
-                                <div className="flex gap-1">
-                                  {isCurrent && (
-                                    <Badge className="bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200">
-                                      Current
-                                    </Badge>
-                                  )}
-                                  {isBlocked && (
-                                    <Badge className="bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200">
-                                      Blocked
-                                    </Badge>
-                                  )}
-                                  <Badge
-                                    className={getMilestoneStatusColor(
-                                      milestone.status,
-                                    )}
-                                  >
-                                    {milestone.status}
-                                  </Badge>
-                                </div>
-                              </div>
-
-                              {/* Client Requirements */}
-                              {milestone.description &&
-                                !milestone.description.includes(
-                                  "To be defined",
-                                ) &&
-                                milestone.description !==
-                                  `Milestone ${index + 1}` && (
-                                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                                    <span className="font-medium">
-                                      Requirements:
-                                    </span>
-                                    <p className="mt-1 line-clamp-2">
-                                      {milestone.description.length > 80
-                                        ? milestone.description.substring(
-                                            0,
-                                            80,
-                                          ) + "..."
-                                        : milestone.description}
-                                    </p>
-                                  </div>
-                                )}
-
-                              <div className="text-sm font-semibold text-green-600 dark:text-green-400">
-                                {formatAmount(milestone.amount)} tokens
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Current Milestone Submission Form */}
-                      {(() => {
-                        // Find the current milestone that can be submitted
-                        // Only allow submission of the next milestone in sequence
-                        let currentMilestoneIndex = -1;
-
-                        for (let i = 0; i < escrow.milestones.length; i++) {
-                          const milestone = escrow.milestones[i];
-                          const milestoneKey = `${escrow.id}-${i}`;
-
-                          // Check if this milestone is pending and can be submitted
-                          if (
-                            milestone.status === "pending" &&
-                            !submittedMilestones.has(milestoneKey) &&
-                            !approvedMilestones.has(milestoneKey)
-                          ) {
-                            // For the first milestone, it can always be submitted if pending
-                            if (i === 0) {
-                              currentMilestoneIndex = i;
-                              break;
-                            }
-
-                            // For subsequent milestones, check if the previous one is approved
-                            const previousMilestone = escrow.milestones[i - 1];
-                            const previousMilestoneKey = `${escrow.id}-${i - 1}`;
-
-                            // Check if previous milestone is approved
-                            const isPreviousApproved =
-                              previousMilestone &&
-                              (previousMilestone.status === "approved" ||
-                                approvedMilestones.has(previousMilestoneKey));
-
-                            // Check if there are any submitted milestones before this one that aren't approved
-                            let hasUnapprovedSubmitted = false;
-                            for (let j = 0; j < i; j++) {
-                              const prevMilestone = escrow.milestones[j];
-                              const prevMilestoneKey = `${escrow.id}-${j}`;
-                              const isPrevSubmitted =
-                                prevMilestone.status === "submitted" ||
-                                submittedMilestones.has(prevMilestoneKey);
-                              const isPrevApproved =
-                                prevMilestone.status === "approved" ||
-                                approvedMilestones.has(prevMilestoneKey);
-
-                              if (isPrevSubmitted && !isPrevApproved) {
-                                hasUnapprovedSubmitted = true;
+                                currentMilestoneIndex = i;
                                 break;
                               }
                             }
-
-                            // Only allow submission if previous milestone is approved AND no submitted milestones are pending
-                            if (isPreviousApproved && !hasUnapprovedSubmitted) {
-                              currentMilestoneIndex = i;
-                              break;
-                            }
                           }
-                        }
 
-                        console.log(
-                          `Escrow ${escrow.id} current milestone index:`,
-                          currentMilestoneIndex,
-                        );
-                        console.log(
-                          `Escrow ${escrow.id} milestone statuses:`,
-                          escrow.milestones.map((m, i) => ({
-                            index: i,
-                            status: m.status,
-                            submitted: submittedMilestones.has(
-                              `${escrow.id}-${i}`,
-                            ),
-                            approved: approvedMilestones.has(
-                              `${escrow.id}-${i}`,
-                            ),
-                          })),
-                        );
-
-                        if (currentMilestoneIndex === -1) {
-                          return (
-                            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-center">
-                              <p className="text-gray-600 dark:text-gray-400">
-                                All milestones completed or in progress
-                              </p>
-                            </div>
+                          console.log(
+                            `Escrow ${escrow.id} current milestone index:`,
+                            currentMilestoneIndex,
                           );
-                        }
+                          console.log(
+                            `Escrow ${escrow.id} milestone statuses:`,
+                            escrow.milestones.map((m, i) => ({
+                              index: i,
+                              status: m.status,
+                              submitted: submittedMilestones.has(
+                                `${escrow.id}-${i}`,
+                              ),
+                              approved: approvedMilestones.has(
+                                `${escrow.id}-${i}`,
+                              ),
+                            })),
+                          );
 
-                        const currentMilestone =
-                          escrow.milestones[currentMilestoneIndex];
-                        const milestoneKey = `${escrow.id}-${currentMilestoneIndex}`;
-                        const isSubmitted =
-                          currentMilestone.status === "submitted" ||
-                          submittedMilestones.has(milestoneKey);
-                        const canSubmit =
-                          currentMilestone.status === "pending" &&
-                          escrow.status === "InProgress" &&
-                          !submittedMilestones.has(milestoneKey) &&
-                          !approvedMilestones.has(milestoneKey);
+                          if (currentMilestoneIndex === -1) {
+                            return (
+                              <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-center">
+                                <p className="text-gray-600 dark:text-gray-400">
+                                  All milestones completed or in progress
+                                </p>
+                              </div>
+                            );
+                          }
 
-                        // Don't show form if milestone is already submitted
-                        if (isSubmitted) {
-                          return (
-                            <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <h5 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-1">
-                                    Milestone {currentMilestoneIndex + 1}{" "}
-                                    Submitted
-                                  </h5>
-                                  <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                                    Awaiting client approval...
-                                  </p>
+                          const currentMilestone =
+                            escrow.milestones[currentMilestoneIndex];
+                          const milestoneKey = `${escrow.id}-${currentMilestoneIndex}`;
+                          const isSubmitted =
+                            currentMilestone.status === "submitted" ||
+                            submittedMilestones.has(milestoneKey);
+                          const canSubmit =
+                            currentMilestone.status === "pending" &&
+                            escrow.status === "InProgress" &&
+                            !submittedMilestones.has(milestoneKey) &&
+                            !approvedMilestones.has(milestoneKey);
+
+                          // Don't show form if milestone is already submitted
+                          if (isSubmitted) {
+                            return (
+                              <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <h5 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-1">
+                                      Milestone {currentMilestoneIndex + 1}{" "}
+                                      Submitted
+                                    </h5>
+                                    <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                                      Awaiting client approval...
+                                    </p>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Badge className="bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-100">
+                                      Submitted
+                                    </Badge>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setSelectedEscrowId(escrow.id);
+                                        setSelectedMilestoneIndex(
+                                          currentMilestoneIndex,
+                                        );
+                                        setDisputeReason("");
+                                        setShowDisputeDialog(true);
+                                      }}
+                                    >
+                                      Dispute
+                                    </Button>
+                                  </div>
                                 </div>
-                                <div className="flex gap-2">
-                                  <Badge className="bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-100">
-                                    Submitted
-                                  </Badge>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                              <h5 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">
+                                Submit Milestone {currentMilestoneIndex + 1}
+                              </h5>
+
+                              {/* Client Requirements */}
+                              {currentMilestone.description &&
+                                !currentMilestone.description.includes(
+                                  "To be defined",
+                                ) &&
+                                currentMilestone.description !==
+                                  `Milestone ${currentMilestoneIndex + 1}` && (
+                                  <div className="mb-3 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                                    <div className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">
+                                      Client Requirements:
+                                    </div>
+                                    <div className="text-sm text-blue-700 dark:text-blue-300">
+                                      {currentMilestone.description}
+                                    </div>
+                                  </div>
+                                )}
+
+                              {/* Show input form only if not submitted */}
+                              {!isSubmitted && (
+                                <div className="space-y-3">
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                      Your Work Description
+                                    </label>
+                                    <Textarea
+                                      value={
+                                        milestoneDescriptions[milestoneKey] ||
+                                        ""
+                                      }
+                                      onChange={(e) =>
+                                        setMilestoneDescriptions((prev) => ({
+                                          ...prev,
+                                          [milestoneKey]: e.target.value,
+                                        }))
+                                      }
+                                      className="text-sm bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
+                                      rows={3}
+                                      placeholder="Describe what you've completed for this milestone..."
+                                    />
+                                  </div>
+
+                                  <div className="flex gap-2">
+                                    {canSubmit && (
+                                      <Button
+                                        size="sm"
+                                        onClick={() =>
+                                          submitMilestone(
+                                            escrow.id,
+                                            currentMilestoneIndex,
+                                          )
+                                        }
+                                        disabled={
+                                          submittingMilestone ===
+                                            milestoneKey ||
+                                          !milestoneDescriptions[
+                                            milestoneKey
+                                          ]?.trim()
+                                        }
+                                      >
+                                        {submittingMilestone === milestoneKey
+                                          ? "Submitting..."
+                                          : "Submit Milestone"}
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Show submitted status if milestone is submitted */}
+                              {isSubmitted && (
+                                <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Badge className="bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200">
+                                      Submitted - Awaiting Approval
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-3">
+                                    Your milestone has been submitted and is
+                                    waiting for client approval.
+                                  </p>
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -1434,137 +1552,34 @@ export default function FreelancerPage() {
                                       setDisputeReason("");
                                       setShowDisputeDialog(true);
                                     }}
+                                    className="border-yellow-300 dark:border-yellow-600 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-800"
                                   >
                                     Dispute
                                   </Button>
                                 </div>
-                              </div>
+                              )}
                             </div>
                           );
-                        }
+                        })()}
+                      </div>
 
-                        return (
-                          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                            <h5 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">
-                              Submit Milestone {currentMilestoneIndex + 1}
-                            </h5>
-
-                            {/* Client Requirements */}
-                            {currentMilestone.description &&
-                              !currentMilestone.description.includes(
-                                "To be defined",
-                              ) &&
-                              currentMilestone.description !==
-                                `Milestone ${currentMilestoneIndex + 1}` && (
-                                <div className="mb-3 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
-                                  <div className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">
-                                    Client Requirements:
-                                  </div>
-                                  <div className="text-sm text-blue-700 dark:text-blue-300">
-                                    {currentMilestone.description}
-                                  </div>
-                                </div>
-                              )}
-
-                            {/* Show input form only if not submitted */}
-                            {!isSubmitted && (
-                              <div className="space-y-3">
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Your Work Description
-                                  </label>
-                                  <Textarea
-                                    value={
-                                      milestoneDescriptions[milestoneKey] || ""
-                                    }
-                                    onChange={(e) =>
-                                      setMilestoneDescriptions((prev) => ({
-                                        ...prev,
-                                        [milestoneKey]: e.target.value,
-                                      }))
-                                    }
-                                    className="text-sm bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
-                                    rows={3}
-                                    placeholder="Describe what you've completed for this milestone..."
-                                  />
-                                </div>
-
-                                <div className="flex gap-2">
-                                  {canSubmit && (
-                                    <Button
-                                      size="sm"
-                                      onClick={() =>
-                                        submitMilestone(
-                                          escrow.id,
-                                          currentMilestoneIndex,
-                                        )
-                                      }
-                                      disabled={
-                                        submittingMilestone === milestoneKey ||
-                                        !milestoneDescriptions[
-                                          milestoneKey
-                                        ]?.trim()
-                                      }
-                                    >
-                                      {submittingMilestone === milestoneKey
-                                        ? "Submitting..."
-                                        : "Submit Milestone"}
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Show submitted status if milestone is submitted */}
-                            {isSubmitted && (
-                              <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Badge className="bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200">
-                                    Submitted - Awaiting Approval
-                                  </Badge>
-                                </div>
-                                <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-3">
-                                  Your milestone has been submitted and is
-                                  waiting for client approval.
-                                </p>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setSelectedEscrowId(escrow.id);
-                                    setSelectedMilestoneIndex(
-                                      currentMilestoneIndex,
-                                    );
-                                    setDisputeReason("");
-                                    setShowDisputeDialog(true);
-                                  }}
-                                  className="border-yellow-300 dark:border-yellow-600 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-800"
-                                >
-                                  Dispute
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-3">
-                      {escrow.status === "Pending" && (
-                        <Button
-                          onClick={() => startWork(escrow.id)}
-                          className="flex items-center gap-2"
-                        >
-                          <Play className="h-4 w-4" />
-                          Start Work
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+                      {/* Actions */}
+                      <div className="flex gap-3">
+                        {escrow.status === "Pending" && (
+                          <Button
+                            onClick={() => startWork(escrow.id)}
+                            className="flex items-center gap-2"
+                          >
+                            <Play className="h-4 w-4" />
+                            Start Work
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
           </div>
         )}
 

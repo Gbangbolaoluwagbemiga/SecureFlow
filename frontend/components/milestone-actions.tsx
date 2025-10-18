@@ -47,6 +47,39 @@ export function MilestoneActions({
   >(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
+  // Poll transaction receipt for confirmation
+  const pollTransactionReceipt = async (txHash: string) => {
+    const maxAttempts = 30; // 30 attempts * 2 seconds = 1 minute timeout
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+      try {
+        const receipt = await window.ethereum.request({
+          method: "eth_getTransactionReceipt",
+          params: [txHash],
+        });
+
+        if (receipt) {
+          return receipt;
+        }
+      } catch (error) {
+        console.log("Waiting for transaction confirmation...", attempts + 1);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+      attempts++;
+    }
+
+    throw new Error(
+      "Transaction timeout - please check the blockchain explorer",
+    );
+  };
+
+  // Check if this milestone can be approved
+  const canApproveMilestone = () => {
+    return milestone.status === "submitted" && isPayer;
+  };
+
   // Check if this milestone can be submitted (sequential validation)
   const canSubmitMilestone = () => {
     if (
@@ -133,20 +166,185 @@ export function MilestoneActions({
           onSuccess();
           break;
         case "approve":
-          txHash = await contract.send(
-            "approveMilestone",
-            "no-value",
-            escrowId,
-            milestoneIndex,
-          );
-          toast({
-            title: "Milestone approved!",
-            description: "Payment has been released to the beneficiary",
-          });
+          try {
+            // Validate milestone state before attempting approval
+            if (milestone.status !== "submitted") {
+              toast({
+                title: "Invalid milestone state",
+                description:
+                  "This milestone is not in submitted state and cannot be approved",
+                variant: "destructive",
+              });
+              return;
+            }
 
-          // Wait for blockchain state to update, then refresh data
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          onSuccess();
+            // Set loading state
+            setIsLoading(true);
+
+            console.log(
+              `Approving milestone ${milestoneIndex} for escrow ${escrowId}`,
+            );
+            console.log(`Milestone status: ${milestone.status}`);
+
+            // Try to estimate gas first to catch potential issues
+            try {
+              const gasEstimate = await contract.estimateGas(
+                "approveMilestone",
+                escrowId,
+                milestoneIndex,
+              );
+              console.log(`Gas estimate: ${gasEstimate}`);
+            } catch (gasError) {
+              console.warn("Gas estimation failed:", gasError);
+              // Don't block the transaction if gas estimation fails
+              // Some networks or contract states might not support gas estimation
+              console.log(
+                "Proceeding with transaction despite gas estimation failure",
+              );
+            }
+
+            // Add retry logic for failed transactions
+            let txHash;
+            let retryCount = 0;
+            const maxRetries = 3;
+
+            while (retryCount < maxRetries) {
+              try {
+                txHash = await contract.send(
+                  "approveMilestone",
+                  "no-value",
+                  escrowId,
+                  milestoneIndex,
+                );
+                break; // Success, exit retry loop
+              } catch (sendError: any) {
+                retryCount++;
+                console.log(
+                  `Transaction attempt ${retryCount} failed:`,
+                  sendError,
+                );
+
+                if (retryCount >= maxRetries) {
+                  throw sendError; // Re-throw the last error
+                }
+
+                // Wait before retry
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+                console.log(
+                  `Retrying transaction (attempt ${retryCount + 1}/${maxRetries})...`,
+                );
+
+                // Show retry toast
+                toast({
+                  title: "Retrying transaction",
+                  description: `Attempt ${retryCount + 1} of ${maxRetries}. Please wait...`,
+                  variant: "default",
+                });
+              }
+            }
+
+            console.log(`Approval transaction hash: ${txHash}`);
+            console.log(`Transaction object type:`, typeof txHash);
+            console.log(`Transaction object:`, txHash);
+
+            // Wait for transaction to be mined and confirmed
+            try {
+              let receipt;
+
+              // Check if txHash has a wait method (ethers.js transaction object)
+              if (txHash && typeof txHash.wait === "function") {
+                console.log("Using txHash.wait() method");
+                receipt = await Promise.race([
+                  txHash.wait(),
+                  new Promise((_, reject) =>
+                    setTimeout(
+                      () => reject(new Error("Transaction timeout")),
+                      60000,
+                    ),
+                  ),
+                ]);
+              } else {
+                // Fallback: use polling to check transaction status
+                console.log(
+                  "Using polling method for transaction confirmation",
+                );
+                receipt = await pollTransactionReceipt(txHash);
+              }
+
+              console.log(`Transaction receipt:`, receipt);
+
+              if (receipt.status === 1) {
+                toast({
+                  title: "Milestone approved!",
+                  description: "Payment has been released to the beneficiary",
+                });
+
+                // Wait for blockchain state to update, then refresh data
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+                onSuccess();
+              } else {
+                throw new Error("Transaction failed on blockchain");
+              }
+            } catch (receiptError: any) {
+              console.error("Transaction confirmation failed:", receiptError);
+              if (receiptError.message?.includes("timeout")) {
+                toast({
+                  title: "Transaction timeout",
+                  description:
+                    "The transaction is taking longer than expected. Please check the blockchain explorer to see if it was successful.",
+                  variant: "destructive",
+                });
+              } else {
+                throw new Error("Transaction failed to confirm on blockchain");
+              }
+            }
+          } catch (error: any) {
+            console.error("Error approving milestone:", error);
+
+            // Handle specific error cases
+            if (error.message?.includes("Not submitted")) {
+              toast({
+                title: "Transaction failed",
+                description:
+                  "The transaction was not submitted to the network. This may be due to network congestion or wallet issues. Please try again or refresh the page.",
+                variant: "destructive",
+              });
+            } else if (
+              error.message?.includes("Transaction failed on blockchain")
+            ) {
+              toast({
+                title: "Transaction reverted",
+                description:
+                  "The transaction was submitted but failed on the blockchain. The milestone may not be in the correct state for approval.",
+                variant: "destructive",
+              });
+            } else if (error.message?.includes("insufficient funds")) {
+              toast({
+                title: "Insufficient funds",
+                description:
+                  "You don't have enough MON tokens to pay for the transaction fee.",
+                variant: "destructive",
+              });
+            } else if (error.message?.includes("gas")) {
+              toast({
+                title: "Gas estimation failed",
+                description:
+                  "Unable to estimate gas for this transaction. The milestone may not be in the correct state.",
+                variant: "destructive",
+              });
+            } else {
+              toast({
+                title: "Approval failed",
+                description:
+                  error.message ||
+                  "An unexpected error occurred while approving the milestone.",
+                variant: "destructive",
+              });
+            }
+            throw error; // Re-throw to prevent success toast
+          } finally {
+            setIsLoading(false);
+          }
           break;
         case "reject":
           txHash = await contract.send(
@@ -222,7 +420,7 @@ export function MilestoneActions({
       case "approve":
         return {
           title: "Approve Milestone",
-          description: `Approve milestone ${milestoneIndex + 1} and release ${milestone.amount} tokens to the beneficiary.`,
+          description: `Approve milestone ${milestoneIndex + 1} and release ${(Number.parseFloat(milestone.amount) / 1e18).toFixed(2)} tokens to the beneficiary.`,
           icon: CheckCircle2,
           confirmText: "Approve & Release",
         };
@@ -291,15 +489,16 @@ export function MilestoneActions({
         )}
 
         {/* Approve Milestone - Only payer for submitted milestones */}
-        {milestone.status === "submitted" && isPayer && (
+        {canApproveMilestone() && (
           <Button
             onClick={() => openDialog("approve")}
             size="sm"
             variant="default"
             className="gap-2"
+            disabled={isLoading}
           >
             <CheckCircle2 className="h-4 w-4" />
-            Approve
+            {isLoading ? "Processing..." : "Approve"}
           </Button>
         )}
 

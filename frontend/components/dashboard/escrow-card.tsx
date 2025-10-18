@@ -16,7 +16,6 @@ interface EscrowCardProps {
   expandedEscrow: string | null;
   submittingMilestone: string | null;
   onToggleExpanded: (escrowId: string) => void;
-  onSubmitMilestone: (escrowId: string, milestoneIndex: number) => void;
   onApproveMilestone: (escrowId: string, milestoneIndex: number) => void;
   onRejectMilestone: (escrowId: string, milestoneIndex: number) => void;
   onDisputeMilestone: (escrowId: string, milestoneIndex: number) => void;
@@ -36,7 +35,6 @@ export function EscrowCard({
   expandedEscrow,
   submittingMilestone,
   onToggleExpanded,
-  onSubmitMilestone,
   onApproveMilestone,
   onRejectMilestone,
   onDisputeMilestone,
