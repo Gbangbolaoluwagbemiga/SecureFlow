@@ -87,8 +87,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     try {
       const knownOwner = "0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41";
 
-      console.log("Checking owner status for:", address);
-      console.log("Known owner:", knownOwner);
 
       setIsOwner(address.toLowerCase() === knownOwner.toLowerCase());
     } catch (error) {
@@ -142,8 +140,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       await checkOwnerStatus(accounts[0]);
 
       const targetChainId = Number.parseInt(MONAD_TESTNET.chainId, 16);
-      console.log("Connected to chain:", chainIdNumber);
-      console.log("Target chain:", targetChainId);
 
       if (chainIdNumber !== targetChainId) {
         toast({
@@ -195,11 +191,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     const currentChainIdNumber = Number.parseInt(currentChainId, 16);
     const targetChainId = Number.parseInt(MONAD_TESTNET.chainId, 16);
 
-    console.log("Current chain:", currentChainIdNumber);
-    console.log("Target chain:", targetChainId);
-
     if (currentChainIdNumber === targetChainId) {
-      console.log("Already on Monad Testnet");
       toast({
         title: "Already connected",
         description: "You're already on Monad Testnet",
@@ -210,7 +202,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     setIsSwitchingNetwork(true);
 
     try {
-      console.log("Attempting to switch to Monad...");
       await window.ethereum.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: MONAD_TESTNET.chainId }],

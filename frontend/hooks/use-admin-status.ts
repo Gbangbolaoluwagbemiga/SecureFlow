@@ -34,7 +34,6 @@ export function useAdminStatus() {
         owner.toString().toLowerCase() === wallet.address?.toLowerCase();
       setIsAdmin(isOwner);
     } catch (error) {
-      console.error("Error checking admin status:", error);
       setIsAdmin(false);
     } finally {
       setLoading(false);

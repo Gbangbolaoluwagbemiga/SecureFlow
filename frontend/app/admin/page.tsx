@@ -19,6 +19,7 @@ import { AdminHeader } from "@/components/admin/admin-header";
 import { AdminStats } from "@/components/admin/admin-stats";
 import { ContractControls } from "@/components/admin/contract-controls";
 import { AdminLoading } from "@/components/admin/admin-loading";
+import { DisputeResolution } from "@/components/admin/dispute-resolution";
 import {
   Lock,
   Shield,
@@ -68,11 +69,7 @@ export default function AdminPage() {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       const owner = await contract.owner();
       setContractOwner(owner);
-      console.log("Contract owner:", owner);
-      console.log("Connected wallet:", wallet.address);
-    } catch (error) {
-      console.error("Error fetching contract owner:", error);
-    }
+    } catch (error) {}
   };
 
   const fetchContractStats = async () => {
@@ -94,7 +91,6 @@ export default function AdminPage() {
         whitelistedTokens: 1, // We whitelisted 1 token (MockERC20)
       });
     } catch (error) {
-      console.error("Error fetching contract stats:", error);
       // Set empty stats if contract calls fail
       setContractStats({
         platformFeeBP: 0,
@@ -111,12 +107,6 @@ export default function AdminPage() {
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       const paused = await contract.call("paused");
-      console.log(
-        "Initial paused status check:",
-        paused,
-        "Type:",
-        typeof paused,
-      );
 
       // Handle different possible return types - including Proxy objects
       let isPaused = false;
@@ -129,18 +119,14 @@ export default function AdminPage() {
         // Handle Proxy objects - try to extract the actual value
         try {
           const pausedValue = paused.toString();
-          console.log("Paused proxy toString():", pausedValue);
           isPaused = pausedValue === "true" || pausedValue === "1";
         } catch (e) {
-          console.warn("Could not parse paused proxy object:", e);
           isPaused = false; // Default to not paused
         }
       }
 
-      console.log("Is paused (initial):", isPaused);
       setIsPaused(isPaused);
     } catch (error) {
-      console.error("Error checking paused status:", error);
       // Fallback to false if contract call fails
       setIsPaused(false);
     } finally {
@@ -161,12 +147,6 @@ export default function AdminPage() {
         case "pause":
           // Check if contract is already paused
           const currentPausedStatusForPause = await contract.call("paused");
-          console.log(
-            "Current paused status for pause:",
-            currentPausedStatusForPause,
-            "Type:",
-            typeof currentPausedStatusForPause,
-          );
 
           // Handle different possible return types - including Proxy objects
           let isPausedForPause = false;
@@ -194,8 +174,6 @@ export default function AdminPage() {
               isPausedForPause = false;
             }
           }
-
-          console.log("Is paused for pause:", isPausedForPause);
 
           if (isPausedForPause) {
             toast({
@@ -250,8 +228,6 @@ export default function AdminPage() {
             }
           }
 
-          console.log("Is paused:", isPaused);
-
           if (!isPaused) {
             toast({
               title: "Contract Already Unpaused",
@@ -285,7 +261,6 @@ export default function AdminPage() {
 
       setDialogOpen(false);
     } catch (error: any) {
-      console.error("Error performing admin action:", error);
       toast({
         title: "Action failed",
         description: error.message || "Failed to perform admin action",
@@ -455,6 +430,8 @@ export default function AdminPage() {
               </div>
             </div>
           </Card>
+
+          <DisputeResolution onDisputeResolved={fetchContractStats} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             <Card className="glass border-primary/20 p-6">

@@ -24,26 +24,6 @@ export function JobCard({
   ongoingProjectsCount,
   onApply,
 }: JobCardProps) {
-  console.log(
-    `JobCard ${job.id} - isJobCreator: ${job.isJobCreator}, hasApplied: ${hasApplied}, isContractPaused: ${isContractPaused}`,
-  );
-  console.log(
-    `JobCard ${job.id} - Button disabled: ${hasApplied || isContractPaused || job.isJobCreator}`,
-  );
-  console.log(
-    `JobCard ${job.id} - Button text logic: isContractPaused=${isContractPaused}, isJobCreator=${job.isJobCreator}, hasApplied=${hasApplied}`,
-  );
-
-  // Additional debugging for application status
-  if (hasApplied) {
-    console.log(
-      `✅ JobCard ${job.id} - User has applied, button should show "Applied"`,
-    );
-  } else {
-    console.log(
-      `❌ JobCard ${job.id} - User has NOT applied, button should show "Apply Now"`,
-    );
-  }
   const getStatusColor = (status: string) => {
     switch (status) {
       case "pending":

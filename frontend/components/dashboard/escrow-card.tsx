@@ -52,10 +52,18 @@ export function EscrowCard({
         return "bg-green-100 text-green-800";
       case "disputed":
         return "bg-red-100 text-red-800";
+      case "terminated":
+        return "bg-gray-100 text-gray-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
   };
+
+  // Check if this escrow should be marked as terminated
+  const isTerminated = escrow.milestones.some(
+    (milestone) =>
+      milestone.status === "disputed" || milestone.status === "rejected",
+  );
 
   const getMilestoneStatusColor = (status: string) => {
     switch (status) {
@@ -114,8 +122,12 @@ export function EscrowCard({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Badge className={getStatusColor(escrow.status)}>
-                {escrow.status}
+              <Badge
+                className={getStatusColor(
+                  isTerminated ? "terminated" : escrow.status,
+                )}
+              >
+                {isTerminated ? "terminated" : escrow.status}
               </Badge>
               <Button
                 variant="ghost"

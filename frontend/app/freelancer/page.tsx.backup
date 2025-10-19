@@ -66,7 +66,6 @@ interface Milestone {
   status: string;
   submittedAt?: number;
   approvedAt?: number;
-  disputeReason?: string;
 }
 
 export default function FreelancerPage() {
@@ -110,6 +109,10 @@ export default function FreelancerPage() {
     };
 
     const handleMilestoneRejected = (event: any) => {
+      console.log(
+        "🎯 FREELANCER: Milestone rejected event received!",
+        event.detail,
+      );
       fetchFreelancerEscrows();
     };
 
@@ -130,6 +133,7 @@ export default function FreelancerPage() {
     setLoading(true);
     try {
       if (!wallet.isConnected || !wallet.address) {
+        console.log("Wallet not connected, skipping fetch");
         return;
       }
 
@@ -149,6 +153,12 @@ export default function FreelancerPage() {
       // Get total number of escrows
       const totalEscrows = await contract.call("nextEscrowId");
       const escrowCount = Number(totalEscrows);
+      console.log(
+        "Freelancer page - Total escrows from contract:",
+        totalEscrows,
+        "Count:",
+        escrowCount,
+      );
 
       const freelancerEscrows: Escrow[] = [];
 
@@ -156,10 +166,13 @@ export default function FreelancerPage() {
       if (escrowCount > 1) {
         for (let i = 1; i < escrowCount; i++) {
           try {
+            console.log(`Fetching escrow ${i} for freelancer...`);
             const escrowSummary = await contract.call("getEscrowSummary", i);
+            console.log(`Escrow ${i} data:`, escrowSummary);
 
             // Handle potential contract call failures
             if (escrowSummary === null || escrowSummary === undefined) {
+              console.log(`Escrow ${i} returned null/undefined, skipping...`);
               continue;
             }
 
@@ -169,6 +182,7 @@ export default function FreelancerPage() {
               !Array.isArray(escrowSummary) ||
               escrowSummary.length === 0
             ) {
+              console.log(`Escrow ${i} has invalid data, skipping...`);
               continue;
             }
 
@@ -383,21 +397,12 @@ export default function FreelancerPage() {
                               );
                             }
 
-                            // Parse dispute reason (index 7 in contract)
-                            let disputeReason = "";
-                            if (m.disputeReason !== undefined) {
-                              disputeReason = String(m.disputeReason);
-                            } else if (m[7] !== undefined) {
-                              disputeReason = String(m[7]);
-                            }
-
                             console.log(`Milestone ${index} parsed values:`, {
                               description,
                               amount,
                               status,
                               submittedAt,
                               approvedAt,
-                              disputeReason,
                             });
 
                             // Debug amount conversion
@@ -478,46 +483,33 @@ export default function FreelancerPage() {
                         hasApprovedAt: approvedAt && approvedAt > 0,
                       });
 
-                      // Priority 1: Use contract status as the primary source of truth
-                      if (status === 1) {
-                        finalStatus = "submitted";
-                        console.log(
-                          `Milestone ${index} setting to submitted due to status 1`,
-                        );
-                      } else if (status === 2) {
+                      // Priority 1: If milestone status is 2 (approved), it's approved
+                      if (status === 2) {
                         finalStatus = "approved";
                         console.log(
                           `Milestone ${index} setting to approved due to status 2`,
                         );
-                      } else if (status === 3) {
-                        finalStatus = "disputed";
+                      }
+                      // Priority 2: If milestone has been approved (approvedAt exists), it's approved
+                      else if (approvedAt && approvedAt > 0) {
+                        finalStatus = "approved";
                         console.log(
-                          `Milestone ${index} setting to disputed due to status 3`,
-                        );
-                      } else if (status === 4) {
-                        finalStatus = "disputed";
-                        console.log(
-                          `Milestone ${index} setting to disputed due to status 4`,
+                          `Milestone ${index} setting to approved due to approvedAt: ${approvedAt}`,
                         );
                       }
-                      // Priority 2: Fallback to timestamp-based logic if status is 0
-                      else if (status === 0) {
-                        if (approvedAt && approvedAt > 0) {
-                          finalStatus = "approved";
-                          console.log(
-                            `Milestone ${index} setting to approved due to approvedAt: ${approvedAt}`,
-                          );
-                        } else if (submittedAt && submittedAt > 0) {
-                          finalStatus = "submitted";
-                          console.log(
-                            `Milestone ${index} setting to submitted due to submittedAt: ${submittedAt}`,
-                          );
-                        } else {
-                          finalStatus = "pending";
-                          console.log(
-                            `Milestone ${index} setting to pending due to no timestamps`,
-                          );
-                        }
+                      // Priority 3: If milestone has been submitted (submittedAt exists) but not approved, it's submitted
+                      else if (submittedAt && submittedAt > 0) {
+                        finalStatus = "submitted";
+                        console.log(
+                          `Milestone ${index} setting to submitted due to submittedAt: ${submittedAt}`,
+                        );
+                      }
+                      // Priority 4: If milestone status is 1 (submitted), it's submitted
+                      else if (status === 1) {
+                        finalStatus = "submitted";
+                        console.log(
+                          `Milestone ${index} setting to submitted due to status 1`,
+                        );
                       }
                       // Special case: If this is the first milestone and funds have been released, it should be approved
                       else if (
@@ -569,7 +561,6 @@ export default function FreelancerPage() {
                       status: finalStatus,
                       submittedAt,
                       approvedAt,
-                      disputeReason,
                     };
                   } catch (error) {
                     console.error(
@@ -975,7 +966,7 @@ export default function FreelancerPage() {
       "submitted", // 1 - Submitted by freelancer
       "approved", // 2 - Approved by client
       "rejected", // 3 - Rejected by client
-      "disputed", // 4 - Under dispute
+      "rejected", // 4 - Under dispute (treating as rejected for UI)
       "resolved", // 5 - Dispute resolved
     ];
     return statuses[status] || "pending";
@@ -1014,8 +1005,6 @@ export default function FreelancerPage() {
         return "bg-blue-100 text-blue-800";
       case "approved":
         return "bg-green-100 text-green-800";
-      case "terminated":
-        return "bg-gray-100 text-gray-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -1150,24 +1139,8 @@ export default function FreelancerPage() {
                             {escrow.projectDescription}
                           </CardDescription>
                         </div>
-                        <Badge
-                          className={getStatusColor(
-                            escrow.milestones.some(
-                              (m) =>
-                                m.status === "disputed" ||
-                                m.status === "rejected",
-                            )
-                              ? "terminated"
-                              : escrow.status,
-                          )}
-                        >
-                          {escrow.milestones.some(
-                            (m) =>
-                              m.status === "disputed" ||
-                              m.status === "rejected",
-                          )
-                            ? "terminated"
-                            : escrow.status}
+                        <Badge className={getStatusColor(escrow.status)}>
+                          {escrow.status}
                         </Badge>
                       </div>
                     </CardHeader>
@@ -1397,18 +1370,19 @@ export default function FreelancerPage() {
                                   {formatAmount(milestone.amount)} tokens
                                 </div>
 
-                                {/* Show rejected status if milestone is rejected */}
-                                {milestone.status === "rejected" && (
+                                {/* Show rejected status if milestone is rejected or disputed */}
+                                {(milestone.status === "rejected" ||
+                                  milestone.status === "disputed") && (
                                   <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
                                     <div className="flex items-center gap-2 mb-2">
                                       <Badge className="bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200">
                                         Rejected - Needs Improvement
                                       </Badge>
                                     </div>
-                                    <p className="text-sm text-red-700 dark:text-red-300">
-                                      This milestone was rejected by the client.
-                                      Please review the feedback and resubmit
-                                      with improvements.
+                                    <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+                                      Your milestone has been rejected by the
+                                      client. Please review the feedback and
+                                      resubmit with improvements.
                                     </p>
                                     <div className="flex gap-2">
                                       <Button
@@ -1428,7 +1402,7 @@ export default function FreelancerPage() {
                                       <Button
                                         size="sm"
                                         onClick={() => {
-                                          // TODO: Implement resubmit functionality
+                                          // TODO: Allow resubmission
                                           console.log(
                                             "Resubmit milestone",
                                             index,
@@ -1437,42 +1411,6 @@ export default function FreelancerPage() {
                                         className="bg-red-600 hover:bg-red-700 text-white"
                                       >
                                         Resubmit
-                                      </Button>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Show disputed status if milestone is disputed */}
-                                {milestone.status === "disputed" && (
-                                  <div className="mt-3 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <Badge className="bg-orange-100 dark:bg-orange-800 text-orange-800 dark:text-orange-200">
-                                        Disputed - Under Review
-                                      </Badge>
-                                    </div>
-                                    <p className="text-sm text-orange-700 dark:text-orange-300 mb-3">
-                                      This milestone is currently under dispute.
-                                      The admin will review the case and make a
-                                      fair resolution.
-                                    </p>
-                                    {milestone.disputeReason && (
-                                      <div className="mt-2 p-2 bg-orange-100 dark:bg-orange-800/30 rounded border border-orange-200 dark:border-orange-700">
-                                        <p className="text-xs font-medium text-orange-800 dark:text-orange-200 mb-1">
-                                          Reason for dispute:
-                                        </p>
-                                        <p className="text-sm text-orange-700 dark:text-orange-300">
-                                          {milestone.disputeReason}
-                                        </p>
-                                      </div>
-                                    )}
-                                    <div className="flex gap-2">
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled
-                                        className="border-orange-300 dark:border-orange-600 text-orange-700 dark:text-orange-300"
-                                      >
-                                        Under Review
                                       </Button>
                                     </div>
                                   </div>

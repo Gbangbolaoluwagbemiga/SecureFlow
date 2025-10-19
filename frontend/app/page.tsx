@@ -63,7 +63,6 @@ export default function HomePage() {
         completedEscrows,
       });
     } catch (error) {
-      console.error("Error fetching stats:", error);
       // Set empty stats if contract call fails
       setStats({
         activeEscrows: 0,

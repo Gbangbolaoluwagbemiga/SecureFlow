@@ -27,13 +27,6 @@ export function ApplicationCard({
   onApprove,
   approving,
 }: ApplicationCardProps) {
-  console.log(`📋 ApplicationCard ${index} data:`, {
-    freelancerAddress: application.freelancerAddress,
-    proposedTimeline: application.proposedTimeline,
-    coverLetter: application.coverLetter,
-    appliedAt: application.appliedAt,
-  });
-
   return (
     <Card key={index} className="p-4 border-border/40">
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -86,8 +79,6 @@ export function ApplicationCard({
         <div className="flex justify-end w-full lg:w-auto">
           <Button
             onClick={() => {
-              console.log("🟢 APPROVE BUTTON CLICKED!");
-              console.log("Freelancer address:", application.freelancerAddress);
               onApprove(application.freelancerAddress);
             }}
             disabled={approving}

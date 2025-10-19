@@ -50,6 +50,14 @@ export default function DashboardPage() {
     }
   };
 
+  // Check if an escrow should be marked as terminated (has disputed milestones)
+  const isEscrowTerminated = (escrow: Escrow): boolean => {
+    return escrow.milestones.some(
+      (milestone) =>
+        milestone.status === "disputed" || milestone.status === "rejected",
+    );
+  };
+
   const getMilestoneStatusFromNumber = (status: number): string => {
     const statuses = [
       "pending", // 0 - Not started
@@ -360,33 +368,46 @@ export default function DashboardPage() {
                 isPending: status === 0,
               });
 
-              // Priority 1: If milestone status is 2 (approved), it's approved
-              if (status === 2) {
-                finalStatus = "approved";
-                console.log(
-                  `Milestone ${index} setting to approved due to status 2`,
-                );
-              }
-              // Priority 2: If milestone has been approved (approvedAt exists), it's approved
-              else if (approvedAt && approvedAt > 0) {
-                finalStatus = "approved";
-                console.log(
-                  `Milestone ${index} setting to approved due to approvedAt: ${approvedAt}`,
-                );
-              }
-              // Priority 3: If milestone has been submitted (submittedAt exists) but not approved, it's submitted
-              else if (submittedAt && submittedAt > 0) {
-                finalStatus = "submitted";
-                console.log(
-                  `Milestone ${index} setting to submitted due to submittedAt: ${submittedAt}`,
-                );
-              }
-              // Priority 4: If milestone status is 1 (submitted), it's submitted
-              else if (status === 1) {
+              // Priority 1: Use contract status as the primary source of truth
+              if (status === 1) {
                 finalStatus = "submitted";
                 console.log(
                   `Milestone ${index} setting to submitted due to status 1`,
                 );
+              } else if (status === 2) {
+                finalStatus = "approved";
+                console.log(
+                  `Milestone ${index} setting to approved due to status 2`,
+                );
+              } else if (status === 3) {
+                finalStatus = "disputed";
+                console.log(
+                  `Milestone ${index} setting to disputed due to status 3`,
+                );
+              } else if (status === 4) {
+                finalStatus = "disputed";
+                console.log(
+                  `Milestone ${index} setting to disputed due to status 4`,
+                );
+              }
+              // Priority 2: Fallback to timestamp-based logic if status is 0
+              else if (status === 0) {
+                if (approvedAt && approvedAt > 0) {
+                  finalStatus = "approved";
+                  console.log(
+                    `Milestone ${index} setting to approved due to approvedAt: ${approvedAt}`,
+                  );
+                } else if (submittedAt && submittedAt > 0) {
+                  finalStatus = "submitted";
+                  console.log(
+                    `Milestone ${index} setting to submitted due to submittedAt: ${submittedAt}`,
+                  );
+                } else {
+                  finalStatus = "pending";
+                  console.log(
+                    `Milestone ${index} setting to pending due to no timestamps`,
+                  );
+                }
               }
               // Special case: If this is the first milestone and funds have been released, it should be approved
               else if (
@@ -531,7 +552,11 @@ export default function DashboardPage() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, escrow?: Escrow) => {
+    // Check if this escrow should be terminated
+    const isTerminated = escrow ? isEscrowTerminated(escrow) : false;
+    const finalStatus = isTerminated ? "terminated" : status;
+
     const variants: Record<string, { variant: any; icon: any; label: string }> =
       {
         pending: { variant: "secondary", icon: Clock, label: "Pending" },
@@ -546,9 +571,14 @@ export default function DashboardPage() {
           icon: AlertCircle,
           label: "Disputed",
         },
+        terminated: {
+          variant: "secondary",
+          icon: AlertCircle,
+          label: "Terminated",
+        },
       };
 
-    const config = variants[status] || variants.pending;
+    const config = variants[finalStatus] || variants.pending;
     const Icon = config.icon;
 
     return (

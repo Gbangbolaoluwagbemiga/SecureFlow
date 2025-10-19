@@ -53,7 +53,6 @@ export function useJobCreatorStatus() {
       
       setIsJobCreator(false);
     } catch (error) {
-      console.error("Error checking job creator status:", error);
       setIsJobCreator(false);
     } finally {
       setLoading(false);

@@ -45,9 +45,14 @@ export function MilestoneActions({
   const [isLoading, setIsLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<
-    "start" | "submit" | "approve" | "reject" | "dispute" | "resolve" | null
+    "start" | "submit" | "approve" | "dispute" | "resolve" | null
   >(null);
-  const [rejectionReason, setRejectionReason] = useState("");
+  const [disputeReason, setDisputeReason] = useState("");
+
+  // Check if this project is terminated (has disputed milestones)
+  const isProjectTerminated = allMilestones.some(
+    (m) => m.status === "disputed" || m.status === "rejected",
+  );
 
   // Poll transaction receipt for confirmation
   const pollTransactionReceipt = async (txHash: string) => {
@@ -64,9 +69,7 @@ export function MilestoneActions({
         if (receipt) {
           return receipt;
         }
-      } catch (error) {
-        console.log("Waiting for transaction confirmation...", attempts + 1);
-      }
+      } catch (error) {}
 
       await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
       attempts++;
@@ -122,16 +125,16 @@ export function MilestoneActions({
 
   const openDialog = (type: typeof actionType) => {
     setActionType(type);
-    setRejectionReason(""); // Clear rejection reason when opening dialog
+    setDisputeReason(""); // Clear dispute reason when opening dialog
     setDialogOpen(true);
   };
 
   const handleAction = async () => {
-    // Validate rejection reason if rejecting
-    if (actionType === "reject" && !rejectionReason.trim()) {
+    // Validate dispute reason if disputing
+    if (actionType === "dispute" && !disputeReason.trim()) {
       toast({
         title: "Reason required",
-        description: "Please provide a reason for rejecting this milestone",
+        description: "Please provide a reason for disputing this milestone",
         variant: "destructive",
       });
       return;
@@ -183,11 +186,6 @@ export function MilestoneActions({
             // Set loading state
             setIsLoading(true);
 
-            console.log(
-              `Approving milestone ${milestoneIndex} for escrow ${escrowId}`,
-            );
-            console.log(`Milestone status: ${milestone.status}`);
-
             // Try to estimate gas first to catch potential issues
             try {
               const gasEstimate = await contract.estimateGas(
@@ -195,14 +193,13 @@ export function MilestoneActions({
                 escrowId,
                 milestoneIndex,
               );
-              console.log(`Gas estimate: ${gasEstimate}`);
             } catch (gasError) {
-              console.warn("Gas estimation failed:", gasError);
-              // Don't block the transaction if gas estimation fails
-              // Some networks or contract states might not support gas estimation
-              console.log(
-                "Proceeding with transaction despite gas estimation failure",
-              );
+              toast({
+                title: "Gas estimation failed",
+                description:
+                  "Could not estimate gas, but will attempt the transaction anyway.",
+                variant: "destructive",
+              });
             }
 
             // Add retry logic for failed transactions
@@ -244,10 +241,6 @@ export function MilestoneActions({
                 });
               }
             }
-
-            console.log(`Approval transaction hash: ${txHash}`);
-            console.log(`Transaction object type:`, typeof txHash);
-            console.log(`Transaction object:`, txHash);
 
             // Wait for transaction to be mined and confirmed
             try {
@@ -304,14 +297,9 @@ export function MilestoneActions({
                 throw new Error("Transaction failed on blockchain");
               }
             } catch (receiptError: any) {
-              console.error("Transaction confirmation failed:", receiptError);
-
               // If confirmation fails but we have a transaction hash, assume success
               // This handles cases where the transaction succeeds but confirmation polling fails
               if (txHash) {
-                console.log(
-                  "Transaction confirmation failed, but assuming success due to transaction hash",
-                );
                 toast({
                   title: "Milestone approved!",
                   description: "Payment has been released to the beneficiary",
@@ -398,24 +386,26 @@ export function MilestoneActions({
             setIsLoading(false);
           }
           break;
-        case "reject":
+        case "dispute":
           try {
-            console.log(
-              `Disputing milestone ${milestoneIndex} for escrow ${escrowId} (using dispute as rejection)`,
-            );
-            console.log(`Rejection reason: ${rejectionReason}`);
-            console.log(`Current milestone status: ${milestone.status}`);
-            console.log(`Milestone details:`, milestone);
+            // Validate milestone state before attempting dispute
+            if (milestone.status !== "submitted") {
+              toast({
+                title: "Invalid milestone state",
+                description:
+                  "This milestone is not in submitted state and cannot be disputed",
+                variant: "destructive",
+              });
+              return;
+            }
 
             txHash = await contract.send(
               "disputeMilestone",
               "no-value",
               escrowId,
               milestoneIndex,
-              rejectionReason,
+              disputeReason,
             );
-
-            console.log(`Rejection transaction hash: ${txHash}`);
 
             // Check if we got a valid transaction hash
             if (!txHash) {
@@ -430,7 +420,6 @@ export function MilestoneActions({
 
               // Check if txHash has a wait method (ethers.js transaction object)
               if (txHash && typeof txHash.wait === "function") {
-                console.log("Using txHash.wait() method for rejection");
                 receipt = await Promise.race([
                   txHash.wait(),
                   new Promise((_, reject) =>
@@ -442,34 +431,25 @@ export function MilestoneActions({
                 ]);
               } else {
                 // Fallback: use polling to check transaction status
-                console.log(
-                  "Using polling method for rejection transaction confirmation",
-                );
                 receipt = await pollTransactionReceipt(txHash);
               }
 
-              console.log(`Rejection transaction receipt:`, receipt);
-
               if (receipt.status === 1) {
                 toast({
-                  title: "Milestone rejected!",
+                  title: "Milestone disputed!",
                   description:
-                    "The milestone has been rejected and returned to freelancer",
+                    "The milestone has been disputed and will be reviewed by the admin",
                 });
 
-                // Close the modal immediately after successful rejection
+                // Close the modal immediately after successful dispute
                 setDialogOpen(false);
 
                 // Wait longer for blockchain state to fully update
                 await new Promise((resolve) => setTimeout(resolve, 5000));
 
-                // Dispatch event to notify freelancer dashboard of rejection
-                console.log("🎯 CLIENT: Dispatching milestoneRejected event", {
-                  escrowId,
-                  milestoneIndex,
-                });
+                // Dispatch event to notify freelancer dashboard of dispute
                 window.dispatchEvent(
-                  new CustomEvent("milestoneRejected", {
+                  new CustomEvent("milestoneDisputed", {
                     detail: { escrowId, milestoneIndex },
                   }),
                 );
@@ -479,20 +459,10 @@ export function MilestoneActions({
 
                 // Wait a bit more for data to refresh, then reload page
                 await new Promise((resolve) => setTimeout(resolve, 2000));
-
-                console.log(
-                  `Reloading page after rejection of milestone ${milestoneIndex}`,
-                );
-                console.log(`Page reload disabled for debugging`);
               } else {
                 throw new Error("Transaction failed on blockchain");
               }
             } catch (receiptError: any) {
-              console.error(
-                "Rejection transaction confirmation failed:",
-                receiptError,
-              );
-
               // Don't assume success if transaction failed on blockchain
               if (
                 receiptError.message?.includes(
@@ -502,7 +472,7 @@ export function MilestoneActions({
                 toast({
                   title: "Transaction failed",
                   description:
-                    "The milestone rejection failed on the blockchain. Please try again.",
+                    "The milestone dispute failed on the blockchain. Please try again.",
                   variant: "destructive",
                 });
               } else if (receiptError.message?.includes("timeout")) {
@@ -523,12 +493,11 @@ export function MilestoneActions({
               throw receiptError; // Re-throw to prevent success flow
             }
           } catch (error: any) {
-            console.error("Error rejecting milestone:", error);
             if (error.message?.includes("Gas estimation failed")) {
               toast({
                 title: "Transaction failed",
                 description:
-                  "Gas estimation failed. The milestone may not be in the correct state for rejection.",
+                  "Gas estimation failed. The milestone may not be in the correct state for dispute.",
                 variant: "destructive",
               });
             } else if (error.message?.includes("Internal JSON-RPC error")) {
@@ -540,10 +509,10 @@ export function MilestoneActions({
               });
             } else {
               toast({
-                title: "Rejection failed",
+                title: "Dispute failed",
                 description:
                   error.message ||
-                  "An unexpected error occurred while rejecting the milestone.",
+                  "An unexpected error occurred while disputing the milestone.",
                 variant: "destructive",
               });
             }
@@ -551,18 +520,6 @@ export function MilestoneActions({
           } finally {
             setIsLoading(false);
           }
-          break;
-        case "dispute":
-          txHash = await contract.send(
-            "disputeMilestone",
-            "no-value",
-            escrowId,
-          );
-          toast({
-            title: "Dispute raised",
-            description: "The escrow is now in dispute status",
-            variant: "destructive",
-          });
           break;
         case "resolve":
           // This would need additional UI for choosing resolution
@@ -612,20 +569,12 @@ export function MilestoneActions({
           icon: CheckCircle2,
           confirmText: "Approve & Release",
         };
-      case "reject":
-        return {
-          title: "Reject Milestone",
-          description: `Reject milestone ${milestoneIndex + 1}. The freelancer will be notified and can resubmit.`,
-          icon: AlertTriangle,
-          confirmText: "Reject",
-        };
       case "dispute":
         return {
-          title: "Raise Dispute",
-          description:
-            "This will pause the escrow and notify the admin. Use this if there's a disagreement about the work.",
-          icon: AlertTriangle,
-          confirmText: "Raise Dispute",
+          title: "Dispute Milestone",
+          description: `Dispute milestone ${milestoneIndex + 1}. This will notify the admin to review the dispute.`,
+          icon: Gavel,
+          confirmText: "Dispute",
         };
       case "resolve":
         return {
@@ -651,20 +600,22 @@ export function MilestoneActions({
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        {/* Start Work - Only beneficiary can start */}
-        {escrowStatus === "pending" && isBeneficiary && (
-          <Button
-            onClick={() => openDialog("start")}
-            size="sm"
-            className="gap-2"
-          >
-            <Play className="h-4 w-4" />
-            Start Work
-          </Button>
-        )}
+        {/* Start Work - Only beneficiary can start (disabled if terminated) */}
+        {escrowStatus === "pending" &&
+          isBeneficiary &&
+          !isProjectTerminated && (
+            <Button
+              onClick={() => openDialog("start")}
+              size="sm"
+              className="gap-2"
+            >
+              <Play className="h-4 w-4" />
+              Start Work
+            </Button>
+          )}
 
-        {/* Submit Milestone - Only beneficiary for pending milestones that can be submitted */}
-        {showSubmitButton && canSubmitMilestone() && (
+        {/* Submit Milestone - Only beneficiary for pending milestones that can be submitted (disabled if terminated) */}
+        {showSubmitButton && canSubmitMilestone() && !isProjectTerminated && (
           <Button
             onClick={() => openDialog("submit")}
             size="sm"
@@ -676,8 +627,8 @@ export function MilestoneActions({
           </Button>
         )}
 
-        {/* Approve Milestone - Only payer for submitted milestones */}
-        {canApproveMilestone() && (
+        {/* Approve Milestone - Only payer for submitted milestones (disabled if terminated) */}
+        {canApproveMilestone() && !isProjectTerminated && (
           <Button
             onClick={() => openDialog("approve")}
             size="sm"
@@ -690,19 +641,21 @@ export function MilestoneActions({
           </Button>
         )}
 
-        {/* Reject Milestone - Only payer for submitted milestones */}
-        {milestone.status === "submitted" && isPayer && (
-          <Button
-            onClick={() => openDialog("reject")}
-            size="sm"
-            variant="destructive"
-            className="gap-2"
-            disabled={isLoading}
-          >
-            <AlertTriangle className="h-4 w-4" />
-            {isLoading ? "Processing..." : "Reject"}
-          </Button>
-        )}
+        {/* Dispute Milestone - Only payer for submitted milestones (disabled if terminated) */}
+        {milestone.status === "submitted" &&
+          isPayer &&
+          !isProjectTerminated && (
+            <Button
+              onClick={() => openDialog("dispute")}
+              size="sm"
+              variant="destructive"
+              className="gap-2"
+              disabled={isLoading}
+            >
+              <Gavel className="h-4 w-4" />
+              {isLoading ? "Processing..." : "Dispute"}
+            </Button>
+          )}
 
         {/* Approved Status - Show approved badge */}
         {milestone.status === "approved" && (
@@ -713,31 +666,45 @@ export function MilestoneActions({
         )}
 
         {/* Rejected Status - Show rejected badge */}
-        {(milestone.status === "rejected" ||
-          milestone.status === "disputed") && (
+        {milestone.status === "rejected" && (
           <div className="flex items-center gap-2 text-red-600">
             <AlertTriangle className="h-4 w-4" />
             <span className="text-sm font-medium">Rejected</span>
           </div>
         )}
 
-        {/* Debug info */}
-        {(() => {
-          console.log(
-            `MilestoneActions - Status: ${milestone.status}, isPayer: ${isPayer}, isBeneficiary: ${isBeneficiary}`,
-          );
-          return null;
-        })()}
+        {/* Disputed Status - Show disputed badge with reason */}
+        {milestone.status === "disputed" && (
+          <div className="flex flex-col gap-2 text-orange-600">
+            <div className="flex items-center gap-2">
+              <Gavel className="h-4 w-4" />
+              <span className="text-sm font-medium">Disputed</span>
+            </div>
+            {milestone.disputeReason && (
+              <div className="text-xs text-orange-700 bg-orange-50 p-2 rounded border">
+                <strong>Reason:</strong> {milestone.disputeReason}
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Dispute - Only beneficiary can dispute, and only for submitted milestones */}
-        {milestone.status === "submitted" && isBeneficiary && (
+        {/* Terminated Project Status - Show terminated badge */}
+        {isProjectTerminated && (
+          <div className="flex items-center gap-2 text-gray-600">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="text-sm font-medium">Project Terminated</span>
+          </div>
+        )}
+
+        {/* Dispute - Only payer can dispute submitted milestones */}
+        {milestone.status === "submitted" && isPayer && (
           <Button
             onClick={() => openDialog("dispute")}
             size="sm"
             variant="destructive"
             className="gap-2"
           >
-            <AlertTriangle className="h-4 w-4" />
+            <Gavel className="h-4 w-4" />
             Dispute
           </Button>
         )}
@@ -787,23 +754,23 @@ export function MilestoneActions({
             </div>
           </div>
 
-          {/* Rejection reason input for reject action */}
-          {actionType === "reject" && (
+          {/* Dispute reason input for dispute action */}
+          {actionType === "dispute" && (
             <div className="my-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Reason for rejection (required)
+                Reason for dispute (required)
               </label>
               <textarea
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                placeholder="Please explain why this milestone is being rejected so the freelancer can make improvements..."
-                className="w-full p-3 border border-gray-300 rounded-md resize-none"
+                value={disputeReason}
+                onChange={(e) => setDisputeReason(e.target.value)}
+                placeholder="Please explain why you are disputing this milestone..."
+                className="w-full p-3 border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 rows={3}
                 required
               />
-              {!rejectionReason.trim() && (
+              {!disputeReason.trim() && (
                 <p className="text-sm text-red-600 mt-1">
-                  Please provide a reason for rejection
+                  Please provide a reason for the dispute
                 </p>
               )}
             </div>

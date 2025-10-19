@@ -33,18 +33,6 @@ export function MilestoneApprovalPanel({
   );
 
   // Debug: Log all milestone statuses
-  console.log(
-    "MilestoneApprovalPanel - All milestones:",
-    escrow.milestones.map((m) => ({
-      description: m.description,
-      status: m.status,
-      amount: m.amount,
-    })),
-  );
-  console.log(
-    "MilestoneApprovalPanel - Submitted milestones:",
-    submittedMilestones.length,
-  );
 
   if (submittedMilestones.length === 0) {
     return (
@@ -176,12 +164,12 @@ function MilestoneApprovalItem({
           <Button
             onClick={() => setShowRejectionForm(true)}
             disabled={isSubmittingThis || isSubmitting}
-            variant="outline"
-            className="flex-1 border-red-300 text-red-600 hover:bg-red-50"
+            variant="destructive"
+            className="flex-1"
             size="sm"
           >
             <XCircle className="h-4 w-4 mr-2" />
-            Reject
+            Dispute
           </Button>
         </div>
       ) : (
@@ -189,7 +177,7 @@ function MilestoneApprovalItem({
           <Textarea
             value={rejectionReason}
             onChange={(e) => setRejectionReason(e.target.value)}
-            placeholder="Please provide feedback on what needs to be improved..."
+            placeholder="Please explain why you are disputing this milestone..."
             className="text-sm"
             rows={3}
           />
@@ -201,7 +189,7 @@ function MilestoneApprovalItem({
               size="sm"
             >
               <XCircle className="h-4 w-4 mr-2" />
-              {isSubmitting ? "Rejecting..." : "Reject with Feedback"}
+              {isSubmitting ? "Disputing..." : "Submit Dispute"}
             </Button>
             <Button
               onClick={() => {

@@ -51,7 +51,6 @@ export default function JobsPage() {
       fetchOpenJobs();
       countOngoingProjects();
     } else {
-      console.log("Wallet not connected, waiting for connection...");
     }
     checkContractPauseStatus();
   }, [wallet.address]);
@@ -74,7 +73,6 @@ export default function JobsPage() {
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       const paused = await contract.call("paused");
-      console.log("Contract pause status:", paused, "type:", typeof paused);
 
       let isPaused = false;
 
@@ -86,18 +84,14 @@ export default function JobsPage() {
       } else if (paused && typeof paused === "object") {
         try {
           const pausedValue = paused.toString();
-          console.log("Paused proxy toString():", pausedValue);
           isPaused = pausedValue === "true" || pausedValue === "1";
         } catch (e) {
-          console.warn("Could not parse paused proxy object:", e);
           isPaused = false; // Default to not paused
         }
       }
 
-      console.log("Is paused (jobs page):", isPaused);
       setIsContractPaused(isPaused);
     } catch (error) {
-      console.error("Error checking contract pause status:", error);
       setIsContractPaused(false);
     }
   };
@@ -117,7 +111,6 @@ export default function JobsPage() {
         for (let i = 1; i < escrowCount; i++) {
           try {
             const escrowSummary = await contract.call("getEscrowSummary", i);
-            console.log(`Escrow ${i} summary:`, escrowSummary);
 
             // Check if current user is the beneficiary (freelancer)
             const beneficiaryAddress = escrowSummary[1];
@@ -127,78 +120,52 @@ export default function JobsPage() {
               userAddress &&
               beneficiaryAddress.toLowerCase() === userAddress.toLowerCase();
 
-            console.log(
-              `Escrow ${i}: beneficiary=${beneficiaryAddress}, user=${userAddress}, isBeneficiary=${isBeneficiary}`,
-            );
-
             if (isBeneficiary) {
               const status = Number(escrowSummary[0]);
-              console.log(
-                `Escrow ${i}: status=${status}, beneficiary=${escrowSummary[1]}, user=${wallet.address}`,
-              );
               // Count active and pending projects (status 0 = pending, 1 = active)
               // Also count any project that's not completed, disputed, or cancelled
               if (status === 0 || status === 1) {
                 ongoingCount++;
-                console.log(
-                  `Found ongoing project ${i} (status: ${status}), total count: ${ongoingCount}`,
-                );
               } else {
-                console.log(
-                  `Escrow ${i} not counted - status: ${status} (${getStatusFromNumber(status)})`,
-                );
               }
             } else {
-              console.log(`Escrow ${i}: User is not beneficiary`);
             }
           } catch (error) {
-            console.log(`Escrow ${i} error:`, error);
             // Skip escrows that don't exist or can't be accessed
             continue;
           }
         }
       }
 
-      console.log(`Freelancer has ${ongoingCount} ongoing projects`);
       setOngoingProjectsCount(ongoingCount);
     } catch (error) {
-      console.error("Error counting ongoing projects:", error);
       setOngoingProjectsCount(0);
     }
   };
 
   const checkApplicationStatus = async () => {
     try {
-      console.log("🔍 Checking application status for all jobs...");
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       const applicationStatus: Record<string, boolean> = {};
 
       for (const job of jobs) {
         try {
-          console.log(`🔍 Checking application status for job ${job.id}...`);
           // Check if user has applied to this job
           const hasUserApplied = await contract.call(
             "hasUserApplied",
             job.id,
             wallet.address,
           );
-          console.log(`✅ Job ${job.id} - hasUserApplied:`, hasUserApplied);
           applicationStatus[job.id] = Boolean(hasUserApplied);
         } catch (error) {
-          console.error(
-            `❌ Error checking application status for job ${job.id}:`,
-            error,
-          );
+          // Error checking application status
           // If we can't check, assume they haven't applied to be safe
           applicationStatus[job.id] = false;
         }
       }
 
-      console.log("📋 Final application status:", applicationStatus);
       setHasApplied(applicationStatus);
-    } catch (error) {
-      console.error("❌ Error checking application status:", error);
-    }
+    } catch (error) {}
   };
 
   const handleRefresh = async () => {
@@ -227,12 +194,6 @@ export default function JobsPage() {
       // Get total number of escrows
       const totalEscrows = await contract.call("nextEscrowId");
       const escrowCount = Number(totalEscrows);
-      console.log(
-        "Jobs page - Total escrows from contract:",
-        totalEscrows,
-        "Count:",
-        escrowCount,
-      );
 
       const openJobs: Escrow[] = [];
 
@@ -254,10 +215,6 @@ export default function JobsPage() {
                 escrowSummary[0].toLowerCase() ===
                 wallet.address?.toLowerCase();
 
-              console.log(
-                `Job ${i} - Depositor: ${escrowSummary[0]}, Wallet: ${wallet.address}, IsJobCreator: ${isJobCreator}`,
-              );
-
               // Check if current user has already applied to this job
               let userHasApplied = false;
               if (wallet.address && !isJobCreator) {
@@ -266,16 +223,6 @@ export default function JobsPage() {
                     "hasUserApplied",
                     i,
                     wallet.address,
-                  );
-                  console.log(
-                    `hasUserApplied result for job ${i}:`,
-                    hasAppliedResult,
-                    "Type:",
-                    typeof hasAppliedResult,
-                    "Raw value:",
-                    hasAppliedResult?.[0],
-                    "toString:",
-                    hasAppliedResult?.toString(),
                   );
 
                   // Handle different possible return types - be more strict about what counts as "applied"
@@ -292,14 +239,7 @@ export default function JobsPage() {
                         resultValue === "true" ||
                         resultValue === 1 ||
                         resultValue === "1";
-                      console.log(
-                        `Parsed Proxy(Result) value:`,
-                        resultValue,
-                        "→",
-                        userHasApplied,
-                      );
                     } catch (e) {
-                      console.log("Error parsing Proxy(Result):", e);
                       userHasApplied = false;
                     }
                   } else {
@@ -308,20 +248,15 @@ export default function JobsPage() {
                       hasAppliedResult === "true" ||
                       hasAppliedResult === 1;
                   }
-                  console.log(`User has applied to job ${i}:`, userHasApplied);
 
                   // Update the hasApplied state for this job
                   setHasApplied((prev) => ({
                     ...prev,
                     [i]: userHasApplied,
                   }));
-                  console.log(`Updated hasApplied[${i}] to:`, userHasApplied);
 
                   // If hasUserApplied returned false, try to double-check with applications list
                   if (!userHasApplied) {
-                    console.log(
-                      `🔍 Double-checking job ${i} applications since hasUserApplied returned false`,
-                    );
                     try {
                       // Try to get applications with a smaller limit first
                       let applications = null;
@@ -332,15 +267,7 @@ export default function JobsPage() {
                           0, // offset
                           1, // limit - start with 1
                         );
-                        console.log(
-                          `Applications fetch successful for job ${i}:`,
-                          applications,
-                        );
                       } catch (error1) {
-                        console.log(
-                          `First attempt failed for job ${i}, trying with limit 10:`,
-                          error1,
-                        );
                         try {
                           applications = await contract.call(
                             "getApplicationsPage",
@@ -348,15 +275,7 @@ export default function JobsPage() {
                             0, // offset
                             10, // limit - try 10
                           );
-                          console.log(
-                            `Second attempt successful for job ${i}:`,
-                            applications,
-                          );
                         } catch (error2) {
-                          console.log(
-                            `All attempts failed for job ${i}:`,
-                            error2,
-                          );
                           throw error2;
                         }
                       }
@@ -368,10 +287,6 @@ export default function JobsPage() {
                             app.freelancer.toLowerCase() ===
                               wallet.address?.toLowerCase(),
                         );
-                        console.log(
-                          `User found in applications for job ${i}:`,
-                          userInApplications,
-                        );
 
                         if (userInApplications) {
                           userHasApplied = true;
@@ -379,30 +294,18 @@ export default function JobsPage() {
                             ...prev,
                             [i]: true,
                           }));
-                          console.log(
-                            `Corrected hasApplied[${i}] to true after direct check`,
-                          );
                         }
                       }
                     } catch (appError) {
-                      console.warn(
-                        `Could not fetch applications for job ${i} during double-check:`,
-                        appError,
-                      );
+                      // Could not fetch applications during double-check
                     }
                   }
                 } catch (error) {
-                  console.error(
-                    `Error checking application status for job ${i}:`,
-                    error,
-                  );
+                  // Error checking application status
                   // If check fails, assume they haven't applied
                   userHasApplied = false;
                 }
               } else {
-                console.log(
-                  `Skipping application check for job ${i} - isJobCreator: ${isJobCreator}, wallet: ${wallet.address}`,
-                );
               }
 
               // Fetch application count for this job
@@ -415,12 +318,8 @@ export default function JobsPage() {
                   100, // limit
                 );
                 applicationCount = applications ? applications.length : 0;
-                console.log(`Job ${i} has ${applicationCount} applications`);
               } catch (error) {
-                console.warn(
-                  `Could not fetch applications for job ${i}:`,
-                  error,
-                );
+                // Could not fetch applications
                 applicationCount = 0;
               }
 
@@ -468,7 +367,6 @@ export default function JobsPage() {
       // Set the actual jobs from the contract
       setJobs(openJobs);
     } catch (error) {
-      console.error("Error fetching jobs:", error);
       toast({
         title: "Failed to load jobs",
         description: "Could not fetch available jobs from the blockchain",
@@ -485,12 +383,6 @@ export default function JobsPage() {
     proposedTimeline: string,
   ) => {
     if (!job || !wallet.isConnected) return;
-
-    console.log("🎯 handleApply called with:", {
-      jobId: job.id,
-      coverLetter: coverLetter,
-      proposedTimeline: proposedTimeline,
-    });
 
     // Check if freelancer has reached the maximum number of ongoing projects (3)
     if (ongoingProjectsCount >= 3) {
@@ -519,7 +411,6 @@ export default function JobsPage() {
       if (!contract) return;
 
       // Double-check with blockchain to prevent duplicate applications
-      console.log("🔍 Checking if user has already applied to job", job.id);
 
       let userHasApplied = false;
 
@@ -530,7 +421,6 @@ export default function JobsPage() {
           job.id,
           wallet.address,
         );
-        console.log("hasUserApplied result:", hasUserAppliedResult);
 
         // Handle different return types including Proxy(Result) objects
         if (hasUserAppliedResult && typeof hasUserAppliedResult === "object") {
@@ -542,9 +432,7 @@ export default function JobsPage() {
               resultValue === "true" ||
               resultValue === 1 ||
               resultValue === "1";
-            console.log("Parsed hasUserApplied result:", userHasApplied);
           } catch (e) {
-            console.log("Error parsing hasUserApplied result:", e);
             userHasApplied = false;
           }
         } else {
@@ -554,23 +442,18 @@ export default function JobsPage() {
             hasUserAppliedResult === 1;
         }
       } catch (checkError) {
-        console.warn("hasUserApplied function failed:", checkError);
         userHasApplied = false;
       }
 
       // If hasUserApplied failed or returned false, try alternative method
       if (!userHasApplied) {
         try {
-          console.log(
-            "🔍 Trying alternative method - checking applications directly",
-          );
           const applications = await contract.call(
             "getApplicationsPage",
             job.id,
             0, // offset
             100, // limit
           );
-          console.log("Applications data:", applications);
 
           if (applications && Array.isArray(applications)) {
             // Check if current user is in the applications list
@@ -581,15 +464,11 @@ export default function JobsPage() {
                 freelancerAddress.toLowerCase() === wallet.address.toLowerCase()
               );
             });
-            console.log("Alternative check result:", userHasApplied);
           }
-        } catch (altError) {
-          console.warn("Alternative application check failed:", altError);
-        }
+        } catch (altError) {}
       }
 
       if (userHasApplied) {
-        console.log("❌ User has already applied to this job");
         toast({
           title: "Already Applied",
           description: "You have already applied to this job.",
@@ -598,9 +477,6 @@ export default function JobsPage() {
         setApplying(false);
         return;
       } else {
-        console.log(
-          "✅ User has not applied to this job, proceeding with application",
-        );
       }
 
       // Call the smart contract applyToJob function
@@ -634,7 +510,6 @@ export default function JobsPage() {
       // Refresh the ongoing projects count
       await countOngoingProjects();
     } catch (error) {
-      console.error("Error applying to job:", error);
       toast({
         title: "Application Failed",
         description: "Could not submit your application. Please try again.",

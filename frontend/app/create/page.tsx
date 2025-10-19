@@ -67,21 +67,15 @@ export default function CreateEscrowPage() {
       } else if (paused && typeof paused === "object") {
         try {
           const pausedValue = paused.toString();
-          console.log("Paused proxy toString() (create page):", pausedValue);
           isPaused = pausedValue === "true" || pausedValue === "1";
         } catch (e) {
-          console.warn("Could not parse paused proxy object (create page):", e);
           isPaused = false; // Default to not paused
         }
       }
 
-      console.log("Is paused (create page):", isPaused);
       setIsContractPaused(isPaused);
     } catch (error) {
-      console.error(
-        "Error checking contract pause status (create page):",
-        error,
-      );
+      console.log("Error checking contract pause status (create page):", error);
       setIsContractPaused(false);
     }
   };
@@ -349,24 +343,17 @@ export default function CreateEscrowPage() {
           Math.floor(Number.parseFloat(formData.totalBudget) * 10 ** 18),
         ).toString();
 
-        console.log("ERC20 Approval Details:");
-        console.log("- Token contract:", formData.token);
-        console.log("- SecureFlow contract:", CONTRACTS.SECUREFLOW_ESCROW);
-        console.log("- Approval amount (wei):", totalAmountInWei);
-        console.log("- Approval amount (tokens):", formData.totalBudget);
-
         // Test if token contract is working
         try {
           const tokenName = await tokenContract.call("name");
           const tokenSymbol = await tokenContract.call("symbol");
           const tokenDecimals = await tokenContract.call("decimals");
-          console.log("Token info:", {
+          console.log({
             name: tokenName,
             symbol: tokenSymbol,
             decimals: tokenDecimals,
           });
         } catch (tokenError) {
-          console.error("Token contract error:", tokenError);
           throw new Error(
             "Token contract is not working properly. Please check the token address.",
           );
@@ -375,7 +362,6 @@ export default function CreateEscrowPage() {
         // Check token balance first
         try {
           const balance = await tokenContract.call("balanceOf", wallet.address);
-          console.log("Token balance:", balance);
           console.log(
             "Balance in tokens:",
             (Number(balance) / 10 ** 18).toFixed(2),
@@ -387,7 +373,6 @@ export default function CreateEscrowPage() {
             );
           }
         } catch (balanceError) {
-          console.error("Error checking token balance:", balanceError);
           throw new Error(
             "Failed to check token balance. Please ensure you have enough tokens or try using native MON tokens instead.",
           );
@@ -420,10 +405,6 @@ export default function CreateEscrowPage() {
         ? ZERO_ADDRESS
         : formData.beneficiary || ZERO_ADDRESS;
 
-      console.log("Beneficiary address:", beneficiaryAddress);
-      console.log("Is open job:", isOpenJob);
-      console.log("Form beneficiary:", formData.beneficiary);
-
       let txHash;
 
       if (formData.token === ZERO_ADDRESS) {
@@ -439,16 +420,9 @@ export default function CreateEscrowPage() {
           BigInt(Math.floor(Number.parseFloat(m.amount) * 10 ** 18)).toString(),
         );
 
-        console.log("Creating escrow with:");
-        console.log("- Total budget:", formData.totalBudget);
         console.log(
           "- Milestone amounts:",
           formData.milestones.map((m) => m.amount),
-        );
-        console.log("- Milestone amounts in wei:", milestoneAmountsInWei);
-        console.log(
-          "- Total milestone sum:",
-          formData.milestones.reduce((sum, m) => sum + Number(m.amount), 0),
         );
 
         const arbiters = ["0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41"]; // Default arbiter
@@ -479,13 +453,10 @@ export default function CreateEscrowPage() {
           BigInt(Math.floor(Number.parseFloat(m.amount) * 10 ** 18)).toString(),
         );
 
-        console.log("Creating ERC20 escrow with:");
-        console.log("- Total budget:", formData.totalBudget);
         console.log(
           "- Milestone amounts:",
           formData.milestones.map((m) => m.amount),
         );
-        console.log("- Milestone amounts in wei:", milestoneAmountsInWei);
         console.log(
           "- Total milestone sum:",
           formData.milestones.reduce((sum, m) => sum + Number(m.amount), 0),
@@ -530,9 +501,7 @@ export default function CreateEscrowPage() {
           if (receipt) {
             break;
           }
-        } catch (error) {
-          console.log("Waiting for transaction confirmation...", attempts + 1);
-        }
+        } catch (error) {}
 
         await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
         attempts++;
@@ -561,7 +530,6 @@ export default function CreateEscrowPage() {
         throw new Error("Transaction failed on blockchain");
       }
     } catch (error: any) {
-      console.error("Error creating escrow:", error);
       toast({
         title: "Creation failed",
         description: error.message || "Failed to create escrow",

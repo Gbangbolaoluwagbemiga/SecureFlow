@@ -54,7 +54,6 @@ export function useFreelancerStatus() {
 
       setIsFreelancer(false);
     } catch (error) {
-      console.error("Error checking freelancer status:", error);
       setIsFreelancer(false);
     } finally {
       setLoading(false);

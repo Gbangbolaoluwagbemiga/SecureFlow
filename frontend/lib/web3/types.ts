@@ -5,6 +5,7 @@ export interface Milestone {
   submittedAt?: number;
   approvedAt?: number;
   rejectionReason?: string;
+  disputeReason?: string;
 }
 
 export interface Escrow {
