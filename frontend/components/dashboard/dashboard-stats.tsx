@@ -8,6 +8,9 @@ interface DashboardStatsProps {
     totalAmount: string;
     releasedAmount: string;
     status: string;
+    milestones: Array<{
+      status: string;
+    }>;
   }>;
 }
 
@@ -22,14 +25,26 @@ export function DashboardStats({ escrows }: DashboardStatsProps) {
     0,
   );
 
+  // Helper function to check if an escrow is terminated
+  const isEscrowTerminated = (escrow: any) => {
+    return escrow.milestones.some(
+      (milestone: any) =>
+        milestone.status === "disputed" || milestone.status === "rejected",
+    );
+  };
+
+  // Count active projects (excluding terminated ones)
   const activeProjects = escrows.filter(
-    (escrow) => escrow.status === "active",
+    (escrow) => escrow.status === "active" && !isEscrowTerminated(escrow),
   ).length;
+
   const completedProjects = escrows.filter(
     (escrow) => escrow.status === "completed",
   ).length;
+
+  // Count disputed projects (including terminated ones)
   const disputedProjects = escrows.filter(
-    (escrow) => escrow.status === "disputed",
+    (escrow) => escrow.status === "disputed" || isEscrowTerminated(escrow),
   ).length;
 
   return (
