@@ -57,6 +57,7 @@ interface Escrow {
   milestones: Milestone[];
   projectDescription: string;
   isOpenJob: boolean;
+  milestoneCount: number;
 }
 
 interface Milestone {
@@ -131,7 +132,23 @@ export default function FreelancerPage() {
   const fetchFreelancerEscrows = async () => {
     setLoading(true);
     try {
+      if (!wallet.isConnected || !wallet.address) {
+        console.log("Wallet not connected, skipping fetch");
+        return;
+      }
+
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+
+      if (!contract) {
+        console.error("Contract not available");
+        toast({
+          title: "Contract Error",
+          description:
+            "Smart contract is not available. Please check your connection.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       // Get total number of escrows
       const totalEscrows = await contract.call("nextEscrowId");
@@ -152,6 +169,22 @@ export default function FreelancerPage() {
             console.log(`Fetching escrow ${i} for freelancer...`);
             const escrowSummary = await contract.call("getEscrowSummary", i);
             console.log(`Escrow ${i} data:`, escrowSummary);
+
+            // Handle potential contract call failures
+            if (escrowSummary === null || escrowSummary === undefined) {
+              console.log(`Escrow ${i} returned null/undefined, skipping...`);
+              continue;
+            }
+
+            // Check if escrowSummary is valid
+            if (
+              !escrowSummary ||
+              !Array.isArray(escrowSummary) ||
+              escrowSummary.length === 0
+            ) {
+              console.log(`Escrow ${i} has invalid data, skipping...`);
+              continue;
+            }
 
             // Check if current user is the beneficiary
             const isBeneficiary =
@@ -564,6 +597,11 @@ export default function FreelancerPage() {
             }
           } catch (error) {
             console.error(`Error fetching escrow ${i}:`, error);
+            // Log more details about the error
+            if (error instanceof Error) {
+              console.error(`Error message: ${error.message}`);
+              console.error(`Error name: ${error.name}`);
+            }
             continue;
           }
         }
@@ -609,7 +647,11 @@ export default function FreelancerPage() {
         description: "Submitting transaction to start work on this escrow",
       });
 
-      const txHash = await contract.send("startWork", "no-value", escrowId);
+      const txHash = await contract.send(
+        "startWork",
+        "no-value",
+        Number(escrowId),
+      );
 
       toast({
         title: "Work started!",
@@ -1327,6 +1369,52 @@ export default function FreelancerPage() {
                                 <div className="text-sm font-semibold text-green-600 dark:text-green-400">
                                   {formatAmount(milestone.amount)} tokens
                                 </div>
+
+                                {/* Show rejected status if milestone is rejected or disputed */}
+                                {(milestone.status === "rejected" ||
+                                  milestone.status === "disputed") && (
+                                  <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <Badge className="bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200">
+                                        Rejected - Needs Improvement
+                                      </Badge>
+                                    </div>
+                                    <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+                                      Your milestone has been rejected by the
+                                      client. Please review the feedback and
+                                      resubmit with improvements.
+                                    </p>
+                                    <div className="flex gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          // TODO: Show rejection reason modal
+                                          console.log(
+                                            "Show rejection reason for milestone",
+                                            index,
+                                          );
+                                        }}
+                                        className="border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800"
+                                      >
+                                        View Feedback
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        onClick={() => {
+                                          // TODO: Allow resubmission
+                                          console.log(
+                                            "Resubmit milestone",
+                                            index,
+                                          );
+                                        }}
+                                        className="bg-red-600 hover:bg-red-700 text-white"
+                                      >
+                                        Resubmit
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -1573,52 +1661,6 @@ export default function FreelancerPage() {
                                   >
                                     Dispute
                                   </Button>
-                                </div>
-                              )}
-
-                              {/* Show rejected status if milestone is rejected or disputed */}
-                              {(milestone.status === "rejected" ||
-                                milestone.status === "disputed") && (
-                                <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <Badge className="bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200">
-                                      Rejected - Needs Improvement
-                                    </Badge>
-                                  </div>
-                                  <p className="text-sm text-red-700 dark:text-red-300 mb-3">
-                                    Your milestone has been rejected by the
-                                    client. Please review the feedback and
-                                    resubmit with improvements.
-                                  </p>
-                                  <div className="flex gap-2">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => {
-                                        // TODO: Show rejection reason modal
-                                        console.log(
-                                          "Show rejection reason for milestone",
-                                          currentMilestoneIndex,
-                                        );
-                                      }}
-                                      className="border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800"
-                                    >
-                                      View Feedback
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      onClick={() => {
-                                        // TODO: Allow resubmission
-                                        console.log(
-                                          "Resubmit milestone",
-                                          currentMilestoneIndex,
-                                        );
-                                      }}
-                                      className="bg-red-600 hover:bg-red-700 text-white"
-                                    >
-                                      Resubmit
-                                    </Button>
-                                  </div>
                                 </div>
                               )}
                             </div>

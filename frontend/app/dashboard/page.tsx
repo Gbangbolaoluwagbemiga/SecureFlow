@@ -8,15 +8,20 @@ import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
 import type { Escrow, Milestone } from "@/lib/web3/types";
 import { motion } from "framer-motion";
-import { Wallet, CheckCircle2, AlertCircle, FileText } from "lucide-react";
+import {
+  Wallet,
+  CheckCircle2,
+  AlertCircle,
+  FileText,
+  Clock,
+  TrendingUp,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { DashboardStats } from "@/components/dashboard/dashboard-stats";
 import { EscrowCard } from "@/components/dashboard/escrow-card";
 import { DashboardLoading } from "@/components/dashboard/dashboard-loading";
-import { RealTimeEscrows } from "@/components/envio/real-time-escrows";
-import { AnalyticsDashboard } from "@/components/envio/analytics-dashboard";
 
 export default function DashboardPage() {
   const { wallet, getContract } = useWeb3();
@@ -782,6 +787,7 @@ export default function DashboardPage() {
         await new Promise((resolve) => setTimeout(resolve, 3000));
 
         // Add debugging for payment tracking
+        const milestone = escrow.milestones[milestoneIndex];
         console.log("🔍 Debugging payment after milestone approval:");
         console.log("- Raw milestone amount:", milestone.amount);
         console.log(
@@ -814,6 +820,11 @@ export default function DashboardPage() {
 
         // Dispatch event to notify other components
         window.dispatchEvent(new CustomEvent("milestoneApproved"));
+
+        // Reload the page to ensure UI is fully updated
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
       } else {
         throw new Error("Transaction failed on blockchain");
       }
@@ -897,6 +908,11 @@ export default function DashboardPage() {
           description: "The freelancer has been notified and can resubmit",
         });
         await fetchUserEscrows();
+
+        // Reload the page to ensure UI is fully updated
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
       } else {
         throw new Error("Transaction failed on blockchain");
       }
@@ -961,7 +977,7 @@ export default function DashboardPage() {
       <div className="min-h-screen py-12">
         <div className="container mx-auto px-4">
           <DashboardHeader />
-          <DashboardLoading />
+          <DashboardLoading isConnected={wallet.isConnected} />
         </div>
       </div>
     );
@@ -989,14 +1005,26 @@ export default function DashboardPage() {
                 escrow={escrow}
                 index={index}
                 expandedEscrow={expandedEscrow}
-                submittingMilestone={submittingMilestone === escrow.id}
+                submittingMilestone={
+                  submittingMilestone === escrow.id ? "true" : "false"
+                }
                 onToggleExpanded={() =>
                   setExpandedEscrow(
                     expandedEscrow === escrow.id ? null : escrow.id,
                   )
                 }
                 onApproveMilestone={approveMilestone}
-                onRejectMilestone={rejectMilestone}
+                onRejectMilestone={(
+                  escrowId: string,
+                  milestoneIndex: number,
+                ) => {
+                  // For now, use empty reason - this should be handled by the component
+                  rejectMilestone(
+                    escrowId,
+                    milestoneIndex,
+                    "No reason provided",
+                  );
+                }}
                 onDisputeMilestone={disputeMilestone}
                 onStartWork={startWork}
                 onDispute={openDispute}
