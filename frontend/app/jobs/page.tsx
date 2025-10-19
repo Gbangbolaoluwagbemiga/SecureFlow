@@ -56,6 +56,13 @@ export default function JobsPage() {
     checkContractPauseStatus();
   }, [wallet.address]);
 
+  // Check application status when jobs are loaded
+  useEffect(() => {
+    if (wallet.address && jobs.length > 0) {
+      checkApplicationStatus();
+    }
+  }, [wallet.address, jobs]);
+
   // Also refresh project count when component mounts
   useEffect(() => {
     if (wallet.address) {
@@ -160,10 +167,48 @@ export default function JobsPage() {
     }
   };
 
+  const checkApplicationStatus = async () => {
+    try {
+      console.log("🔍 Checking application status for all jobs...");
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+      const applicationStatus: Record<string, boolean> = {};
+
+      for (const job of jobs) {
+        try {
+          console.log(`🔍 Checking application status for job ${job.id}...`);
+          // Check if user has applied to this job
+          const hasUserApplied = await contract.call(
+            "hasUserApplied",
+            job.id,
+            wallet.address,
+          );
+          console.log(`✅ Job ${job.id} - hasUserApplied:`, hasUserApplied);
+          applicationStatus[job.id] = Boolean(hasUserApplied);
+        } catch (error) {
+          console.error(
+            `❌ Error checking application status for job ${job.id}:`,
+            error,
+          );
+          // If we can't check, assume they haven't applied to be safe
+          applicationStatus[job.id] = false;
+        }
+      }
+
+      console.log("📋 Final application status:", applicationStatus);
+      setHasApplied(applicationStatus);
+    } catch (error) {
+      console.error("❌ Error checking application status:", error);
+    }
+  };
+
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
       await Promise.all([fetchOpenJobs(), countOngoingProjects()]);
+      // Check application status after refreshing jobs
+      if (wallet.address && jobs.length > 0) {
+        await checkApplicationStatus();
+      }
     } finally {
       setRefreshing(false);
     }
@@ -434,8 +479,18 @@ export default function JobsPage() {
     }
   };
 
-  const handleApply = async () => {
-    if (!selectedJob || !wallet.isConnected) return;
+  const handleApply = async (
+    job: Escrow,
+    coverLetter: string,
+    proposedTimeline: string,
+  ) => {
+    if (!job || !wallet.isConnected) return;
+
+    console.log("🎯 handleApply called with:", {
+      jobId: job.id,
+      coverLetter: coverLetter,
+      proposedTimeline: proposedTimeline,
+    });
 
     // Check if freelancer has reached the maximum number of ongoing projects (3)
     if (ongoingProjectsCount >= 3) {
@@ -449,7 +504,7 @@ export default function JobsPage() {
     }
 
     // Check if user has already applied to this job (local state)
-    if (hasApplied[selectedJob.id]) {
+    if (hasApplied[job.id]) {
       toast({
         title: "Already Applied",
         description: "You have already applied to this job.",
@@ -464,10 +519,7 @@ export default function JobsPage() {
       if (!contract) return;
 
       // Double-check with blockchain to prevent duplicate applications
-      console.log(
-        "🔍 Checking if user has already applied to job",
-        selectedJob.id,
-      );
+      console.log("🔍 Checking if user has already applied to job", job.id);
 
       let userHasApplied = false;
 
@@ -475,7 +527,7 @@ export default function JobsPage() {
         // First try the hasUserApplied function
         const hasUserAppliedResult = await contract.call(
           "hasUserApplied",
-          selectedJob.id,
+          job.id,
           wallet.address,
         );
         console.log("hasUserApplied result:", hasUserAppliedResult);
@@ -514,7 +566,7 @@ export default function JobsPage() {
           );
           const applications = await contract.call(
             "getApplicationsPage",
-            selectedJob.id,
+            job.id,
             0, // offset
             100, // limit
           );
@@ -555,7 +607,7 @@ export default function JobsPage() {
       await contract.send(
         "applyToJob",
         "no-value",
-        selectedJob.id,
+        job.id,
         coverLetter,
         proposedTimeline,
       );
@@ -573,7 +625,7 @@ export default function JobsPage() {
       // Update the application status for this specific job
       setHasApplied((prev) => ({
         ...prev,
-        [selectedJob.id]: true,
+        [job.id]: true,
       }));
 
       // Refresh the jobs list to update application counts

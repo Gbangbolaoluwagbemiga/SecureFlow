@@ -18,19 +18,22 @@ interface ApplicationCardProps {
   application: Application;
   index: number;
   onApprove: (freelancer: string) => void;
-  onReject: (freelancer: string) => void;
   approving: boolean;
-  rejecting: boolean;
 }
 
 export function ApplicationCard({
   application,
   index,
   onApprove,
-  onReject,
   approving,
-  rejecting,
 }: ApplicationCardProps) {
+  console.log(`📋 ApplicationCard ${index} data:`, {
+    freelancerAddress: application.freelancerAddress,
+    proposedTimeline: application.proposedTimeline,
+    coverLetter: application.coverLetter,
+    appliedAt: application.appliedAt,
+  });
+
   return (
     <Card key={index} className="p-4 border-border/40">
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -41,19 +44,34 @@ export function ApplicationCard({
               {application.freelancerAddress.slice(0, 6)}...
               {application.freelancerAddress.slice(-4)}
             </span>
-            <Badge variant="outline" className="text-xs">
+            <Badge
+              variant="secondary"
+              className="text-xs bg-blue-100 text-blue-800"
+            >
               <Calendar className="h-3 w-3 mr-1" />
               {isNaN(application.proposedTimeline) ||
               application.proposedTimeline === 0
-                ? "Not specified"
-                : `${application.proposedTimeline} days`}
+                ? "Timeline not specified"
+                : `Proposes ${application.proposedTimeline} days`}
             </Badge>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Cover Letter:</Label>
-            <div className="bg-muted/20 rounded-lg p-3 text-sm break-words">
-              {application.coverLetter || "No cover letter provided"}
+          <div className="space-y-3">
+            <div>
+              <Label className="text-sm font-medium">Proposed Timeline:</Label>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm font-medium text-blue-800">
+                {isNaN(application.proposedTimeline) ||
+                application.proposedTimeline === 0
+                  ? "Timeline not specified by freelancer"
+                  : `${application.proposedTimeline} days`}
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium">Cover Letter:</Label>
+              <div className="bg-muted/20 rounded-lg p-3 text-sm break-words">
+                {application.coverLetter || "No cover letter provided"}
+              </div>
             </div>
           </div>
 
@@ -65,32 +83,19 @@ export function ApplicationCard({
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 w-full lg:w-auto">
-          <div className="flex gap-2">
-            <Button
-              onClick={() => {
-                console.log("🟢 GREEN APPROVE BUTTON CLICKED!");
-                console.log(
-                  "Freelancer address:",
-                  application.freelancerAddress,
-                );
-                onApprove(application.freelancerAddress);
-              }}
-              disabled={approving || rejecting}
-              className="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 cursor-pointer"
-              size="sm"
-            >
-              {approving ? "Approving..." : "Approve"}
-            </Button>
-            <Button
-              onClick={() => onReject(application.freelancerAddress)}
-              disabled={approving || rejecting}
-              className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 cursor-pointer"
-              size="sm"
-            >
-              {rejecting ? "Rejecting..." : "Reject"}
-            </Button>
-          </div>
+        <div className="flex justify-end w-full lg:w-auto">
+          <Button
+            onClick={() => {
+              console.log("🟢 APPROVE BUTTON CLICKED!");
+              console.log("Freelancer address:", application.freelancerAddress);
+              onApprove(application.freelancerAddress);
+            }}
+            disabled={approving}
+            className="px-6 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 cursor-pointer"
+            size="sm"
+          >
+            {approving ? "Approving..." : "Approve Application"}
+          </Button>
         </div>
       </div>
     </Card>

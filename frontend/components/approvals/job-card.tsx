@@ -47,11 +47,9 @@ interface JobCardProps {
   dialogOpen: boolean;
   selectedJob: JobWithApplications | null;
   approving: boolean;
-  rejecting: boolean;
   onJobSelect: (job: JobWithApplications) => void;
   onDialogChange: (open: boolean) => void;
   onApprove: (freelancer: string) => void;
-  onReject: (freelancer: string) => void;
 }
 
 export function JobCard({
@@ -60,11 +58,9 @@ export function JobCard({
   dialogOpen,
   selectedJob,
   approving,
-  rejecting,
   onJobSelect,
   onDialogChange,
   onApprove,
-  onReject,
 }: JobCardProps) {
   return (
     <motion.div
@@ -150,9 +146,7 @@ export function JobCard({
                         application={application}
                         index={idx}
                         onApprove={onApprove}
-                        onReject={onReject}
                         approving={approving}
-                        rejecting={rejecting}
                       />
                     ))
                   )}

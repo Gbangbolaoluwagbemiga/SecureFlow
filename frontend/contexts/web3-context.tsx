@@ -267,30 +267,13 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     return {
       async call(method: string, ...args: any[]) {
         try {
-          const data = encodeFunction(abi, method, args);
-          const result = await window.ethereum.request({
-            method: "eth_call",
-            params: [
-              {
-                to: address,
-                data,
-              },
-              "latest",
-            ],
-          });
+          // Use direct RPC connection for read operations to avoid MetaMask issues
+          const provider = new ethers.JsonRpcProvider(MONAD_TESTNET.rpcUrls[0]);
+          const contract = new ethers.Contract(address, abi, provider);
 
-          // Decode the result using ethers.js
-          try {
-            const iface = new ethers.Interface(abi);
-            const decodedResult = iface.decodeFunctionResult(method, result);
-            return decodedResult;
-          } catch (decodeError) {
-            console.warn(
-              `Could not decode result for ${method}, returning raw data:`,
-              decodeError,
-            );
-            return result;
-          }
+          // Call the contract method directly
+          const result = await contract[method](...args);
+          return result;
         } catch (error) {
           console.error(`Error calling ${method}:`, error);
           throw error;

@@ -43,11 +43,7 @@ export default function ApprovalsPage() {
     }
   }, [selectedFreelancer]);
   const [approving, setApproving] = useState(false);
-  const [rejecting, setRejecting] = useState(false);
-  const [actionType, setActionType] = useState<"approve" | "reject" | null>(
-    null,
-  );
-  const [rejectionReason, setRejectionReason] = useState("");
+  const [isApproving, setIsApproving] = useState(false);
 
   const getStatusFromNumber = (
     status: number,
@@ -640,43 +636,6 @@ export default function ApprovalsPage() {
     }
   };
 
-  const handleRejectFreelancer = async () => {
-    if (!selectedJob || !selectedFreelancer || !wallet.isConnected) return;
-
-    setRejecting(true);
-    try {
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-
-      await contract.send(
-        "rejectFreelancer",
-        "no-value",
-        Number(selectedJob.id),
-        selectedFreelancer.freelancerAddress,
-        rejectionReason || "No reason provided",
-      );
-
-      toast({
-        title: "Freelancer Rejected",
-        description: "The freelancer has been rejected for this job",
-      });
-
-      // Refresh the jobs list
-      await fetchMyJobs();
-      setSelectedJob(null);
-      setSelectedFreelancer(null);
-      setRejectionReason("");
-    } catch (error) {
-      console.error("Error rejecting freelancer:", error);
-      toast({
-        title: "Rejection Failed",
-        description: "Could not reject the freelancer",
-        variant: "destructive",
-      });
-    } finally {
-      setRejecting(false);
-    }
-  };
-
   useEffect(() => {
     if (wallet.isConnected && isJobCreator) {
       fetchMyJobs();
@@ -767,7 +726,6 @@ export default function ApprovalsPage() {
               dialogOpen={selectedJob?.id === job.id}
               selectedJob={selectedJob}
               approving={approving}
-              rejecting={rejecting}
               onJobSelect={(job: JobWithApplications) => setSelectedJob(job)}
               onDialogChange={(open: boolean) => {
                 if (!open) {
@@ -786,20 +744,11 @@ export default function ApprovalsPage() {
                 if (application) {
                   console.log("✅ Found application, setting state");
                   setSelectedFreelancer(application);
-                  setActionType("approve");
+                  setIsApproving(true);
                   console.log("✅ State set, confirmation modal should open");
                   console.log("Application being set:", application);
                 } else {
                   console.log("❌ Application not found");
-                }
-              }}
-              onReject={(freelancer: string) => {
-                const application = job.applications.find(
-                  (app) => app.freelancerAddress === freelancer,
-                );
-                if (application) {
-                  setSelectedFreelancer(application);
-                  setActionType("reject");
                 }
               }}
             />
@@ -863,20 +812,11 @@ export default function ApprovalsPage() {
                                   application,
                                 );
                                 setSelectedFreelancer(application);
-                                setActionType("approve");
+                                setIsApproving(true);
                               }}
                               className="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 cursor-pointer"
                             >
                               Approve
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedFreelancer(application);
-                                setActionType("reject");
-                              }}
-                              className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 cursor-pointer"
-                            >
-                              Reject
                             </button>
                           </div>
                         </div>
@@ -913,7 +853,7 @@ export default function ApprovalsPage() {
       })()}
       {selectedFreelancer && (
         <div
-          className="fixed inset-0 bg-black flex items-center justify-center p-4 z-[100]"
+          className="fixed inset-0 backdrop-blur-sm flex items-center justify-center p-4 z-[100]"
           onClick={(e) => {
             console.log("🖱️ Backdrop clicked");
             console.log("Event target:", e.target);
@@ -942,9 +882,7 @@ export default function ApprovalsPage() {
             }}
           >
             <div className="p-6">
-              <h3 className="text-lg font-semibold mb-4">
-                {actionType === "approve" ? "Approve" : "Reject"} Freelancer
-              </h3>
+              <h3 className="text-lg font-semibold mb-4">Approve Freelancer</h3>
 
               <div className="space-y-4">
                 <div>
@@ -954,26 +892,11 @@ export default function ApprovalsPage() {
                   </p>
                 </div>
 
-                {actionType === "reject" && (
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Rejection Reason (Optional):
-                    </label>
-                    <textarea
-                      value={rejectionReason}
-                      onChange={(e) => setRejectionReason(e.target.value)}
-                      className="w-full p-2 border rounded-md bg-background"
-                      rows={3}
-                      placeholder="Enter reason for rejection..."
-                    />
-                  </div>
-                )}
-
                 <div className="flex gap-3 justify-end">
                   <button
                     onClick={() => setSelectedFreelancer(null)}
                     className="px-4 py-2 border rounded-md hover:bg-muted"
-                    disabled={approving || rejecting}
+                    disabled={approving}
                   >
                     Cancel
                   </button>
@@ -982,19 +905,13 @@ export default function ApprovalsPage() {
                       e.preventDefault();
                       e.stopPropagation();
                       console.log("🔘 Confirm button clicked");
-                      console.log("Action type:", actionType);
+                      console.log("Is approving:", isApproving);
                       console.log("Selected freelancer:", selectedFreelancer);
                       console.log("Selected job:", selectedJob);
                       console.log("Wallet connected:", wallet.isConnected);
                       console.log("Approving state:", approving);
-                      console.log("Rejecting state:", rejecting);
-                      if (actionType === "approve") {
-                        console.log("✅ Calling handleApproveFreelancer");
-                        handleApproveFreelancer();
-                      } else {
-                        console.log("❌ Calling handleRejectFreelancer");
-                        handleRejectFreelancer();
-                      }
+                      console.log("✅ Calling handleApproveFreelancer");
+                      handleApproveFreelancer();
                     }}
                     onMouseDown={(e) => {
                       console.log("🖱️ Mouse down on confirm button");
@@ -1004,11 +921,7 @@ export default function ApprovalsPage() {
                       console.log("🖱️ Mouse up on confirm button");
                       e.stopPropagation();
                     }}
-                    className={`px-4 py-2 rounded-md text-white cursor-pointer ${
-                      actionType === "approve"
-                        ? "bg-green-600 hover:bg-green-700"
-                        : "bg-red-600 hover:bg-red-700"
-                    } ${approving || rejecting ? "opacity-75" : ""}`}
+                    className={`px-4 py-2 rounded-md text-white cursor-pointer bg-green-600 hover:bg-green-700 ${approving ? "opacity-75" : ""}`}
                     disabled={false}
                     style={{
                       pointerEvents: "auto",
@@ -1016,9 +929,7 @@ export default function ApprovalsPage() {
                       position: "relative",
                     }}
                   >
-                    {actionType === "approve"
-                      ? "Confirm Approval"
-                      : "Confirm Rejection"}
+                    Confirm Approval
                   </button>
                 </div>
               </div>
