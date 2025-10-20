@@ -1,10 +1,10 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/next"
-    }
-  ],
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "buildCommand": "cd frontend && corepack enable && pnpm install --frozen-lockfile=false && pnpm run build",
+  "installCommand": "cd frontend && corepack enable && pnpm install --frozen-lockfile=false",
+  "outputDirectory": "frontend/.next",
+  "env": {
+    "NEXT_TELEMETRY_DISABLED": "1"
+  }
 }
