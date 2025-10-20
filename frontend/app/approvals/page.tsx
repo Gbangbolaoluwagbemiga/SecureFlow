@@ -36,10 +36,7 @@ export default function ApprovalsPage() {
 
   // Debug selectedFreelancer changes
   useEffect(() => {
-    console.log("🔄 selectedFreelancer state changed:", selectedFreelancer);
     if (selectedFreelancer === null) {
-      console.log("⚠️ selectedFreelancer was set to null!");
-      console.trace("Stack trace for null assignment:");
     }
   }, [selectedFreelancer]);
   const [approving, setApproving] = useState(false);
@@ -83,10 +80,6 @@ export default function ApprovalsPage() {
             const isOpenJob =
               escrowSummary[1] === "0x0000000000000000000000000000000000000000";
 
-            console.log(
-              `Job ${i} - isOpenJob: ${isOpenJob}, beneficiary: ${escrowSummary[1]}`,
-            );
-
             if (isOpenJob) {
               let applicationCount = 0;
               const applications: Application[] = [];
@@ -96,19 +89,11 @@ export default function ApprovalsPage() {
                   "getApplicationCount",
                   i,
                 );
-                console.log(
-                  `Raw application count for job ${i}:`,
-                  rawApplicationCount,
-                );
+
                 applicationCount = Number(rawApplicationCount);
-                console.log(`Job ${i} has ${applicationCount} applications`);
 
                 if (applicationCount > 0) {
                   try {
-                    console.log(
-                      `Fetching applications for job ${i}: offset=0, limit=${applicationCount}`,
-                    );
-
                     // Try a different approach - fetch with a smaller limit first
                     let applicationsData;
                     try {
@@ -118,15 +103,7 @@ export default function ApprovalsPage() {
                         0,
                         Math.min(applicationCount, 1), // Start with just 1 application
                       );
-                      console.log(
-                        `Initial fetch successful for job ${i}:`,
-                        applicationsData,
-                      );
                     } catch (initialError) {
-                      console.log(
-                        `Initial fetch failed for job ${i}, trying with full limit:`,
-                        initialError,
-                      );
                       applicationsData = await contract.call(
                         "getApplicationsPage",
                         i,
@@ -135,38 +112,11 @@ export default function ApprovalsPage() {
                       );
                     }
 
-                    console.log(
-                      `Raw applications data for job ${i}:`,
-                      applicationsData,
-                    );
-                    console.log(
-                      `Applications data type:`,
-                      typeof applicationsData,
-                    );
-                    console.log(
-                      `Applications data length:`,
-                      applicationsData?.length,
-                    );
-                    console.log(
-                      `Applications data isArray:`,
-                      Array.isArray(applicationsData),
-                    );
-
                     if (applicationsData && applicationsData.length > 0) {
                       // Try to parse the real application data
-                      console.log(
-                        `Processing ${applicationsData.length} applications for job ${i}`,
-                      );
 
                       // If we got fewer applications than expected, try a different approach
                       if (applicationsData.length < applicationCount) {
-                        console.log(
-                          `Warning: Expected ${applicationCount} applications but got ${applicationsData.length}`,
-                        );
-                        console.log(
-                          `Trying to fetch with different parameters...`,
-                        );
-
                         // Try fetching with a higher limit
                         try {
                           const moreApplicationsData = await contract.call(
@@ -175,24 +125,16 @@ export default function ApprovalsPage() {
                             0,
                             applicationCount * 2, // Try with double the limit
                           );
-                          console.log(
-                            `Alternative fetch result:`,
-                            moreApplicationsData,
-                          );
+
                           if (
                             moreApplicationsData &&
                             moreApplicationsData.length >
                               applicationsData.length
                           ) {
-                            console.log(
-                              `Got more applications with alternative fetch: ${moreApplicationsData.length}`,
-                            );
                             // Use the alternative data if it has more applications
                             applicationsData = moreApplicationsData;
                           }
-                        } catch (altError) {
-                          console.log(`Alternative fetch failed:`, altError);
-                        }
+                        } catch (altError) {}
                       }
 
                       for (
@@ -200,16 +142,8 @@ export default function ApprovalsPage() {
                         appIndex < applicationsData.length;
                         appIndex++
                       ) {
-                        console.log(
-                          `Processing application ${appIndex} of ${applicationsData.length} for job ${i}`,
-                        );
-
                         try {
                           const app = applicationsData[appIndex];
-                          console.log(
-                            `Raw application data ${appIndex} for job ${i}:`,
-                            app,
-                          );
 
                           // Attempt to extract real data from Proxy objects
                           let freelancerAddress = "";
@@ -218,9 +152,6 @@ export default function ApprovalsPage() {
                           let appliedAt = 0;
 
                           // Try to extract real data from blockchain without accessing Proxy properties
-                          console.log(
-                            `Attempting to extract real blockchain data for app ${appIndex}`,
-                          );
 
                           try {
                             // Strategy 1: Try to get the raw data without property access
@@ -230,17 +161,9 @@ export default function ApprovalsPage() {
                                 ? value.toString()
                                 : value,
                             );
-                            console.log(
-                              `Raw JSON data for app ${appIndex}:`,
-                              rawData,
-                            );
 
                             // Try to parse the JSON data
                             const parsedData = JSON.parse(rawData);
-                            console.log(
-                              `Parsed data for app ${appIndex}:`,
-                              parsedData,
-                            );
 
                             // Extract from parsed data - handle nested arrays
                             if (parsedData && Array.isArray(parsedData)) {
@@ -255,9 +178,6 @@ export default function ApprovalsPage() {
                                   coverLetter = String(appData[1] || "");
                                   proposedTimeline = Number(appData[2]) || 0;
                                   appliedAt = Number(appData[3]) || 0;
-                                  console.log(
-                                    `Successfully extracted real blockchain data for app ${appIndex} (nested array)`,
-                                  );
                                 } else {
                                   throw new Error(
                                     "Invalid nested array structure",
@@ -269,9 +189,6 @@ export default function ApprovalsPage() {
                                 coverLetter = String(parsedData[1] || "");
                                 proposedTimeline = Number(parsedData[2]) || 0;
                                 appliedAt = Number(parsedData[3]) || 0;
-                                console.log(
-                                  `Successfully extracted real blockchain data for app ${appIndex} (flat array)`,
-                                );
                               } else {
                                 throw new Error("Invalid array structure");
                               }
@@ -279,43 +196,21 @@ export default function ApprovalsPage() {
                               throw new Error("Invalid parsed data structure");
                             }
                           } catch (jsonError) {
-                            console.log(
-                              `JSON parsing failed for app ${appIndex}, trying alternative method:`,
-                              jsonError,
-                            );
-
                             try {
                               // Strategy 2: Try to access data using Object.values without property access
                               const values = Object.values(app);
-                              console.log(
-                                `Object.values for app ${appIndex}:`,
-                                values,
-                              );
 
                               if (values && values.length >= 4) {
                                 freelancerAddress = String(values[0] || "");
                                 coverLetter = String(values[1] || "");
                                 proposedTimeline = Number(values[2]) || 0;
                                 appliedAt = Number(values[3]) || 0;
-                                console.log(
-                                  `Successfully extracted data using Object.values for app ${appIndex}`,
-                                );
                               } else {
                                 throw new Error("Invalid values structure");
                               }
                             } catch (valuesError) {
-                              console.log(
-                                `Object.values failed for app ${appIndex}, trying Object.keys:`,
-                                valuesError,
-                              );
-
                               try {
-                                // Strategy 3: Try using Object.keys and accessing properties safely
                                 const keys = Object.keys(app);
-                                console.log(
-                                  `Object.keys for app ${appIndex}:`,
-                                  keys,
-                                );
 
                                 // Try to access properties using the keys
                                 const safeAccess = (obj: any, key: string) => {
@@ -348,29 +243,18 @@ export default function ApprovalsPage() {
                                 );
 
                                 if (freelancerAddress && coverLetter) {
-                                  console.log(
-                                    `Successfully extracted data using safe property access for app ${appIndex}`,
-                                  );
                                 } else {
                                   throw new Error(
                                     "Safe property access failed",
                                   );
                                 }
                               } catch (safeError) {
-                                console.log(
-                                  `Safe property access failed for app ${appIndex}:`,
-                                  safeError,
-                                );
                                 throw safeError; // Re-throw to trigger fallback
                               }
                             }
 
                             // If we reach here, all methods failed, use fallback
                             if (!freelancerAddress || !coverLetter) {
-                              console.log(
-                                `All extraction methods failed for app ${appIndex}, using fallback`,
-                              );
-
                               // Use fallback data only if all else fails
                               const fallbackAddresses = [
                                 "0xdd946B178f96Aa4D4b21c3d089e53303D4F9012f",
@@ -385,9 +269,6 @@ export default function ApprovalsPage() {
                               coverLetter = `Application ${appIndex + 1} - Real blockchain data could not be parsed due to Proxy object limitations. This is a fallback display.`;
                               proposedTimeline = 30 + appIndex * 15;
                               appliedAt = Date.now() - appIndex * 86400000;
-                              console.log(
-                                `Using fallback data for app ${appIndex} - real blockchain data could not be extracted`,
-                              );
                             }
                           }
 
@@ -424,9 +305,6 @@ export default function ApprovalsPage() {
                           );
 
                           if (existingApplication) {
-                            console.log(
-                              `Duplicate application detected for freelancer ${freelancerAddress} in job ${i}. Skipping duplicate.`,
-                            );
                             continue; // Skip this duplicate application
                           }
 
@@ -438,25 +316,8 @@ export default function ApprovalsPage() {
                             status: "pending" as const,
                           };
 
-                          console.log(
-                            `Successfully parsed application ${appIndex} for job ${i}:`,
-                            {
-                              freelancerAddress,
-                              coverLetter,
-                              proposedTimeline,
-                              appliedAt: appliedAt * 1000,
-                            },
-                          );
-
                           applications.push(application);
-                          console.log(
-                            `Added application ${appIndex} to applications array. Total applications so far: ${applications.length}`,
-                          );
                         } catch (parseError) {
-                          console.error(
-                            `Error parsing application ${appIndex} for job ${i}:`,
-                            parseError,
-                          );
                           // Fallback to mock data if parsing fails - but continue processing other applications
                           const fallbackApplication: Application = {
                             freelancerAddress: `0x${Math.random().toString(16).substr(2, 40)}`,
@@ -475,26 +336,12 @@ export default function ApprovalsPage() {
 
                           if (!existingFallback) {
                             applications.push(fallbackApplication);
-                            console.log(
-                              `Added fallback application ${appIndex} to applications array. Total applications so far: ${applications.length}`,
-                            );
                           } else {
-                            console.log(
-                              `Skipping duplicate fallback application ${appIndex} for job ${i}`,
-                            );
                           }
                         }
                       }
-
-                      console.log(
-                        `Finished processing applications for job ${i}. Total applications parsed: ${applications.length}`,
-                      );
                     }
                   } catch (dataError) {
-                    console.error(
-                      `Error fetching application data for job ${i}:`,
-                      dataError,
-                    );
                     // Fallback to mock data if fetching fails
                     for (
                       let appIndex = 0;
@@ -513,10 +360,6 @@ export default function ApprovalsPage() {
                   }
                 }
               } catch (error) {
-                console.error(
-                  `Error fetching applications for job ${i}:`,
-                  error,
-                );
                 applicationCount = 0;
               }
 
@@ -549,7 +392,6 @@ export default function ApprovalsPage() {
 
       setJobs(myJobs);
     } catch (error) {
-      console.error("Error fetching my jobs:", error);
       toast({
         title: "Failed to load jobs",
         description: "Could not fetch your job postings",
@@ -561,41 +403,25 @@ export default function ApprovalsPage() {
   };
 
   const handleApproveFreelancer = async () => {
-    console.log("🚀 handleApproveFreelancer called");
-    console.log("Selected job:", selectedJob);
-    console.log("Selected freelancer:", selectedFreelancer);
-    console.log("Wallet connected:", wallet.isConnected);
-
     if (!selectedJob || !selectedFreelancer || !wallet.isConnected) {
-      console.log("❌ Missing required data for approval");
       return;
     }
 
-    console.log("🔄 Setting approving to true");
     setApproving(true);
 
     try {
-      console.log("📋 Getting contract instance...");
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-      console.log("Contract instance:", contract);
 
       if (!contract) {
         throw new Error("Contract instance not found");
       }
 
-      console.log("📝 Calling acceptFreelancer with params:", {
-        jobId: Number(selectedJob.id),
-        freelancerAddress: selectedFreelancer.freelancerAddress,
-      });
-
-      console.log("🚀 About to call contract.send...");
       const txHash = await contract.send(
         "acceptFreelancer",
         "no-value",
         Number(selectedJob.id),
         selectedFreelancer.freelancerAddress,
       );
-      console.log("✅ Transaction successful! Hash:", txHash);
 
       toast({
         title: "Freelancer Approved",
@@ -607,31 +433,24 @@ export default function ApprovalsPage() {
       setSelectedFreelancer(null);
 
       // Wait a moment for the transaction to be processed
-      console.log("⏳ Waiting for transaction to be processed...");
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Refresh the jobs list
-      console.log("🔄 Refreshing jobs list...");
       await fetchMyJobs();
 
       // Force a re-render by updating a dummy state
       setLoading(true);
       setTimeout(() => setLoading(false), 100);
     } catch (error) {
-      console.error("❌ Error approving freelancer:", error);
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error("Error details:", {
-        message: errorMessage,
-        error: error,
-      });
+
       toast({
         title: "Approval Failed",
         description: `There was an error approving the freelancer: ${errorMessage}`,
         variant: "destructive",
       });
     } finally {
-      console.log("🔄 Setting approving to false");
       setApproving(false);
     }
   };
@@ -695,7 +514,6 @@ export default function ApprovalsPage() {
       <div className="mb-6 flex justify-end">
         <button
           onClick={async () => {
-            console.log("🔄 Manual refresh triggered");
             setLoading(true);
             await fetchMyJobs();
             setLoading(false);
@@ -734,21 +552,13 @@ export default function ApprovalsPage() {
                 }
               }}
               onApprove={(freelancer: string) => {
-                console.log(
-                  "🟢 Approve button clicked for freelancer:",
-                  freelancer,
-                );
                 const application = job.applications.find(
                   (app) => app.freelancerAddress === freelancer,
                 );
                 if (application) {
-                  console.log("✅ Found application, setting state");
                   setSelectedFreelancer(application);
                   setIsApproving(true);
-                  console.log("✅ State set, confirmation modal should open");
-                  console.log("Application being set:", application);
                 } else {
-                  console.log("❌ Application not found");
                 }
               }}
             />
@@ -807,10 +617,6 @@ export default function ApprovalsPage() {
                           <div className="flex gap-2">
                             <button
                               onClick={() => {
-                                console.log(
-                                  "🟢 Approve button clicked for application:",
-                                  application,
-                                );
                                 setSelectedFreelancer(application);
                                 setIsApproving(true);
                               }}
@@ -846,38 +652,23 @@ export default function ApprovalsPage() {
 
       {/* Approval/Rejection Confirmation Modal */}
       {(() => {
-        console.log("🔍 Checking if confirmation modal should render:");
-        console.log("selectedFreelancer:", selectedFreelancer);
-        console.log("Should render modal:", !!selectedFreelancer);
         return null;
       })()}
       {selectedFreelancer && (
         <div
           className="fixed inset-0 backdrop-blur-sm flex items-center justify-center p-4 z-[100]"
           onClick={(e) => {
-            console.log("🖱️ Backdrop clicked");
-            console.log("Event target:", e.target);
-            console.log("Event currentTarget:", e.currentTarget);
-            console.log(
-              "Target === currentTarget:",
-              e.target === e.currentTarget,
-            );
             if (e.target === e.currentTarget) {
-              console.log("🔄 Closing modal via backdrop click");
               setSelectedFreelancer(null);
             }
           }}
         >
           {(() => {
-            console.log("🎯 CONFIRMATION MODAL IS RENDERING!");
             return null;
           })()}
           <div
             className="bg-background rounded-lg max-w-md w-full border shadow-2xl"
             onClick={(e) => {
-              console.log(
-                "🖱️ Modal content clicked - preventing backdrop close",
-              );
               e.stopPropagation();
             }}
           >
@@ -904,21 +695,13 @@ export default function ApprovalsPage() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      console.log("🔘 Confirm button clicked");
-                      console.log("Is approving:", isApproving);
-                      console.log("Selected freelancer:", selectedFreelancer);
-                      console.log("Selected job:", selectedJob);
-                      console.log("Wallet connected:", wallet.isConnected);
-                      console.log("Approving state:", approving);
-                      console.log("✅ Calling handleApproveFreelancer");
+
                       handleApproveFreelancer();
                     }}
                     onMouseDown={(e) => {
-                      console.log("🖱️ Mouse down on confirm button");
                       e.stopPropagation();
                     }}
                     onMouseUp={(e) => {
-                      console.log("🖱️ Mouse up on confirm button");
                       e.stopPropagation();
                     }}
                     className={`px-4 py-2 rounded-md text-white cursor-pointer bg-green-600 hover:bg-green-700 ${approving ? "opacity-75" : ""}`}

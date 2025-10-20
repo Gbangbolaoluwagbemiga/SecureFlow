@@ -50,12 +50,6 @@ export default function CreateEscrowPage() {
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       const paused = await contract.call("paused");
-      console.log(
-        "Contract pause status (create page):",
-        paused,
-        "type:",
-        typeof paused,
-      );
 
       let isPaused = false;
 
@@ -75,7 +69,6 @@ export default function CreateEscrowPage() {
 
       setIsContractPaused(isPaused);
     } catch (error) {
-      console.log("Error checking contract pause status (create page):", error);
       setIsContractPaused(false);
     }
   };
@@ -348,11 +341,6 @@ export default function CreateEscrowPage() {
           const tokenName = await tokenContract.call("name");
           const tokenSymbol = await tokenContract.call("symbol");
           const tokenDecimals = await tokenContract.call("decimals");
-          console.log({
-            name: tokenName,
-            symbol: tokenSymbol,
-            decimals: tokenDecimals,
-          });
         } catch (tokenError) {
           throw new Error(
             "Token contract is not working properly. Please check the token address.",
@@ -362,10 +350,6 @@ export default function CreateEscrowPage() {
         // Check token balance first
         try {
           const balance = await tokenContract.call("balanceOf", wallet.address);
-          console.log(
-            "Balance in tokens:",
-            (Number(balance) / 10 ** 18).toFixed(2),
-          );
 
           if (Number(balance) < Number(totalAmountInWei)) {
             throw new Error(
@@ -420,11 +404,6 @@ export default function CreateEscrowPage() {
           BigInt(Math.floor(Number.parseFloat(m.amount) * 10 ** 18)).toString(),
         );
 
-        console.log(
-          "- Milestone amounts:",
-          formData.milestones.map((m) => m.amount),
-        );
-
         const arbiters = ["0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41"]; // Default arbiter
         const requiredConfirmations = 1;
 
@@ -451,15 +430,6 @@ export default function CreateEscrowPage() {
         // Convert milestone amounts to wei for ERC20 tokens
         const milestoneAmountsInWei = formData.milestones.map((m) =>
           BigInt(Math.floor(Number.parseFloat(m.amount) * 10 ** 18)).toString(),
-        );
-
-        console.log(
-          "- Milestone amounts:",
-          formData.milestones.map((m) => m.amount),
-        );
-        console.log(
-          "- Total milestone sum:",
-          formData.milestones.reduce((sum, m) => sum + Number(m.amount), 0),
         );
 
         // Convert duration from days to seconds

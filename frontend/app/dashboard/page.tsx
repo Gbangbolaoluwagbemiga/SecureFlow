@@ -68,15 +68,9 @@ export default function DashboardPage() {
       "resolved", // 5 - Dispute resolved
     ];
     const mappedStatus = statuses[status] || "pending";
-    console.log(
-      `Milestone status number: ${status}, mapped to: ${mappedStatus}`,
-    );
 
     // Special debugging for rejected status
     if (status === 3 || status === 4) {
-      console.log(
-        `🎯 REJECTED MILESTONE DETECTED! Status: ${status} -> ${mappedStatus}`,
-      );
     }
 
     return mappedStatus;
@@ -122,14 +116,9 @@ export default function DashboardPage() {
     try {
       // Get milestone count from escrow summary first
       const milestoneCount = Number(escrowSummary[11]) || 0;
-      console.log(
-        `Escrow ${escrowId} milestoneCount from contract:`,
-        escrowSummary[11],
-      );
-      console.log(`Escrow ${escrowId} parsed milestoneCount:`, milestoneCount);
 
       // Always try to fetch individual milestones to get accurate data
-      console.log(`Fetching individual milestones for escrow ${escrowId}...`);
+
       const allMilestones = [];
 
       for (let j = 0; j < milestoneCount; j++) {
@@ -139,25 +128,9 @@ export default function DashboardPage() {
             escrowId,
             j,
           );
-          console.log(
-            `Individual milestone ${j} for escrow ${escrowId}:`,
-            individualMilestone,
-          );
-          console.log(`Milestone ${j} structure:`, {
-            type: typeof individualMilestone,
-            keys: Object.keys(individualMilestone || {}),
-            description: individualMilestone?.description,
-            amount: individualMilestone?.amount,
-            status: individualMilestone?.status,
-            submittedAt: individualMilestone?.submittedAt,
-            approvedAt: individualMilestone?.approvedAt,
-          });
+
           allMilestones.push(individualMilestone);
         } catch (error) {
-          console.warn(
-            `Could not fetch individual milestone ${j} for escrow ${escrowId}:`,
-            error,
-          );
           // Only create placeholder if we absolutely can't fetch the data
           allMilestones.push({
             description: `Milestone ${j + 1} - To be defined`,
@@ -169,12 +142,7 @@ export default function DashboardPage() {
         }
       }
 
-      console.log(`All milestones for escrow ${escrowId}:`, allMilestones);
-
       if (allMilestones.length > 0) {
-        console.log(
-          `Processing ${allMilestones.length} milestones for escrow ${escrowId}`,
-        );
         return allMilestones.map((m: any, index: number) => {
           try {
             // Handle milestone data structure from getMilestones
@@ -194,70 +162,33 @@ export default function DashboardPage() {
                   status = m.status || 0;
                   submittedAt = m.submittedAt || undefined;
                   approvedAt = m.approvedAt || undefined;
-                  console.log(`Milestone ${index} is a placeholder milestone`);
                 } else {
                   // This is a real milestone from the contract
                   // Handle Proxy(Result) objects properly
                   try {
-                    console.log(`Parsing milestone ${index} raw data:`, m);
-                    console.log(`Milestone ${index} data type:`, typeof m);
-                    console.log(
-                      `Milestone ${index} data keys:`,
-                      Object.keys(m || {}),
-                    );
-
                     // Try direct field access first (for struct fields)
                     if (m.description !== undefined) {
                       description = String(m.description);
-                      console.log(
-                        `Milestone ${index} description from m.description:`,
-                        description,
-                      );
                     } else if (m[0] !== undefined) {
                       description = String(m[0]);
-                      console.log(
-                        `Milestone ${index} description from m[0]:`,
-                        description,
-                      );
                     } else {
                       description = `Milestone ${index + 1}`;
-                      console.log(
-                        `Milestone ${index} using default description`,
-                      );
                     }
 
                     if (m.amount !== undefined) {
                       amount = String(m.amount);
-                      console.log(
-                        `Milestone ${index} amount from m.amount:`,
-                        amount,
-                      );
                     } else if (m[1] !== undefined) {
                       amount = String(m[1]);
-                      console.log(
-                        `Milestone ${index} amount from m[1]:`,
-                        amount,
-                      );
                     } else {
                       amount = "0";
-                      console.log(`Milestone ${index} using default amount`);
                     }
 
                     if (m.status !== undefined) {
                       status = Number(m.status) || 0;
-                      console.log(
-                        `Milestone ${index} status from m.status:`,
-                        status,
-                      );
                     } else if (m[2] !== undefined) {
                       status = Number(m[2]) || 0;
-                      console.log(
-                        `Milestone ${index} status from m[2]:`,
-                        status,
-                      );
                     } else {
                       status = 0;
-                      console.log(`Milestone ${index} using default status`);
                     }
 
                     if (
@@ -265,16 +196,8 @@ export default function DashboardPage() {
                       Number(m.submittedAt) > 0
                     ) {
                       submittedAt = Number(m.submittedAt) * 1000;
-                      console.log(
-                        `Milestone ${index} submittedAt from m.submittedAt:`,
-                        submittedAt,
-                      );
                     } else if (m[3] !== undefined && Number(m[3]) > 0) {
                       submittedAt = Number(m[3]) * 1000;
-                      console.log(
-                        `Milestone ${index} submittedAt from m[3]:`,
-                        submittedAt,
-                      );
                     }
 
                     if (
@@ -282,38 +205,13 @@ export default function DashboardPage() {
                       Number(m.approvedAt) > 0
                     ) {
                       approvedAt = Number(m.approvedAt) * 1000;
-                      console.log(
-                        `Milestone ${index} approvedAt from m.approvedAt:`,
-                        approvedAt,
-                      );
                     } else if (m[4] !== undefined && Number(m[4]) > 0) {
                       approvedAt = Number(m[4]) * 1000;
-                      console.log(
-                        `Milestone ${index} approvedAt from m[4]:`,
-                        approvedAt,
-                      );
                     }
-
-                    console.log(`Milestone ${index} parsed values:`, {
-                      description,
-                      amount,
-                      status,
-                      submittedAt,
-                      approvedAt,
-                    });
 
                     // Debug amount conversion
                     const amountInTokens = (Number(amount) / 1e18).toFixed(2);
-                    console.log(`Milestone ${index} amount conversion:`, {
-                      rawAmount: amount,
-                      amountInTokens: amountInTokens,
-                      isZero: amount === "0" || amount === "0x0",
-                    });
                   } catch (proxyError) {
-                    console.warn(
-                      `Error parsing Proxy(Result) for milestone ${index}:`,
-                      proxyError,
-                    );
                     // Fallback to basic parsing
                     description = `Milestone ${index + 1}`;
                     amount = "0";
@@ -321,7 +219,6 @@ export default function DashboardPage() {
                   }
                 }
               } catch (e) {
-                console.warn(`Error parsing milestone ${index} basic data:`, e);
                 description = `Milestone ${index + 1}`;
                 amount = "0";
                 status = 0;
@@ -343,70 +240,30 @@ export default function DashboardPage() {
             if (isPlaceholder) {
               // For placeholder milestones, determine status based on previous milestones
               if (index === 0) {
-                // First milestone - should be pending
                 finalStatus = "pending";
               } else {
                 // Check if previous milestone is approved
-                // This will be handled by the UI logic
                 finalStatus = "pending";
               }
-              console.log(
-                `Milestone ${index} is placeholder, setting to pending`,
-              );
             } else {
-              // Real milestone from contract
-              console.log(`Milestone ${index} status determination:`, {
-                rawStatus: status,
-                parsedStatus: getMilestoneStatusFromNumber(status),
-                submittedAt: submittedAt,
-                approvedAt: approvedAt,
-                hasSubmittedAt: submittedAt && submittedAt > 0,
-                hasApprovedAt: approvedAt && approvedAt > 0,
-                isRejected: status === 3,
-                isSubmitted: status === 1,
-                isApproved: status === 2,
-                isPending: status === 0,
-              });
-
               // Priority 1: Use contract status as the primary source of truth
               if (status === 1) {
                 finalStatus = "submitted";
-                console.log(
-                  `Milestone ${index} setting to submitted due to status 1`,
-                );
               } else if (status === 2) {
                 finalStatus = "approved";
-                console.log(
-                  `Milestone ${index} setting to approved due to status 2`,
-                );
               } else if (status === 3) {
                 finalStatus = "disputed";
-                console.log(
-                  `Milestone ${index} setting to disputed due to status 3`,
-                );
               } else if (status === 4) {
                 finalStatus = "disputed";
-                console.log(
-                  `Milestone ${index} setting to disputed due to status 4`,
-                );
               }
               // Priority 2: Fallback to timestamp-based logic if status is 0
               else if (status === 0) {
                 if (approvedAt && approvedAt > 0) {
                   finalStatus = "approved";
-                  console.log(
-                    `Milestone ${index} setting to approved due to approvedAt: ${approvedAt}`,
-                  );
                 } else if (submittedAt && submittedAt > 0) {
                   finalStatus = "submitted";
-                  console.log(
-                    `Milestone ${index} setting to submitted due to submittedAt: ${submittedAt}`,
-                  );
                 } else {
                   finalStatus = "pending";
-                  console.log(
-                    `Milestone ${index} setting to pending due to no timestamps`,
-                  );
                 }
               }
               // Special case: If this is the first milestone and funds have been released, it should be approved
@@ -416,23 +273,11 @@ export default function DashboardPage() {
                 Number(escrowSummary[5]) > 0
               ) {
                 finalStatus = "approved";
-                console.log(
-                  `Milestone ${index} setting to approved due to released funds: ${escrowSummary[5]}`,
-                );
               }
               // Otherwise use the parsed status
               else {
-                console.log(
-                  `Milestone ${index} using parsed status: ${finalStatus}`,
-                );
               }
             }
-
-            console.log(
-              `Milestone ${index} final status:`,
-              finalStatus,
-              `(raw status: ${status}, submittedAt: ${submittedAt}, approvedAt: ${approvedAt})`,
-            );
 
             return {
               description,
@@ -442,7 +287,6 @@ export default function DashboardPage() {
               approvedAt,
             };
           } catch (error) {
-            console.error(`Error processing milestone ${index}:`, error);
             return {
               description: `Milestone ${index + 1}`,
               amount: "0",
@@ -453,7 +297,6 @@ export default function DashboardPage() {
       }
       return [];
     } catch (error) {
-      console.error("Error fetching milestones:", error);
       return [];
     }
   };
@@ -472,12 +315,6 @@ export default function DashboardPage() {
       // Get total number of escrows
       const totalEscrows = await contract.call("nextEscrowId");
       const escrowCount = Number(totalEscrows);
-      console.log(
-        "Total escrows from contract:",
-        totalEscrows,
-        "Count:",
-        escrowCount,
-      );
 
       const userEscrows: Escrow[] = [];
 
@@ -486,14 +323,7 @@ export default function DashboardPage() {
       if (escrowCount > 1) {
         for (let i = 1; i < escrowCount; i++) {
           try {
-            console.log(`Fetching escrow ${i}...`);
             const escrowSummary = await contract.call("getEscrowSummary", i);
-            console.log(`Escrow ${i} data:`, escrowSummary);
-            console.log(
-              `Escrow ${i} - releasedAmount (paidAmount):`,
-              escrowSummary[5],
-            );
-            console.log(`Escrow ${i} - totalAmount:`, escrowSummary[4]);
 
             // Check if user is involved in this escrow
             // getEscrowSummary returns indexed properties: [depositor, beneficiary, arbiters, status, totalAmount, paidAmount, remaining, token, deadline, workStarted, createdAt, milestoneCount, isOpenJob, projectTitle, projectDescription]
@@ -541,7 +371,6 @@ export default function DashboardPage() {
       // Set the actual escrows from the contract
       setEscrows(userEscrows);
     } catch (error) {
-      console.error("Error fetching escrows:", error);
       toast({
         title: "Failed to load escrows",
         description: "Could not fetch your escrows from the blockchain",
@@ -685,7 +514,6 @@ export default function DashboardPage() {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       await fetchUserEscrows();
     } catch (error) {
-      console.error("Error disputing milestone:", error);
       toast({
         title: "Dispute Failed",
         description: "Could not open dispute. Please try again.",
@@ -712,7 +540,6 @@ export default function DashboardPage() {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       await fetchUserEscrows();
     } catch (error) {
-      console.error("Error starting work:", error);
       toast({
         title: "Start Work Failed",
         description: "Could not start work. Please try again.",
@@ -739,7 +566,6 @@ export default function DashboardPage() {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       await fetchUserEscrows();
     } catch (error) {
-      console.error("Error opening dispute:", error);
       toast({
         title: "Dispute Failed",
         description: "Could not open dispute. Please try again.",
@@ -794,9 +620,7 @@ export default function DashboardPage() {
             params: [txHash],
           });
           if (receipt) break;
-        } catch (error) {
-          console.log("Waiting for transaction confirmation...", attempts + 1);
-        }
+        } catch (error) {}
         await new Promise((resolve) => setTimeout(resolve, 2000));
         attempts++;
       }
@@ -818,33 +642,10 @@ export default function DashboardPage() {
 
         // Add debugging for payment tracking
         const milestone = escrow.milestones[milestoneIndex];
-        console.log("🔍 Debugging payment after milestone approval:");
-        console.log("- Raw milestone amount:", milestone.amount);
-        console.log(
-          "- Milestone amount (tokens):",
-          (Number.parseFloat(milestone.amount) / 1e18).toFixed(2),
-        );
-        console.log(
-          "- Current released amount:",
-          (Number.parseFloat(escrow.releasedAmount) / 1e18).toFixed(2),
-        );
-        console.log(
-          "- Expected released amount:",
-          (
-            Number.parseFloat(escrow.releasedAmount) / 1e18 +
-            Number.parseFloat(milestone.amount) / 1e18
-          ).toFixed(2),
-          "tokens",
-        );
 
         // Check if milestone amount is being parsed correctly
         const milestoneAmountInTokens =
           Number.parseFloat(milestone.amount) / 1e18;
-        console.log("- Milestone amount in tokens:", milestoneAmountInTokens);
-        console.log(
-          "- Is milestone amount correct?",
-          milestoneAmountInTokens === 40,
-        );
 
         await fetchUserEscrows();
 
@@ -859,7 +660,6 @@ export default function DashboardPage() {
         throw new Error("Transaction failed on blockchain");
       }
     } catch (error: any) {
-      console.error("Error approving milestone:", error);
       toast({
         title: "Approval Failed",
         description: error.message || "Failed to approve milestone",
@@ -919,9 +719,7 @@ export default function DashboardPage() {
             params: [txHash],
           });
           if (receipt) break;
-        } catch (error) {
-          console.log("Waiting for transaction confirmation...", attempts + 1);
-        }
+        } catch (error) {}
         await new Promise((resolve) => setTimeout(resolve, 2000));
         attempts++;
       }
@@ -947,7 +745,6 @@ export default function DashboardPage() {
         throw new Error("Transaction failed on blockchain");
       }
     } catch (error: any) {
-      console.error("Error rejecting milestone:", error);
       toast({
         title: "Rejection Failed",
         description: error.message || "Failed to reject milestone",

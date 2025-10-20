@@ -78,19 +78,15 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
         await checkOwnerStatus(accounts[0]);
       }
-    } catch (error) {
-      console.error("Error checking connection:", error);
-    }
+    } catch (error) {}
   };
 
   const checkOwnerStatus = async (address: string) => {
     try {
       const knownOwner = "0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41";
 
-
       setIsOwner(address.toLowerCase() === knownOwner.toLowerCase());
     } catch (error) {
-      console.error("Error checking owner status:", error);
       setIsOwner(false);
     }
   };
@@ -154,7 +150,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         });
       }
     } catch (error: any) {
-      console.error("Error connecting wallet:", error);
       toast({
         title: "Connection failed",
         description: error.message || "Failed to connect wallet",
@@ -181,7 +176,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined" || !window.ethereum) return;
 
     if (isSwitchingNetwork) {
-      console.log("Network switch already in progress");
       return;
     }
 
@@ -212,11 +206,8 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         description: "Successfully switched to Monad Testnet",
       });
     } catch (error: any) {
-      console.log("Switch error code:", error.code);
-
       if (error.code === 4902) {
         try {
-          console.log("Adding Monad network...");
           await window.ethereum.request({
             method: "wallet_addEthereumChain",
             params: [MONAD_TESTNET],
@@ -227,7 +218,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
             description: "Monad Testnet has been added to your wallet",
           });
         } catch (addError: any) {
-          console.error("Error adding Monad network:", addError);
           toast({
             title: "Network error",
             description: addError.message || "Failed to add Monad Testnet",
@@ -240,7 +230,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           description: "You cancelled the network switch",
         });
       } else {
-        console.error("Error switching network:", error);
         toast({
           title: "Switch failed",
           description: error.message || "Failed to switch network",
@@ -266,7 +255,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           const result = await contract[method](...args);
           return result;
         } catch (error) {
-          console.error(`Error calling ${method}:`, error);
           throw error;
         }
       },
@@ -280,7 +268,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           // Force higher gas limits for specific functions that need it
           if (method === "approve") {
             gasLimit = "0xc350"; // 50,000 gas - force higher limit for ERC20 approve
-            console.log(`Using forced gas limit for ${method}: ${gasLimit}`);
           } else {
             try {
               const estimatedGas = await window.ethereum.request({
@@ -298,18 +285,10 @@ export function Web3Provider({ children }: { children: ReactNode }) {
               // Add only 10% buffer to estimated gas (reduced from 20%)
               const gasWithBuffer = Math.floor(Number(estimatedGas) * 1.1);
               gasLimit = `0x${gasWithBuffer.toString(16)}`;
-              console.log(`Gas estimated: ${estimatedGas}, using: ${gasLimit}`);
             } catch (gasError) {
-              console.warn(
-                "Gas estimation failed, using optimized defaults:",
-                gasError,
-              );
               // Use much lower, function-specific gas limits
               if (method === "unpause" || method === "pause") {
                 gasLimit = "0x20000"; // 131,072 gas - very low for simple functions
-                console.log(
-                  `Using reduced gas limit for ${method}: ${gasLimit}`,
-                );
               } else if (
                 method === "submitMilestone" ||
                 method === "approveMilestone" ||
@@ -317,17 +296,11 @@ export function Web3Provider({ children }: { children: ReactNode }) {
                 method === "disputeMilestone"
               ) {
                 gasLimit = "0x30000"; // 196,608 gas - reduced for milestone functions
-                console.log(
-                  `Using reduced gas limit for ${method}: ${gasLimit}`,
-                );
               } else if (
                 method === "createEscrow" ||
                 method === "createEscrowNative"
               ) {
                 gasLimit = "0x60000"; // 393,216 gas - optimized for escrow creation
-                console.log(
-                  `Using optimized gas limit for ${method}: ${gasLimit}`,
-                );
               }
             }
           }
@@ -337,8 +310,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
             to: address,
             data,
             gas: gasLimit,
-            // Let network auto-estimate gas price for better compatibility
-            // gasPrice: method === "approve" ? "0x174876e800" : "0x3b9aca00", // 100 gwei for approve, 1 gwei for others
           };
 
           // Only add value field if it's not "0x0" or "no-value" (for native token transactions)
@@ -352,7 +323,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           });
           return txHash;
         } catch (error) {
-          console.error(`Error sending ${method}:`, error);
           throw error;
         }
       },
@@ -363,8 +333,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   };
 
   const encodeFunction = (abi: any, method: string, args: any[]) => {
-    console.log(`Encoding function ${method} with args:`, args);
-
     try {
       // Create a proper interface from the ABI
       const iface = new ethers.Interface(abi);
@@ -372,11 +340,8 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       // Encode the function call with proper parameters
       const encodedData = iface.encodeFunctionData(method, args);
 
-      console.log(`Encoded data for ${method}:`, encodedData);
       return encodedData;
     } catch (error) {
-      console.error(`Error encoding function ${method}:`, error);
-
       // Fallback to basic encoding for common functions
       if (method === "approve") {
         // approve(address,uint256) selector

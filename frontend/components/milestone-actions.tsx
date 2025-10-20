@@ -218,10 +218,6 @@ export function MilestoneActions({
                 break; // Success, exit retry loop
               } catch (sendError: any) {
                 retryCount++;
-                console.log(
-                  `Transaction attempt ${retryCount} failed:`,
-                  sendError,
-                );
 
                 if (retryCount >= maxRetries) {
                   throw sendError; // Re-throw the last error
@@ -229,11 +225,7 @@ export function MilestoneActions({
 
                 // Wait before retry
                 await new Promise((resolve) => setTimeout(resolve, 2000));
-                console.log(
-                  `Retrying transaction (attempt ${retryCount + 1}/${maxRetries})...`,
-                );
 
-                // Show retry toast
                 toast({
                   title: "Retrying transaction",
                   description: `Attempt ${retryCount + 1} of ${maxRetries}. Please wait...`,
@@ -248,7 +240,6 @@ export function MilestoneActions({
 
               // Check if txHash has a wait method (ethers.js transaction object)
               if (txHash && typeof txHash.wait === "function") {
-                console.log("Using txHash.wait() method");
                 receipt = await Promise.race([
                   txHash.wait(),
                   new Promise((_, reject) =>
@@ -260,13 +251,9 @@ export function MilestoneActions({
                 ]);
               } else {
                 // Fallback: use polling to check transaction status
-                console.log(
-                  "Using polling method for transaction confirmation",
-                );
+
                 receipt = await pollTransactionReceipt(txHash);
               }
-
-              console.log(`Transaction receipt:`, receipt);
 
               if (receipt.status === 1) {
                 toast({
@@ -292,7 +279,6 @@ export function MilestoneActions({
 
                 // Wait a bit more for data to refresh, then reload page
                 await new Promise((resolve) => setTimeout(resolve, 2000));
-                console.log(`Page reload disabled for debugging`);
               } else {
                 throw new Error("Transaction failed on blockchain");
               }
@@ -323,8 +309,7 @@ export function MilestoneActions({
 
                 // Wait a bit more for data to refresh, then reload page
                 await new Promise((resolve) => setTimeout(resolve, 2000));
-                console.log(`Page reload disabled for debugging`);
-                return; // Exit early to avoid the error handling below
+                return;
               }
 
               if (receiptError.message?.includes("timeout")) {
@@ -339,8 +324,6 @@ export function MilestoneActions({
               }
             }
           } catch (error: any) {
-            console.error("Error approving milestone:", error);
-
             // Handle specific error cases
             if (error.message?.includes("Not submitted")) {
               toast({
@@ -530,11 +513,9 @@ export function MilestoneActions({
           break;
       }
 
-      console.log("Transaction hash:", txHash);
       setDialogOpen(false);
       onSuccess();
     } catch (error: any) {
-      console.error("Error performing action:", error);
       toast({
         title: "Action failed",
         description: error.message || "Failed to perform action",

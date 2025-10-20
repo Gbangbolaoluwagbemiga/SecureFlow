@@ -194,12 +194,6 @@ export default function AdminPage() {
         case "unpause":
           // Check if contract is already unpaused
           const currentPausedStatus = await contract.call("paused");
-          console.log(
-            "Current paused status:",
-            currentPausedStatus,
-            "Type:",
-            typeof currentPausedStatus,
-          );
 
           // Handle different possible return types - including Proxy objects
           let isPaused = false;

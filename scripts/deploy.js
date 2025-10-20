@@ -3,20 +3,10 @@ const fs = require("fs");
 require("dotenv").config();
 
 async function main() {
-  console.log(
-    "🚀 Deploying SecureFlow - Advanced Hybrid Escrow + Marketplace Platform",
-  );
-
   // Get the deployer account
   const [deployer] = await hre.ethers.getSigners();
-  console.log("Deploying contracts with account:", deployer.address);
-  console.log(
-    "Account balance:",
-    (await hre.ethers.provider.getBalance(deployer.address)).toString(),
-  );
 
   // Deploy MockERC20 token for testing
-  console.log("\n📦 Deploying MockERC20 token...");
   const MockERC20 = await hre.ethers.getContractFactory("MockERC20");
   const mockToken = await MockERC20.deploy(
     "Mock Token",
@@ -24,10 +14,8 @@ async function main() {
     hre.ethers.parseEther("1000000"),
   );
   await mockToken.waitForDeployment();
-  console.log("✅ MockERC20 deployed to:", await mockToken.getAddress());
 
   // Deploy SecureFlow
-  console.log("\n🔒 Deploying SecureFlow...");
   const SecureFlow = await hre.ethers.getContractFactory("SecureFlow");
 
   // Constructor parameters: monadToken, feeCollector, platformFeeBP
@@ -41,10 +29,7 @@ async function main() {
   );
   await secureFlow.waitForDeployment();
 
-  console.log("✅ SecureFlow deployed to:", await secureFlow.getAddress());
-
   // Authorize some arbiters for testing
-  console.log("\n⚖️ Authorizing arbiters...");
   const arbiters = [
     "0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41", // Your arbiter address
     "0xF1E430aa48c3110B2f223f278863A4c8E2548d8C", // Another arbiter address
@@ -52,14 +37,10 @@ async function main() {
 
   for (const arbiterAddress of arbiters) {
     await secureFlow.authorizeArbiter(arbiterAddress);
-    console.log(`   - Authorized arbiter: ${arbiterAddress}`);
   }
-  console.log("✅ Arbiters authorized.");
 
   // Whitelist the mock token
-  console.log("\n🪙 Whitelisting tokens...");
   await secureFlow.whitelistToken(await mockToken.getAddress());
-  console.log("✅ MockERC20 whitelisted");
 
   // Get contract info
   const contractInfo = {
@@ -100,30 +81,10 @@ async function main() {
       2,
     ),
   );
-  console.log("\n📄 Deployment info saved to deployed.json");
-
-  // Display summary
-  console.log("\n" + "=".repeat(60));
-  console.log("🎉 SECUREFLOW DEPLOYMENT COMPLETE!");
-  console.log("=".repeat(60));
-  console.log(`📋 Contract Address: ${await secureFlow.getAddress()}`);
-  console.log(`🪙 Mock Token: ${await mockToken.getAddress()}`);
-  console.log(
-    `🌐 Network: ${contractInfo.network} (Chain ID: ${contractInfo.chainId})`,
-  );
-  console.log(`💰 Platform Fee: ${platformFeeBP}% (Hackathon Demo)`);
-  console.log(`⚖️ Authorized Arbiters: ${arbiters.length}`);
-
-  console.log("\n🏆 HACKATHON-WINNING FEATURES:");
-  contractInfo.features.forEach((feature) => console.log(`  ${feature}`));
-
-  console.log("\n🚀 Ready for hackathon submission!");
-  console.log("=".repeat(60));
 }
 
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error(error);
     process.exit(1);
   });

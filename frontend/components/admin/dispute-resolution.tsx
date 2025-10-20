@@ -90,9 +90,6 @@ export function DisputeResolution({
           );
           const escrowStatus = Number(escrowSummary[3]); // status is at index 3
 
-          console.log(`Escrow ${escrowId} status:`, escrowStatus);
-          console.log(`Escrow ${escrowId} summary:`, escrowSummary);
-
           // Get milestone details for this escrow (check all escrows, not just disputed ones)
           const milestoneCount = Number(escrowSummary[11]); // milestoneCount is at index 11
 
@@ -109,15 +106,6 @@ export function DisputeResolution({
               );
               const milestoneStatus = Number(milestone[2]); // status is at index 2
 
-              console.log(
-                `Escrow ${escrowId} Milestone ${milestoneIndex} status:`,
-                milestoneStatus,
-              );
-              console.log(
-                `Escrow ${escrowId} Milestone ${milestoneIndex} data:`,
-                milestone,
-              );
-
               // Check if this milestone is disputed (3 = Disputed)
               if (milestoneStatus === 3) {
                 const dispute: Dispute = {
@@ -133,24 +121,10 @@ export function DisputeResolution({
                   milestoneDescription: milestone[0], // description
                 };
                 disputes.push(dispute);
-                console.log(
-                  `Found dispute for Escrow ${escrowId}, Milestone ${milestoneIndex}:`,
-                  dispute,
-                );
               }
-            } catch (milestoneError) {
-              console.log(
-                `Error fetching milestone ${milestoneIndex} for escrow ${escrowId}:`,
-                milestoneError,
-              );
-            }
+            } catch (milestoneError) {}
           }
         } catch (escrowError) {
-          console.log(
-            `Error calling getEscrowSummary for escrow ${escrowId}:`,
-            escrowError,
-          );
-
           // Try to get milestone data directly even if escrow summary fails
           try {
             // Try to get milestones directly using the milestones function
@@ -163,15 +137,6 @@ export function DisputeResolution({
                   milestoneIndex,
                 );
                 const milestoneStatus = Number(milestone[2]); // status is at index 2
-
-                console.log(
-                  `Direct milestone check - Escrow ${escrowId} Milestone ${milestoneIndex} status:`,
-                  milestoneStatus,
-                );
-                console.log(
-                  `Direct milestone check - Escrow ${escrowId} Milestone ${milestoneIndex} data:`,
-                  milestone,
-                );
 
                 // Check if this milestone is disputed (3 = Disputed)
                 if (milestoneStatus === 3) {
@@ -188,22 +153,12 @@ export function DisputeResolution({
                     milestoneDescription: milestone[0], // description
                   };
                   disputes.push(dispute);
-                  console.log(
-                    `Found dispute via direct milestone check for Escrow ${escrowId}, Milestone ${milestoneIndex}:`,
-                    dispute,
-                  );
                 }
               } catch (milestoneError) {
-                // If we get an error, we've probably reached the end of milestones for this escrow
                 break;
               }
             }
-          } catch (directError) {
-            console.log(
-              `Error with direct milestone check for escrow ${escrowId}:`,
-              directError,
-            );
-          }
+          } catch (directError) {}
         }
       }
 
@@ -251,15 +206,6 @@ export function DisputeResolution({
       // Use BigInt to handle large numbers properly
       const amountInWei = BigInt(Math.floor(amountInTokens)) * BigInt(1e18);
       const beneficiaryAmountWei = amountInWei.toString();
-
-      console.log("Dispute resolution values:", {
-        beneficiaryAmount,
-        amountInTokens,
-        amountInWei,
-        beneficiaryAmountWei,
-        escrowId: selectedDispute.escrowId,
-        milestoneIndex: selectedDispute.milestoneIndex,
-      });
 
       const txHash = await contract.send(
         "resolveDispute",

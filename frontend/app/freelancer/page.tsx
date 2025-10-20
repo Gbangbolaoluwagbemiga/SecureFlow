@@ -136,7 +136,6 @@ export default function FreelancerPage() {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
 
       if (!contract) {
-        console.error("Contract not available");
         toast({
           title: "Contract Error",
           description:
@@ -179,26 +178,17 @@ export default function FreelancerPage() {
             if (isBeneficiary) {
               // Get milestone count from escrow summary first
               const milestoneCount = Number(escrowSummary[11]) || 0;
-              console.log(
-                `Escrow ${i} milestoneCount from contract:`,
-                escrowSummary[11],
-              );
-              console.log(`Escrow ${i} parsed milestoneCount:`, milestoneCount);
 
               // Fetch milestones for this escrow
               const milestones = await contract.call("getMilestones", i);
-              console.log(`Milestones for escrow ${i}:`, milestones);
-              console.log(`Milestones type:`, typeof milestones);
-              console.log(`Milestones length:`, milestones?.length);
+
               if (milestones && milestones.length > 0) {
-                console.log(`First milestone:`, milestones[0]);
               }
 
               // Try to get individual milestones if getMilestones doesn't return all
               const allMilestones = [];
 
               // Always try to fetch individual milestones to get accurate data
-              console.log(`Fetching individual milestones for escrow ${i}...`);
               for (let j = 0; j < milestoneCount; j++) {
                 try {
                   const individualMilestone = await contract.call(
@@ -206,25 +196,9 @@ export default function FreelancerPage() {
                     i,
                     j,
                   );
-                  console.log(
-                    `Individual milestone ${j} for escrow ${i}:`,
-                    individualMilestone,
-                  );
-                  console.log(`Milestone ${j} structure:`, {
-                    type: typeof individualMilestone,
-                    keys: Object.keys(individualMilestone || {}),
-                    description: individualMilestone?.description,
-                    amount: individualMilestone?.amount,
-                    status: individualMilestone?.status,
-                    submittedAt: individualMilestone?.submittedAt,
-                    approvedAt: individualMilestone?.approvedAt,
-                  });
+
                   allMilestones.push(individualMilestone);
                 } catch (error) {
-                  console.warn(
-                    `Could not fetch individual milestone ${j} for escrow ${i}:`,
-                    error,
-                  );
                   // Only create placeholder if we absolutely can't fetch the data
                   allMilestones.push({
                     description: `Milestone ${j + 1} - To be defined`,
@@ -235,8 +209,6 @@ export default function FreelancerPage() {
                   });
                 }
               }
-
-              console.log(`All milestones for escrow ${i}:`, allMilestones);
 
               // Convert contract data to our Escrow type
               const escrow: Escrow = {
@@ -271,82 +243,33 @@ export default function FreelancerPage() {
                           status = m.status || 0;
                           submittedAt = m.submittedAt || undefined;
                           approvedAt = m.approvedAt || undefined;
-                          console.log(
-                            `Milestone ${index} is a placeholder milestone`,
-                          );
                         } else {
                           // This is a real milestone from the contract
                           // Handle Proxy(Result) objects properly
                           try {
-                            console.log(
-                              `Parsing milestone ${index} raw data:`,
-                              m,
-                            );
-                            console.log(
-                              `Milestone ${index} data type:`,
-                              typeof m,
-                            );
-                            console.log(
-                              `Milestone ${index} data keys:`,
-                              Object.keys(m || {}),
-                            );
-
                             // Try direct field access first (for struct fields)
                             if (m.description !== undefined) {
                               description = String(m.description);
-                              console.log(
-                                `Milestone ${index} description from m.description:`,
-                                description,
-                              );
                             } else if (m[0] !== undefined) {
                               description = String(m[0]);
-                              console.log(
-                                `Milestone ${index} description from m[0]:`,
-                                description,
-                              );
                             } else {
                               description = `Milestone ${index + 1}`;
-                              console.log(
-                                `Milestone ${index} using default description`,
-                              );
                             }
 
                             if (m.amount !== undefined) {
                               amount = String(m.amount);
-                              console.log(
-                                `Milestone ${index} amount from m.amount:`,
-                                amount,
-                              );
                             } else if (m[1] !== undefined) {
                               amount = String(m[1]);
-                              console.log(
-                                `Milestone ${index} amount from m[1]:`,
-                                amount,
-                              );
                             } else {
                               amount = "0";
-                              console.log(
-                                `Milestone ${index} using default amount`,
-                              );
                             }
 
                             if (m.status !== undefined) {
                               status = Number(m.status) || 0;
-                              console.log(
-                                `Milestone ${index} status from m.status:`,
-                                status,
-                              );
                             } else if (m[2] !== undefined) {
                               status = Number(m[2]) || 0;
-                              console.log(
-                                `Milestone ${index} status from m[2]:`,
-                                status,
-                              );
                             } else {
                               status = 0;
-                              console.log(
-                                `Milestone ${index} using default status`,
-                              );
                             }
 
                             if (
@@ -354,16 +277,8 @@ export default function FreelancerPage() {
                               Number(m.submittedAt) > 0
                             ) {
                               submittedAt = Number(m.submittedAt) * 1000;
-                              console.log(
-                                `Milestone ${index} submittedAt from m.submittedAt:`,
-                                submittedAt,
-                              );
                             } else if (m[3] !== undefined && Number(m[3]) > 0) {
                               submittedAt = Number(m[3]) * 1000;
-                              console.log(
-                                `Milestone ${index} submittedAt from m[3]:`,
-                                submittedAt,
-                              );
                             }
 
                             if (
@@ -371,16 +286,8 @@ export default function FreelancerPage() {
                               Number(m.approvedAt) > 0
                             ) {
                               approvedAt = Number(m.approvedAt) * 1000;
-                              console.log(
-                                `Milestone ${index} approvedAt from m.approvedAt:`,
-                                approvedAt,
-                              );
                             } else if (m[4] !== undefined && Number(m[4]) > 0) {
                               approvedAt = Number(m[4]) * 1000;
-                              console.log(
-                                `Milestone ${index} approvedAt from m[4]:`,
-                                approvedAt,
-                              );
                             }
 
                             // Parse dispute reason (index 7 in contract)
@@ -391,30 +298,9 @@ export default function FreelancerPage() {
                               disputeReason = String(m[7]);
                             }
 
-                            console.log(`Milestone ${index} parsed values:`, {
-                              description,
-                              amount,
-                              status,
-                              submittedAt,
-                              approvedAt,
-                              disputeReason,
-                            });
-
                             // Debug amount conversion
                             const amountInTokens = formatAmount(amount);
-                            console.log(
-                              `Milestone ${index} amount conversion:`,
-                              {
-                                rawAmount: amount,
-                                amountInTokens: amountInTokens,
-                                isZero: amount === "0" || amount === "0x0",
-                              },
-                            );
                           } catch (proxyError) {
-                            console.warn(
-                              `Error parsing Proxy(Result) for milestone ${index}:`,
-                              proxyError,
-                            );
                             // Fallback to basic parsing
                             description = `Milestone ${index + 1}`;
                             amount = "0";
@@ -422,24 +308,10 @@ export default function FreelancerPage() {
                           }
                         }
                       } catch (e) {
-                        console.warn(
-                          `Error parsing milestone ${index} basic data:`,
-                          e,
-                        );
                         description = `Milestone ${index + 1}`;
                         amount = "0";
                         status = 0;
                       }
-
-                      // Log the milestone data for debugging
-                      console.log(`Milestone ${index} raw data:`, m);
-                      console.log(`Milestone ${index} parsed:`, {
-                        description,
-                        amount,
-                        status,
-                        submittedAt,
-                        approvedAt,
-                      });
                     } else {
                       // Fallback for unexpected structure
                       description = `Milestone ${index + 1}`;
@@ -464,59 +336,25 @@ export default function FreelancerPage() {
                         // This will be handled by the UI logic
                         finalStatus = "pending";
                       }
-                      console.log(
-                        `Milestone ${index} is placeholder, setting to pending`,
-                      );
                     } else {
-                      // Real milestone from contract
-                      console.log(`Milestone ${index} status determination:`, {
-                        rawStatus: status,
-                        parsedStatus: getMilestoneStatusFromNumber(status),
-                        submittedAt: submittedAt,
-                        approvedAt: approvedAt,
-                        hasSubmittedAt: submittedAt && submittedAt > 0,
-                        hasApprovedAt: approvedAt && approvedAt > 0,
-                      });
-
                       // Priority 1: Use contract status as the primary source of truth
                       if (status === 1) {
                         finalStatus = "submitted";
-                        console.log(
-                          `Milestone ${index} setting to submitted due to status 1`,
-                        );
                       } else if (status === 2) {
                         finalStatus = "approved";
-                        console.log(
-                          `Milestone ${index} setting to approved due to status 2`,
-                        );
                       } else if (status === 3) {
                         finalStatus = "disputed";
-                        console.log(
-                          `Milestone ${index} setting to disputed due to status 3`,
-                        );
                       } else if (status === 4) {
                         finalStatus = "disputed";
-                        console.log(
-                          `Milestone ${index} setting to disputed due to status 4`,
-                        );
                       }
                       // Priority 2: Fallback to timestamp-based logic if status is 0
                       else if (status === 0) {
                         if (approvedAt && approvedAt > 0) {
                           finalStatus = "approved";
-                          console.log(
-                            `Milestone ${index} setting to approved due to approvedAt: ${approvedAt}`,
-                          );
                         } else if (submittedAt && submittedAt > 0) {
                           finalStatus = "submitted";
-                          console.log(
-                            `Milestone ${index} setting to submitted due to submittedAt: ${submittedAt}`,
-                          );
                         } else {
                           finalStatus = "pending";
-                          console.log(
-                            `Milestone ${index} setting to pending due to no timestamps`,
-                          );
                         }
                       }
                       // Special case: If this is the first milestone and funds have been released, it should be approved
@@ -526,29 +364,10 @@ export default function FreelancerPage() {
                         Number(escrowSummary[5]) > 0
                       ) {
                         finalStatus = "approved";
-                        console.log(
-                          `Milestone ${index} setting to approved due to released funds: ${escrowSummary[5]}`,
-                        );
                       }
                       // Otherwise use the parsed status
                       else {
-                        console.log(
-                          `Milestone ${index} using parsed status: ${finalStatus}`,
-                        );
                       }
-                    }
-
-                    console.log(
-                      `Milestone ${index} final status:`,
-                      finalStatus,
-                      `(raw status: ${status}, submittedAt: ${submittedAt}, approvedAt: ${approvedAt})`,
-                    );
-
-                    // Special debugging for rejected milestones
-                    if (finalStatus === "rejected") {
-                      console.log(
-                        `🎯 FREELANCER: REJECTED MILESTONE DETECTED! Milestone ${index} status: ${finalStatus}`,
-                      );
                     }
 
                     // Track milestone states for submission prevention
@@ -572,10 +391,6 @@ export default function FreelancerPage() {
                       disputeReason,
                     };
                   } catch (error) {
-                    console.error(
-                      `Error processing milestone ${index}:`,
-                      error,
-                    );
                     return {
                       description: `Milestone ${index + 1}`,
                       amount: "0",
@@ -588,29 +403,9 @@ export default function FreelancerPage() {
                 milestoneCount: Number(escrowSummary[11]) || 0, // milestoneCount
               };
 
-              // Debug milestone count
-              console.log(
-                `Escrow ${i} milestoneCount from contract:`,
-                escrowSummary[11],
-              );
-              console.log(
-                `Escrow ${i} parsed milestoneCount:`,
-                Number(escrowSummary[11]),
-              );
-              console.log(
-                `Escrow ${i} milestones array length:`,
-                milestones?.length,
-              );
-
               freelancerEscrows.push(escrow);
             }
           } catch (error) {
-            console.error(`Error fetching escrow ${i}:`, error);
-            // Log more details about the error
-            if (error instanceof Error) {
-              console.error(`Error message: ${error.message}`);
-              console.error(`Error name: ${error.name}`);
-            }
             continue;
           }
         }
@@ -635,7 +430,6 @@ export default function FreelancerPage() {
       });
       setSubmittedMilestones(currentSubmittedMilestones);
     } catch (error) {
-      console.error("Error fetching freelancer escrows:", error);
       toast({
         title: "Failed to load escrows",
         description:
@@ -670,7 +464,6 @@ export default function FreelancerPage() {
       // Refresh escrows
       await fetchFreelancerEscrows();
     } catch (error) {
-      console.error("Error starting work:", error);
       toast({
         title: "Failed to start work",
         description: "Could not start work on this escrow",
@@ -790,7 +583,6 @@ export default function FreelancerPage() {
 
       if (milestones && milestones.length > milestoneIndex) {
         const milestone = milestones[milestoneIndex];
-        console.log(`Contract milestone ${milestoneIndex} status:`, milestone);
 
         // Check if milestone has been submitted (status 1) or approved (status 2)
         if (milestone && milestone[2] && Number(milestone[2]) > 0) {
@@ -802,10 +594,7 @@ export default function FreelancerPage() {
           return;
         }
       }
-    } catch (error) {
-      console.warn("Could not check milestone status from contract:", error);
-      // Continue with submission attempt
-    }
+    } catch (error) {}
 
     // Validate milestone description from input field
     if (!description?.trim()) {
@@ -855,9 +644,7 @@ export default function FreelancerPage() {
           if (receipt) {
             break;
           }
-        } catch (error) {
-          console.log("Waiting for transaction confirmation...", attempts + 1);
-        }
+        } catch (error) {}
 
         await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
         attempts++;
@@ -896,7 +683,6 @@ export default function FreelancerPage() {
         throw new Error("Transaction failed on blockchain");
       }
     } catch (error) {
-      console.error("Error submitting milestone:", error);
       toast({
         title: "Failed to submit milestone",
         description: "Could not submit your milestone",
@@ -946,7 +732,6 @@ export default function FreelancerPage() {
       // Refresh escrows
       await fetchFreelancerEscrows();
     } catch (error) {
-      console.error("Error opening dispute:", error);
       toast({
         title: "Failed to open dispute",
         description: "Could not open dispute for this milestone",
@@ -1029,7 +814,6 @@ export default function FreelancerPage() {
       }
       return num.toFixed(2);
     } catch (error) {
-      console.warn("Error formatting amount:", amount, error);
       return "0.00";
     }
   };
@@ -1414,26 +1198,12 @@ export default function FreelancerPage() {
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        onClick={() => {
-                                          // TODO: Show rejection reason modal
-                                          console.log(
-                                            "Show rejection reason for milestone",
-                                            index,
-                                          );
-                                        }}
                                         className="border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800"
                                       >
                                         View Feedback
                                       </Button>
                                       <Button
                                         size="sm"
-                                        onClick={() => {
-                                          // TODO: Implement resubmit functionality
-                                          console.log(
-                                            "Resubmit milestone",
-                                            index,
-                                          );
-                                        }}
                                         className="bg-red-600 hover:bg-red-700 text-white"
                                       >
                                         Resubmit
@@ -1543,24 +1313,6 @@ export default function FreelancerPage() {
                               }
                             }
                           }
-
-                          console.log(
-                            `Escrow ${escrow.id} current milestone index:`,
-                            currentMilestoneIndex,
-                          );
-                          console.log(
-                            `Escrow ${escrow.id} milestone statuses:`,
-                            escrow.milestones.map((m, i) => ({
-                              index: i,
-                              status: m.status,
-                              submitted: submittedMilestones.has(
-                                `${escrow.id}-${i}`,
-                              ),
-                              approved: approvedMilestones.has(
-                                `${escrow.id}-${i}`,
-                              ),
-                            })),
-                          );
 
                           if (currentMilestoneIndex === -1) {
                             return (
