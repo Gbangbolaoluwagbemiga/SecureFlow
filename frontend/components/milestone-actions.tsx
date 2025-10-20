@@ -581,19 +581,7 @@ export function MilestoneActions({
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        {/* Start Work - Only beneficiary can start (disabled if terminated) */}
-        {escrowStatus === "pending" &&
-          isBeneficiary &&
-          !isProjectTerminated && (
-            <Button
-              onClick={() => openDialog("start")}
-              size="sm"
-              className="gap-2"
-            >
-              <Play className="h-4 w-4" />
-              Start Work
-            </Button>
-          )}
+        {/* Start Work button removed - only available on freelancer page */}
 
         {/* Submit Milestone - Only beneficiary for pending milestones that can be submitted (disabled if terminated) */}
         {showSubmitButton && canSubmitMilestone() && !isProjectTerminated && (
@@ -677,18 +665,7 @@ export function MilestoneActions({
           </div>
         )}
 
-        {/* Dispute - Only payer can dispute submitted milestones */}
-        {milestone.status === "submitted" && isPayer && (
-          <Button
-            onClick={() => openDialog("dispute")}
-            size="sm"
-            variant="destructive"
-            className="gap-2"
-          >
-            <Gavel className="h-4 w-4" />
-            Dispute
-          </Button>
-        )}
+        {/* Duplicate dispute button removed */}
       </div>
 
       {/* Confirmation Dialog */}

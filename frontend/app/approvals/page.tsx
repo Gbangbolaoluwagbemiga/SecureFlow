@@ -33,6 +33,8 @@ export default function ApprovalsPage() {
   );
   const [selectedFreelancer, setSelectedFreelancer] =
     useState<Application | null>(null);
+  const [selectedJobForApproval, setSelectedJobForApproval] =
+    useState<JobWithApplications | null>(null);
 
   // Debug selectedFreelancer changes
   useEffect(() => {
@@ -403,7 +405,7 @@ export default function ApprovalsPage() {
   };
 
   const handleApproveFreelancer = async () => {
-    if (!selectedJob || !selectedFreelancer || !wallet.isConnected) {
+    if (!selectedJobForApproval || !selectedFreelancer || !wallet.isConnected) {
       return;
     }
 
@@ -419,7 +421,7 @@ export default function ApprovalsPage() {
       const txHash = await contract.send(
         "acceptFreelancer",
         "no-value",
-        Number(selectedJob.id),
+        Number(selectedJobForApproval.id),
         selectedFreelancer.freelancerAddress,
       );
 
@@ -431,6 +433,7 @@ export default function ApprovalsPage() {
       // Close modals first
       setSelectedJob(null);
       setSelectedFreelancer(null);
+      setSelectedJobForApproval(null);
 
       // Wait a moment for the transaction to be processed
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -556,6 +559,8 @@ export default function ApprovalsPage() {
                   (app) => app.freelancerAddress === freelancer,
                 );
                 if (application) {
+                  setSelectedJobForApproval(job); // Store job data for approval
+                  setSelectedJob(null); // Close the first modal
                   setSelectedFreelancer(application);
                   setIsApproving(true);
                 } else {
@@ -617,6 +622,8 @@ export default function ApprovalsPage() {
                           <div className="flex gap-2">
                             <button
                               onClick={() => {
+                                setSelectedJobForApproval(selectedJob); // Store job data for approval
+                                setSelectedJob(null); // Close the Application Review Modal
                                 setSelectedFreelancer(application);
                                 setIsApproving(true);
                               }}
@@ -695,7 +702,6 @@ export default function ApprovalsPage() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-
                       handleApproveFreelancer();
                     }}
                     onMouseDown={(e) => {
