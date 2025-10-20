@@ -4,6 +4,8 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { Web3Provider } from "@/contexts/web3-context";
+import { SmartAccountProvider } from "@/contexts/smart-account-context";
+import { DelegationProvider } from "@/contexts/delegation-context";
 import { Navbar } from "@/components/navbar";
 import { Toaster } from "@/components/ui/toaster";
 import { Suspense } from "react";
@@ -60,9 +62,13 @@ export default function RootLayout({
         >
           <Suspense fallback={<div>Loading...</div>}>
             <Web3Provider>
-              <Navbar />
-              <main className="pt-16">{children}</main>
-              <Toaster />
+              <SmartAccountProvider>
+                <DelegationProvider>
+                  <Navbar />
+                  <main className="pt-16">{children}</main>
+                  <Toaster />
+                </DelegationProvider>
+              </SmartAccountProvider>
             </Web3Provider>
           </Suspense>
         </ThemeProvider>

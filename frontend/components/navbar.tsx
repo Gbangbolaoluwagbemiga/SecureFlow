@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { WalletButton } from "@/components/wallet-button";
+import { SmartAccountStatus } from "@/components/smart-account-status";
 import { Shield, Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -58,7 +59,7 @@ export function Navbar() {
   return (
     <>
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/40 glass">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-2">
           <Link href="/" className="flex items-center gap-2 font-bold text-xl">
             <Shield className="h-6 w-6 text-primary" />
             <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
@@ -67,7 +68,7 @@ export function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-4">
             <Link
               href="/"
               className={`text-sm font-medium transition-colors ${
@@ -108,6 +109,7 @@ export function Navbar() {
             >
               Dashboard
             </Link>
+
             {isJobCreator && (
               <Link
                 href="/approvals"
@@ -144,26 +146,39 @@ export function Navbar() {
                 Admin
               </Link>
             )}
+            <Link
+              href="/smart-account-demo"
+              className={`text-sm font-medium transition-colors ${
+                isActive("/smart-account-demo")
+                  ? "text-primary bg-primary/10 px-3 py-2 rounded-md"
+                  : "hover:text-primary"
+              }`}
+            >
+              Smart Account Demo
+            </Link>
           </div>
 
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <WalletButton />
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Hide heavy widgets on mobile to keep hamburger visible */}
+            <div className="hidden md:block">
+              <ThemeToggle />
+            </div>
+            <div className="hidden md:block">
+              <SmartAccountStatus />
+            </div>
+            <div className="flex-shrink-0">
+              <WalletButton />
+            </div>
 
             <Button
+              aria-label="Toggle menu"
               variant="ghost"
               size="icon"
-              className="md:hidden"
+              className="md:hidden ml-1"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
               {mobileMenuOpen ? (
-                <X
-                  className="h-5 w-5"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMobileMenuOpen(false);
-                  }}
-                />
+                <X className="h-5 w-5" />
               ) : (
                 <Menu className="h-5 w-5" />
               )}

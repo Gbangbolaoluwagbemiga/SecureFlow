@@ -17,15 +17,19 @@ export default function HomePage() {
     totalVolume: "0",
     completedEscrows: 0,
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (wallet.isConnected) {
       fetchStats();
+    } else {
+      setLoading(false);
     }
   }, [wallet.isConnected]);
 
   const fetchStats = async () => {
     try {
+      setLoading(true);
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
 
       // Get total number of escrows
@@ -95,6 +99,8 @@ export default function HomePage() {
         totalVolume: "0",
         completedEscrows: 0,
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -161,7 +167,11 @@ export default function HomePage() {
                 <TrendingUp className="h-6 w-6 text-primary" />
               </div>
               <div className="text-4xl font-bold mb-2">
-                {stats.activeEscrows}
+                {loading ? (
+                  <span className="animate-pulse text-muted-foreground">…</span>
+                ) : (
+                  stats.activeEscrows
+                )}
               </div>
               <div className="text-sm text-muted-foreground">
                 Active Escrows
@@ -173,7 +183,13 @@ export default function HomePage() {
                 <Shield className="h-6 w-6 text-accent" />
               </div>
               <div className="text-4xl font-bold mb-2">
-                ${stats.totalVolume}
+                {loading ? (
+                  <span className="animate-pulse text-muted-foreground">
+                    $...
+                  </span>
+                ) : (
+                  `$${stats.totalVolume}`
+                )}
               </div>
               <div className="text-sm text-muted-foreground">
                 Total Volume Secured
@@ -185,7 +201,11 @@ export default function HomePage() {
                 <CheckCircle2 className="h-6 w-6 text-primary" />
               </div>
               <div className="text-4xl font-bold mb-2">
-                {stats.completedEscrows}
+                {loading ? (
+                  <span className="animate-pulse text-muted-foreground">…</span>
+                ) : (
+                  stats.completedEscrows
+                )}
               </div>
               <div className="text-sm text-muted-foreground">
                 Completed Projects

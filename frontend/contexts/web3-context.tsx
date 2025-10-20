@@ -243,13 +243,18 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
   const getContract = (address: string, abi: any) => {
     if (typeof window === "undefined" || !window.ethereum) return null;
+    // Normalize address to a valid checksum to avoid INVALID_ARGUMENT errors
+    let targetAddress = address;
+    try {
+      targetAddress = ethers.getAddress(address.toLowerCase());
+    } catch {}
 
     return {
       async call(method: string, ...args: any[]) {
         try {
           // Use direct RPC connection for read operations to avoid MetaMask issues
           const provider = new ethers.JsonRpcProvider(MONAD_TESTNET.rpcUrls[0]);
-          const contract = new ethers.Contract(address, abi, provider);
+          const contract = new ethers.Contract(targetAddress, abi, provider);
 
           // Call the contract method directly
           const result = await contract[method](...args);
@@ -275,7 +280,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
                 params: [
                   {
                     from: wallet.address,
-                    to: address,
+                    to: targetAddress,
                     data,
                     value:
                       value !== "0x0" && value !== "no-value" ? value : "0x0",
@@ -307,7 +312,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
           const txParams: any = {
             from: wallet.address,
-            to: address,
+            to: targetAddress,
             data,
             gas: gasLimit,
           };

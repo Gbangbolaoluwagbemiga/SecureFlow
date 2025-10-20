@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { useWeb3 } from "@/contexts/web3-context";
+import { useDelegation } from "@/contexts/delegation-context";
 import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
 
 export function useAdminStatus() {
   const { wallet, getContract } = useWeb3();
+  const { getActiveDelegations, delegations } = useDelegation();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -15,7 +17,7 @@ export function useAdminStatus() {
     }
 
     checkAdminStatus();
-  }, [wallet.isConnected, wallet.address]);
+  }, [wallet.isConnected, wallet.address, delegations.length]);
 
   const checkAdminStatus = async () => {
     setLoading(true);
@@ -32,7 +34,14 @@ export function useAdminStatus() {
       // Check if current wallet is the owner
       const isOwner =
         owner.toString().toLowerCase() === wallet.address?.toLowerCase();
-      setIsAdmin(isOwner);
+
+      // Also check if user has an active delegation granted TO their address
+      const activeDelegations = getActiveDelegations();
+      const hasDelegationForUser = activeDelegations.some(
+        (d) => d.delegatee.toLowerCase() === wallet.address?.toLowerCase(),
+      );
+
+      setIsAdmin(isOwner || hasDelegationForUser);
     } catch (error) {
       setIsAdmin(false);
     } finally {

@@ -12,6 +12,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useWeb3 } from "@/contexts/web3-context";
+import { useAdminStatus } from "@/hooks/use-admin-status";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
@@ -35,7 +36,8 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function AdminPage() {
-  const { wallet, isOwner, getContract } = useWeb3();
+  const { wallet, getContract } = useWeb3();
+  const { isAdmin, loading: adminLoading } = useAdminStatus();
   const { toast } = useToast();
   const [isPaused, setIsPaused] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -48,6 +50,7 @@ export default function AdminPage() {
     token: CONTRACTS.MOCK_ERC20,
     amount: "",
   });
+  const [testMode, setTestMode] = useState(false);
   const [contractStats, setContractStats] = useState({
     platformFeeBP: 0,
     totalEscrows: 0,
@@ -141,6 +144,34 @@ export default function AdminPage() {
 
   const handleAction = async () => {
     try {
+      // If in test mode, simulate the action without calling the contract
+      if (testMode) {
+        switch (actionType) {
+          case "pause":
+            setIsPaused(true);
+            toast({
+              title: "🧪 Test Mode: Contract paused",
+              description: "Simulated: All escrow operations are now paused",
+            });
+            break;
+          case "unpause":
+            setIsPaused(false);
+            toast({
+              title: "🧪 Test Mode: Contract unpaused",
+              description: "Simulated: Escrow operations have been resumed",
+            });
+            break;
+          case "withdraw":
+            toast({
+              title: "🧪 Test Mode: Tokens withdrawn",
+              description: `Simulated: Withdrew ${withdrawData.amount} tokens from ${withdrawData.token}`,
+            });
+            break;
+        }
+        setDialogOpen(false);
+        return;
+      }
+
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
 
       switch (actionType) {
@@ -264,32 +295,38 @@ export default function AdminPage() {
   };
 
   const getDialogContent = () => {
+    const testModePrefix = testMode ? "🧪 Test Mode: " : "";
+    const testModeSuffix = testMode ? " (Simulated)" : "";
+
     switch (actionType) {
       case "pause":
         return {
-          title: "Pause Contract",
-          description:
-            "This will pause all escrow operations. Users will not be able to create new escrows or interact with existing ones until the contract is unpaused.",
+          title: `${testModePrefix}Pause Contract${testModeSuffix}`,
+          description: testMode
+            ? "This will simulate pausing all escrow operations. No real transaction will be sent."
+            : "This will pause all escrow operations. Users will not be able to create new escrows or interact with existing ones until the contract is unpaused.",
           icon: Pause,
-          confirmText: "Pause Contract",
+          confirmText: testMode ? "Simulate Pause" : "Pause Contract",
           variant: "destructive" as const,
         };
       case "unpause":
         return {
-          title: "Unpause Contract",
-          description:
-            "This will resume all escrow operations. Users will be able to interact with escrows again.",
+          title: `${testModePrefix}Unpause Contract${testModeSuffix}`,
+          description: testMode
+            ? "This will simulate resuming all escrow operations. No real transaction will be sent."
+            : "This will resume all escrow operations. Users will be able to interact with escrows again.",
           icon: Play,
-          confirmText: "Unpause Contract",
+          confirmText: testMode ? "Simulate Unpause" : "Unpause Contract",
           variant: "default" as const,
         };
       case "withdraw":
         return {
-          title: "Withdraw Stuck Tokens",
-          description:
-            "Withdraw tokens that may be stuck in the contract. This should only be used in emergency situations.",
+          title: `${testModePrefix}Withdraw Stuck Tokens${testModeSuffix}`,
+          description: testMode
+            ? "This will simulate withdrawing tokens. No real transaction will be sent."
+            : "Withdraw tokens that may be stuck in the contract. This should only be used in emergency situations.",
           icon: Download,
-          confirmText: "Withdraw Tokens",
+          confirmText: testMode ? "Simulate Withdraw" : "Withdraw Tokens",
           variant: "destructive" as const,
         };
       default:
@@ -317,7 +354,7 @@ export default function AdminPage() {
     );
   }
 
-  if (!isOwner) {
+  if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-mesh">
         <Card className="glass border-destructive/20 p-12 text-center max-w-md">
@@ -343,10 +380,10 @@ export default function AdminPage() {
             <p className="text-xs text-amber-600 mt-4">
               💡 <span className="font-semibold">Tip:</span> Make sure you're
               connected with the wallet that deployed the SecureFlow contract.
-              Update the owner address in{" "}
-              <code className="bg-muted px-1 rounded">
+              {/* Update the owner address in{" "} */}
+              {/* <code className="bg-muted px-1 rounded">
                 contexts/web3-context.tsx
-              </code>
+              </code> */}
             </p>
           </div>
         </Card>
@@ -384,6 +421,84 @@ export default function AdminPage() {
             Manage the SecureFlow escrow contract
           </p>
 
+          {/* Test Mode Toggle */}
+          <Card className="glass border-accent/20 p-4 mb-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold mb-2">
+                  🧪 Admin Testing Mode
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Enable test mode to simulate admin functions and test the
+                  interface without executing real transactions.
+                </p>
+              </div>
+              <Button
+                variant={testMode ? "default" : "outline"}
+                onClick={() => setTestMode(!testMode)}
+                className="ml-4"
+              >
+                {testMode ? "Exit Test Mode" : "Enable Test Mode"}
+              </Button>
+            </div>
+            {testMode && (
+              <Alert className="mt-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Test Mode Active:</strong> All admin functions will be
+                  simulated. No real transactions will be sent to the
+                  blockchain. This allows you to test the admin interface and
+                  see how it would work for a judge or other admin user.
+                </AlertDescription>
+              </Alert>
+            )}
+          </Card>
+
+          {/* Judge Testing Instructions */}
+          <Card className="glass border-primary/20 p-6 mb-8">
+            <div className="flex items-start gap-4">
+              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
+                <Shield className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold mb-3">
+                  🏆 For Hackathon Judges
+                </h3>
+                <div className="space-y-3 text-sm">
+                  <p className="text-muted-foreground">
+                    To test admin functionalities as a judge, you have several
+                    options:
+                  </p>
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2">
+                      <span className="text-primary font-bold">1.</span>
+                      <div>
+                        <strong>Test Mode (Recommended):</strong> Use the
+                        "Enable Test Mode" button above to simulate admin
+                        functions without real transactions.
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-primary font-bold">2.</span>
+                      <div>
+                        <strong>Use Different Wallet:</strong> Connect with a
+                        different wallet address to test non-admin user
+                        experience.
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                    <p className="text-xs text-muted-foreground">
+                      <strong>Note:</strong> Test Mode provides a safe way to
+                      test all admin functionalities without affecting the live
+                      contract or requiring additional permissions.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
           {isPaused && (
             <Alert variant="destructive" className="mb-8">
               <AlertTriangle className="h-4 w-4" />
@@ -398,7 +513,14 @@ export default function AdminPage() {
           <Card className="glass border-primary/20 p-6 mb-8">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-bold mb-2">Contract Status</h2>
+                <div className="flex items-center gap-3 mb-2">
+                  <h2 className="text-2xl font-bold">Contract Status</h2>
+                  {testMode && (
+                    <Badge variant="secondary" className="gap-1">
+                      🧪 Test Mode
+                    </Badge>
+                  )}
+                </div>
                 <div className="flex items-center gap-3">
                   <span className="text-muted-foreground">Current State:</span>
                   {isPaused ? (
