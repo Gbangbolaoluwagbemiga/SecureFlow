@@ -16,12 +16,12 @@ interface DashboardStatsProps {
 
 export function DashboardStats({ escrows }: DashboardStatsProps) {
   const totalValue = escrows.reduce(
-    (sum, escrow) => sum + Number.parseFloat(escrow.totalAmount),
+    (sum, escrow) => sum + Number.parseFloat(escrow.totalAmount) / 1e18,
     0,
   );
 
   const totalReleased = escrows.reduce(
-    (sum, escrow) => sum + Number.parseFloat(escrow.releasedAmount),
+    (sum, escrow) => sum + Number.parseFloat(escrow.releasedAmount) / 1e18,
     0,
   );
 
@@ -55,9 +55,7 @@ export function DashboardStats({ escrows }: DashboardStatsProps) {
           <TrendingUp className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">
-            {(totalValue / 1e18).toFixed(2)}
-          </div>
+          <div className="text-2xl font-bold">{totalValue.toFixed(2)}</div>
           <p className="text-xs text-muted-foreground">tokens in escrows</p>
         </CardContent>
       </Card>
@@ -68,9 +66,7 @@ export function DashboardStats({ escrows }: DashboardStatsProps) {
           <FileText className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">
-            {(totalReleased / 1e18).toFixed(2)}
-          </div>
+          <div className="text-2xl font-bold">{totalReleased.toFixed(2)}</div>
           <p className="text-xs text-muted-foreground">tokens released</p>
         </CardContent>
       </Card>

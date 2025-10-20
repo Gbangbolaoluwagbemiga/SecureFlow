@@ -34,6 +34,25 @@ export default function HomePage() {
 
       let activeEscrows = 0;
       let completedEscrows = 0;
+      let totalVolume = 0;
+
+      // Helper function to check if an escrow is terminated
+      const isEscrowTerminated = async (escrowId: number) => {
+        try {
+          const milestones = await contract.call("getMilestones", escrowId);
+          for (let j = 0; j < milestones.length; j++) {
+            const milestone = milestones[j];
+            const milestoneStatus = Number(milestone[2]); // status is at index 2
+            if (milestoneStatus === 3 || milestoneStatus === 4) {
+              // disputed or rejected
+              return true;
+            }
+          }
+        } catch (error) {
+          // If we can't check milestones, assume not terminated
+        }
+        return false;
+      };
 
       // Count escrows by status
       // Check if there are any escrows created yet (nextEscrowId > 1 means at least one escrow exists)
@@ -42,10 +61,17 @@ export default function HomePage() {
           try {
             const escrowSummary = await contract.call("getEscrowSummary", i);
             const status = Number(escrowSummary[3]); // status is at index 3
+            const totalAmount = Number(escrowSummary[4]); // totalAmount is at index 4
+
+            // Add to total volume (convert from Wei to tokens)
+            totalVolume += totalAmount / 1e18;
 
             if (status === 1) {
-              // Active
-              activeEscrows++;
+              // Check if this active escrow is terminated due to disputed milestones
+              const isTerminated = await isEscrowTerminated(i);
+              if (!isTerminated) {
+                activeEscrows++;
+              }
             } else if (status === 2) {
               // Completed
               completedEscrows++;
@@ -59,7 +85,7 @@ export default function HomePage() {
 
       setStats({
         activeEscrows,
-        totalVolume: "0", // Would need to track total volume in contract
+        totalVolume: totalVolume.toFixed(2),
         completedEscrows,
       });
     } catch (error) {
