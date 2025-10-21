@@ -20,6 +20,10 @@ import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
 import {
+  useNotifications,
+  createMilestoneNotification,
+} from "@/contexts/notification-context";
+import {
   AlertTriangle,
   Clock,
   User,
@@ -52,6 +56,7 @@ export function DisputeResolution({
 }: DisputeResolutionProps) {
   const { wallet, getContract } = useWeb3();
   const { toast } = useToast();
+  const { addNotification } = useNotifications();
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastDisputeCount, setLastDisputeCount] = useState(0);
@@ -224,11 +229,6 @@ export function DisputeResolution({
       setSelectedDispute(null);
       await fetchDisputes(false); // Refresh disputes without showing loading
       onDisputeResolved();
-
-      // Refresh the page to ensure all dashboards update
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
     } catch (error: any) {
       toast({
         title: "Resolution Failed",

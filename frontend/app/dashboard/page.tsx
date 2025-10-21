@@ -6,6 +6,11 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
+import {
+  useNotifications,
+  createEscrowNotification,
+  createMilestoneNotification,
+} from "@/contexts/notification-context";
 import type { Escrow, Milestone } from "@/lib/web3/types";
 import { motion } from "framer-motion";
 import {
@@ -26,6 +31,7 @@ import { DashboardLoading } from "@/components/dashboard/dashboard-loading";
 export default function DashboardPage() {
   const { wallet, getContract } = useWeb3();
   const { toast } = useToast();
+  const { addNotification } = useNotifications();
   const [escrows, setEscrows] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedEscrow, setExpandedEscrow] = useState<string | null>(null);
@@ -60,17 +66,18 @@ export default function DashboardPage() {
 
   const getMilestoneStatusFromNumber = (status: number): string => {
     const statuses = [
-      "pending", // 0 - Not started
-      "submitted", // 1 - Submitted by freelancer
-      "approved", // 2 - Approved by client
-      "rejected", // 3 - Rejected by client
-      "rejected", // 4 - Under dispute (treating as rejected for UI)
-      "resolved", // 5 - Dispute resolved
+      "pending", // 0 - NotStarted
+      "submitted", // 1 - Submitted
+      "approved", // 2 - Approved
+      "disputed", // 3 - Disputed
+      "resolved", // 4 - Resolved
+      "rejected", // 5 - Rejected
     ];
     const mappedStatus = statuses[status] || "pending";
 
     // Special debugging for rejected status
-    if (status === 3 || status === 4) {
+    if (status === 5) {
+      console.log("Milestone status 5 (Rejected) detected");
     }
 
     return mappedStatus;
@@ -254,7 +261,9 @@ export default function DashboardPage() {
               } else if (status === 3) {
                 finalStatus = "disputed";
               } else if (status === 4) {
-                finalStatus = "disputed";
+                finalStatus = "resolved";
+              } else if (status === 5) {
+                finalStatus = "rejected";
               }
               // Priority 2: Fallback to timestamp-based logic if status is 0
               else if (status === 0) {
@@ -510,6 +519,15 @@ export default function DashboardPage() {
         description: "A dispute has been opened for this milestone",
       });
 
+      // Add notification for dispute opening
+      addNotification(
+        createMilestoneNotification("disputed", escrowId, milestoneIndex, {
+          reason: "Disputed by client",
+          clientName:
+            wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+        }),
+      );
+
       // Wait a moment for blockchain state to update
       await new Promise((resolve) => setTimeout(resolve, 2000));
       await fetchUserEscrows();
@@ -535,6 +553,17 @@ export default function DashboardPage() {
         title: "Work Started",
         description: "You have started work on this escrow",
       });
+
+      // Add notification for work started
+      addNotification(
+        createEscrowNotification("work_started", escrowId, {
+          projectTitle:
+            escrows.find((e) => e.id === escrowId)?.projectDescription ||
+            `Project #${escrowId}`,
+          freelancerName:
+            wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+        }),
+      );
 
       // Wait a moment for blockchain state to update
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -636,6 +665,19 @@ export default function DashboardPage() {
           title: "Milestone Approved!",
           description: "Payment has been sent to the freelancer",
         });
+
+        // Get freelancer address from escrow data
+        const freelancerAddress = escrow.beneficiary;
+
+        // Add notification for milestone approval (notify both client and freelancer)
+        addNotification(
+          createMilestoneNotification("approved", escrowId, milestoneIndex, {
+            clientName:
+              wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+            projectTitle: escrow.projectDescription || `Project #${escrowId}`,
+          }),
+          freelancerAddress ? [freelancerAddress] : undefined, // Notify the freelancer
+        );
 
         // Wait a moment for blockchain state to update
         await new Promise((resolve) => setTimeout(resolve, 3000));

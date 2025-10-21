@@ -13,6 +13,11 @@ import {
 import { useWeb3 } from "@/contexts/web3-context";
 import { useSmartAccount } from "@/contexts/smart-account-context";
 import { useDelegation } from "@/contexts/delegation-context";
+import {
+  useNotifications,
+  createMilestoneNotification,
+  createEscrowNotification,
+} from "@/contexts/notification-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
@@ -23,6 +28,7 @@ import {
   Gavel,
   Play,
   Zap,
+  XCircle,
 } from "lucide-react";
 import type { Milestone } from "@/lib/web3/types";
 
@@ -36,6 +42,8 @@ interface MilestoneActionsProps {
   onSuccess: () => void;
   allMilestones?: Milestone[]; // Add all milestones for sequential validation
   showSubmitButton?: boolean; // New prop to control submit button visibility
+  payerAddress?: string; // Client address for notifications
+  beneficiaryAddress?: string; // Freelancer address for notifications
 }
 
 export function MilestoneActions({
@@ -48,16 +56,26 @@ export function MilestoneActions({
   onSuccess,
   allMilestones = [],
   showSubmitButton = true, // Default to true for backward compatibility
+  payerAddress,
+  beneficiaryAddress,
 }: MilestoneActionsProps) {
   const { getContract } = useWeb3();
   const { executeTransaction, executeBatchTransaction, isSmartAccountReady } =
     useSmartAccount();
   const { isDelegatedFunction } = useDelegation();
+  const { addNotification } = useNotifications();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<
-    "start" | "submit" | "approve" | "dispute" | "resolve" | null
+    | "start"
+    | "submit"
+    | "approve"
+    | "reject"
+    | "resubmit"
+    | "dispute"
+    | "resolve"
+    | null
   >(null);
   const [disputeReason, setDisputeReason] = useState("");
 
@@ -95,6 +113,11 @@ export function MilestoneActions({
   // Check if this milestone can be approved
   const canApproveMilestone = () => {
     return milestone.status === "submitted" && isPayer;
+  };
+
+  // Check if this milestone can be resubmitted
+  const canResubmitMilestone = () => {
+    return milestone.status === "rejected" && isBeneficiary;
   };
 
   // Check if this milestone can be submitted (sequential validation)
@@ -142,11 +165,14 @@ export function MilestoneActions({
   };
 
   const handleAction = async () => {
-    // Validate dispute reason if disputing
-    if (actionType === "dispute" && !disputeReason.trim()) {
+    // Validate reason if disputing or rejecting
+    if (
+      (actionType === "dispute" || actionType === "reject") &&
+      !disputeReason.trim()
+    ) {
       toast({
         title: "Reason required",
-        description: "Please provide a reason for disputing this milestone",
+        description: `Please provide a reason for ${actionType === "dispute" ? "disputing" : "rejecting"} this milestone`,
         variant: "destructive",
       });
       return;
@@ -181,6 +207,14 @@ export function MilestoneActions({
             title: "Work started!",
             description: "You can now begin working on the milestones",
           });
+
+          // Add notification for work started
+          addNotification(
+            createEscrowNotification("work_started", escrowId, {
+              projectTitle: `Project #${escrowId}`,
+              freelancerName: "Freelancer",
+            }),
+          );
           break;
         case "submit":
           if (useSmartAccount) {
@@ -201,6 +235,16 @@ export function MilestoneActions({
               description:
                 "Milestone submitted using Smart Account with enhanced features",
             });
+
+            // Add notification - notify the CLIENT (payer)
+            addNotification(
+              createMilestoneNotification(
+                "submitted",
+                escrowId,
+                milestoneIndex,
+              ),
+              payerAddress ? [payerAddress] : undefined, // Notify the client
+            );
           } else {
             txHash = await contract.send(
               "submitMilestone",
@@ -213,6 +257,16 @@ export function MilestoneActions({
               title: "Milestone submitted!",
               description: "Waiting for client approval",
             });
+
+            // Add notification - notify the CLIENT (payer)
+            addNotification(
+              createMilestoneNotification(
+                "submitted",
+                escrowId,
+                milestoneIndex,
+              ),
+              payerAddress ? [payerAddress] : undefined, // Notify the client
+            );
           }
 
           // Wait for blockchain state to update, then refresh data
@@ -259,12 +313,10 @@ export function MilestoneActions({
                   milestoneIndex,
                 );
               } catch (gasError) {
-                toast({
-                  title: "Gas estimation failed",
-                  description:
-                    "Could not estimate gas, but will attempt the transaction anyway.",
-                  variant: "destructive",
-                });
+                // Gas estimation failed, but continue with transaction
+                console.log(
+                  "Gas estimation failed, proceeding with transaction",
+                );
               }
 
               // Add retry logic for failed transactions
@@ -325,6 +377,16 @@ export function MilestoneActions({
                   title: "Milestone approved!",
                   description: "Payment has been released to the beneficiary",
                 });
+
+                // Add notification - notify the FREELANCER (beneficiary)
+                addNotification(
+                  createMilestoneNotification(
+                    "approved",
+                    escrowId,
+                    milestoneIndex,
+                  ),
+                  beneficiaryAddress ? [beneficiaryAddress] : undefined, // Notify the freelancer
+                );
 
                 // Close the modal immediately after successful approval
                 setDialogOpen(false);
@@ -434,6 +496,223 @@ export function MilestoneActions({
             setIsLoading(false);
           }
           break;
+        case "reject":
+          try {
+            // Validate milestone state before attempting rejection
+            if (milestone.status !== "submitted") {
+              toast({
+                title: "Invalid milestone state",
+                description:
+                  "This milestone is not in submitted state and cannot be rejected",
+                variant: "destructive",
+              });
+              return;
+            }
+
+            if (useSmartAccount) {
+              // Use Smart Account for enhanced transaction
+              const { ethers } = await import("ethers");
+              const iface = new ethers.Interface(SECUREFLOW_ABI);
+              const data = iface.encodeFunctionData("rejectMilestone", [
+                escrowId,
+                milestoneIndex,
+                disputeReason,
+              ]);
+              txHash = await executeTransaction(
+                CONTRACTS.SECUREFLOW_ESCROW,
+                data,
+              );
+              toast({
+                title: "🚀 Smart Account Milestone rejected!",
+                description:
+                  "Milestone rejected using Smart Account with enhanced features",
+              });
+            } else {
+              // Use regular transaction
+              txHash = await contract.send(
+                "rejectMilestone",
+                "no-value",
+                escrowId,
+                milestoneIndex,
+                disputeReason,
+              );
+            }
+
+            // Wait for transaction to be mined and confirmed
+            try {
+              let receipt;
+
+              // Check if txHash has a wait method (ethers.js transaction object)
+              if (txHash && typeof txHash.wait === "function") {
+                receipt = await Promise.race([
+                  txHash.wait(),
+                  new Promise((_, reject) =>
+                    setTimeout(
+                      () => reject(new Error("Transaction timeout")),
+                      60000,
+                    ),
+                  ),
+                ]);
+              } else {
+                // Fallback: use polling to check transaction status
+                receipt = await pollTransactionReceipt(txHash);
+              }
+
+              if (receipt.status === 1) {
+                toast({
+                  title: "Milestone rejected!",
+                  description:
+                    "The milestone has been rejected and the freelancer can resubmit",
+                });
+
+                // Add notification - notify the FREELANCER (beneficiary)
+                addNotification(
+                  createMilestoneNotification(
+                    "rejected",
+                    escrowId,
+                    milestoneIndex,
+                    { reason: disputeReason },
+                  ),
+                  beneficiaryAddress ? [beneficiaryAddress] : undefined, // Notify the freelancer
+                );
+
+                setDialogOpen(false);
+                onSuccess();
+              } else {
+                throw new Error("Transaction failed on blockchain");
+              }
+            } catch (receiptError: any) {
+              if (txHash) {
+                toast({
+                  title: "Milestone rejected!",
+                  description:
+                    "The milestone has been rejected and the freelancer can resubmit",
+                });
+                setDialogOpen(false);
+                onSuccess();
+                return;
+              }
+              throw new Error("Transaction failed to confirm on blockchain");
+            }
+          } catch (error: any) {
+            toast({
+              title: "Rejection failed",
+              description: error.message || "Failed to reject milestone",
+              variant: "destructive",
+            });
+            return;
+          } finally {
+            setIsLoading(false);
+          }
+          break;
+        case "resubmit":
+          try {
+            // Validate milestone state before attempting resubmission
+            if (milestone.status !== "rejected") {
+              toast({
+                title: "Invalid milestone state",
+                description:
+                  "This milestone is not in rejected state and cannot be resubmitted",
+                variant: "destructive",
+              });
+              return;
+            }
+
+            if (useSmartAccount) {
+              // Use Smart Account for enhanced transaction
+              const { ethers } = await import("ethers");
+              const iface = new ethers.Interface(SECUREFLOW_ABI);
+              const data = iface.encodeFunctionData("resubmitMilestone", [
+                escrowId,
+                milestoneIndex,
+                milestone.description, // Use existing description or allow new one
+              ]);
+              txHash = await executeTransaction(
+                CONTRACTS.SECUREFLOW_ESCROW,
+                data,
+              );
+              toast({
+                title: "🚀 Smart Account Milestone resubmitted!",
+                description:
+                  "Milestone resubmitted using Smart Account with enhanced features",
+              });
+            } else {
+              // Use regular transaction
+              txHash = await contract.send(
+                "resubmitMilestone",
+                "no-value",
+                escrowId,
+                milestoneIndex,
+                milestone.description, // Use existing description or allow new one
+              );
+            }
+
+            // Wait for transaction to be mined and confirmed
+            try {
+              let receipt;
+
+              // Check if txHash has a wait method (ethers.js transaction object)
+              if (txHash && typeof txHash.wait === "function") {
+                receipt = await Promise.race([
+                  txHash.wait(),
+                  new Promise((_, reject) =>
+                    setTimeout(
+                      () => reject(new Error("Transaction timeout")),
+                      60000,
+                    ),
+                  ),
+                ]);
+              } else {
+                // Fallback: use polling to check transaction status
+                receipt = await pollTransactionReceipt(txHash);
+              }
+
+              if (receipt.status === 1) {
+                toast({
+                  title: "Milestone resubmitted!",
+                  description:
+                    "The milestone has been resubmitted and is waiting for client review",
+                });
+
+                // Add notification - notify the CLIENT (payer)
+                addNotification(
+                  createMilestoneNotification(
+                    "submitted",
+                    escrowId,
+                    milestoneIndex,
+                  ),
+                  payerAddress ? [payerAddress] : undefined, // Notify the client
+                );
+
+                setDialogOpen(false);
+                onSuccess();
+              } else {
+                throw new Error("Transaction failed on blockchain");
+              }
+            } catch (receiptError: any) {
+              if (txHash) {
+                toast({
+                  title: "Milestone resubmitted!",
+                  description:
+                    "The milestone has been resubmitted and is waiting for client review",
+                });
+                setDialogOpen(false);
+                onSuccess();
+                return;
+              }
+              throw new Error("Transaction failed to confirm on blockchain");
+            }
+          } catch (error: any) {
+            toast({
+              title: "Resubmission failed",
+              description: error.message || "Failed to resubmit milestone",
+              variant: "destructive",
+            });
+            return;
+          } finally {
+            setIsLoading(false);
+          }
+          break;
         case "dispute":
           try {
             // Validate milestone state before attempting dispute
@@ -465,6 +744,16 @@ export function MilestoneActions({
                 description:
                   "Dispute created using Smart Account with enhanced features",
               });
+
+              // Add notification
+              addNotification(
+                createMilestoneNotification(
+                  "disputed",
+                  escrowId,
+                  milestoneIndex,
+                  { reason: disputeReason },
+                ),
+              );
             } else {
               txHash = await contract.send(
                 "disputeMilestone",
@@ -635,6 +924,20 @@ export function MilestoneActions({
           icon: CheckCircle2,
           confirmText: "Approve & Release",
         };
+      case "reject":
+        return {
+          title: "Reject Milestone",
+          description: `Reject milestone ${milestoneIndex + 1}. The freelancer will be able to resubmit after making changes.`,
+          icon: XCircle,
+          confirmText: "Reject",
+        };
+      case "resubmit":
+        return {
+          title: "Resubmit Milestone",
+          description: `Resubmit milestone ${milestoneIndex + 1} for client review. Make sure you've addressed the feedback.`,
+          icon: Send,
+          confirmText: "Resubmit",
+        };
       case "dispute":
         return {
           title: "Dispute Milestone",
@@ -665,7 +968,10 @@ export function MilestoneActions({
 
   return (
     <>
-      <div className="flex flex-wrap gap-2">
+      <div
+        className="flex flex-wrap gap-2"
+        data-milestone-actions={`${escrowId}-${milestoneIndex}`}
+      >
         {/* Start Work button removed - only available on freelancer page */}
 
         {/* Submit Milestone - Only beneficiary for pending milestones that can be submitted (disabled if terminated) */}
@@ -713,6 +1019,29 @@ export function MilestoneActions({
           </Button>
         )}
 
+        {/* Reject Milestone - Only payer for submitted milestones (disabled if terminated) */}
+        {canApproveMilestone() && !isProjectTerminated && (
+          <Button
+            onClick={() => openDialog("reject")}
+            size="sm"
+            variant="outline"
+            className="gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+            disabled={isLoading}
+          >
+            {isSmartAccountReady ? (
+              <>
+                <Zap className="h-4 w-4" />
+                {isLoading ? "Processing..." : "Smart Reject"}
+              </>
+            ) : (
+              <>
+                <XCircle className="h-4 w-4" />
+                {isLoading ? "Processing..." : "Reject"}
+              </>
+            )}
+          </Button>
+        )}
+
         {/* Dispute Milestone - Only payer for submitted milestones (disabled if terminated) */}
         {milestone.status === "submitted" &&
           isPayer &&
@@ -746,11 +1075,35 @@ export function MilestoneActions({
           </div>
         )}
 
-        {/* Rejected Status - Show rejected badge */}
+        {/* Rejected Status - Show rejected badge and resubmit button */}
         {milestone.status === "rejected" && (
-          <div className="flex items-center gap-2 text-red-600">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="text-sm font-medium">Rejected</span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="text-sm font-medium">Rejected</span>
+            </div>
+            {canResubmitMilestone() && (
+              <Button
+                onClick={() => openDialog("resubmit")}
+                size="sm"
+                variant="default"
+                className="gap-2"
+                disabled={isLoading}
+                data-action="resubmit"
+              >
+                {isSmartAccountReady ? (
+                  <>
+                    <Zap className="h-4 w-4" />
+                    {isLoading ? "Processing..." : "Smart Resubmit"}
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    {isLoading ? "Processing..." : "Resubmit"}
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         )}
 
@@ -766,6 +1119,14 @@ export function MilestoneActions({
                 <strong>Reason:</strong> {milestone.disputeReason}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Resolved Status - Show resolved badge */}
+        {milestone.status === "resolved" && (
+          <div className="flex items-center gap-2 text-blue-600">
+            <CheckCircle2 className="h-4 w-4" />
+            <span className="text-sm font-medium">Resolved</span>
           </div>
         )}
 
@@ -824,23 +1185,25 @@ export function MilestoneActions({
             </div>
           </div>
 
-          {/* Dispute reason input for dispute action */}
-          {actionType === "dispute" && (
+          {/* Reason input for dispute or reject action */}
+          {(actionType === "dispute" || actionType === "reject") && (
             <div className="my-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Reason for dispute (required)
+                Reason for {actionType === "dispute" ? "dispute" : "rejection"}{" "}
+                (required)
               </label>
               <textarea
                 value={disputeReason}
                 onChange={(e) => setDisputeReason(e.target.value)}
-                placeholder="Please explain why you are disputing this milestone..."
+                placeholder={`Please explain why you are ${actionType === "dispute" ? "disputing" : "rejecting"} this milestone...`}
                 className="w-full p-3 border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 rows={3}
                 required
               />
               {!disputeReason.trim() && (
                 <p className="text-sm text-red-600 mt-1">
-                  Please provide a reason for the dispute
+                  Please provide a reason for the{" "}
+                  {actionType === "dispute" ? "dispute" : "rejection"}
                 </p>
               )}
             </div>

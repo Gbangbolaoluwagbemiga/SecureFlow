@@ -225,6 +225,8 @@ export function EscrowCard({
                           escrowStatus={escrow.status}
                           allMilestones={escrow.milestones}
                           showSubmitButton={false} // Hide submit buttons on dashboard
+                          payerAddress={escrow.payer} // Client address for notifications
+                          beneficiaryAddress={escrow.beneficiary} // Freelancer address for notifications
                           onSuccess={() => {
                             // Refresh the escrow data
                             window.dispatchEvent(

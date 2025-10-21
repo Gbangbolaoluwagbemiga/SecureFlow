@@ -5,6 +5,11 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
 import {
+  useNotifications,
+  createEscrowNotification,
+  createMilestoneNotification,
+} from "@/contexts/notification-context";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -55,6 +60,7 @@ interface Escrow {
   createdAt: number;
   duration: number;
   milestones: Milestone[];
+  projectTitle?: string;
   projectDescription: string;
   isOpenJob: boolean;
   milestoneCount: number;
@@ -71,6 +77,7 @@ interface Milestone {
 
 export default function FreelancerPage() {
   const { wallet, getContract } = useWeb3();
+  const { addNotification } = useNotifications();
   const [escrows, setEscrows] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(false);
   const [submittingMilestone, setSubmittingMilestone] = useState<string | null>(
@@ -398,6 +405,7 @@ export default function FreelancerPage() {
                     };
                   }
                 }),
+                projectTitle: escrowSummary[13] || "", // projectTitle
                 projectDescription: escrowSummary[14] || "", // projectDescription
                 isOpenJob: Boolean(escrowSummary[12]), // isOpenJob
                 milestoneCount: Number(escrowSummary[11]) || 0, // milestoneCount
@@ -460,6 +468,17 @@ export default function FreelancerPage() {
         title: "Work started!",
         description: "You can now submit milestones for this project",
       });
+
+      // Add notification for work started
+      addNotification(
+        createEscrowNotification("work_started", escrowId, {
+          projectTitle:
+            escrows.find((e) => e.id === escrowId)?.projectTitle ||
+            `Project #${escrowId}`,
+          freelancerName:
+            wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+        }),
+      );
 
       // Refresh escrows
       await fetchFreelancerEscrows();
@@ -662,6 +681,20 @@ export default function FreelancerPage() {
           description: "Your milestone has been submitted for review",
         });
 
+        // Get client address from escrow data
+        const escrow = escrows.find((e) => e.id === escrowId);
+        const clientAddress = escrow?.payer;
+
+        // Add notification for milestone submission (notify both freelancer and client)
+        addNotification(
+          createMilestoneNotification("submitted", escrowId, milestoneIndex, {
+            freelancerName:
+              wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+            projectTitle: escrow?.projectTitle || `Project #${escrowId}`,
+          }),
+          clientAddress ? [clientAddress] : undefined, // Notify the client
+        );
+
         // Mark this milestone as submitted to prevent double submission
         const milestoneKey = `${escrowId}-${milestoneIndex}`;
         setSubmittedMilestones((prev) => new Set([...prev, milestoneKey]));
@@ -729,6 +762,15 @@ export default function FreelancerPage() {
         description: "A dispute has been opened for this milestone",
       });
 
+      // Add notification for dispute opening
+      addNotification(
+        createMilestoneNotification("disputed", escrowId, milestoneIndex, {
+          reason: reason,
+          freelancerName:
+            wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+        }),
+      );
+
       // Refresh escrows
       await fetchFreelancerEscrows();
     } catch (error) {
@@ -756,12 +798,12 @@ export default function FreelancerPage() {
 
   const getMilestoneStatusFromNumber = (status: number): string => {
     const statuses = [
-      "pending", // 0 - Not started
-      "submitted", // 1 - Submitted by freelancer
-      "approved", // 2 - Approved by client
-      "rejected", // 3 - Rejected by client
-      "disputed", // 4 - Under dispute
-      "resolved", // 5 - Dispute resolved
+      "pending", // 0 - NotStarted
+      "submitted", // 1 - Submitted
+      "approved", // 2 - Approved
+      "disputed", // 3 - Disputed
+      "resolved", // 4 - Resolved
+      "rejected", // 5 - Rejected
     ];
     return statuses[status] || "pending";
   };
@@ -928,10 +970,20 @@ export default function FreelancerPage() {
                         <div>
                           <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
                             <User className="h-5 w-5" />
-                            Project #{escrow.id}
+                            {escrow.projectTitle ||
+                              (escrow.projectDescription
+                                ? escrow.projectDescription.length > 50
+                                  ? escrow.projectDescription.substring(0, 50) +
+                                    "..."
+                                  : escrow.projectDescription
+                                : `Project #${escrow.id}`)}
                           </CardTitle>
                           <CardDescription className="mt-1 text-gray-600 dark:text-gray-400">
-                            {escrow.projectDescription}
+                            {escrow.projectDescription &&
+                            (!escrow.projectTitle ||
+                              escrow.projectDescription.length > 50)
+                              ? escrow.projectDescription
+                              : `Project ID: #${escrow.id}`}
                           </CardDescription>
                         </div>
                         <Badge
@@ -1189,24 +1241,99 @@ export default function FreelancerPage() {
                                         Rejected - Needs Improvement
                                       </Badge>
                                     </div>
-                                    <p className="text-sm text-red-700 dark:text-red-300">
+
+                                    {/* Display feedback directly */}
+                                    {milestone.disputeReason && (
+                                      <div className="mb-3 p-2 bg-red-100 dark:bg-red-800/30 rounded border border-red-200 dark:border-red-700">
+                                        <p className="text-xs font-medium text-red-800 dark:text-red-200 mb-1">
+                                          Client Feedback:
+                                        </p>
+                                        <p className="text-sm text-red-700 dark:text-red-300">
+                                          {milestone.disputeReason}
+                                        </p>
+                                      </div>
+                                    )}
+
+                                    <p className="text-sm text-red-700 dark:text-red-300 mb-3">
                                       This milestone was rejected by the client.
-                                      Please review the feedback and resubmit
-                                      with improvements.
+                                      Please review the feedback above and
+                                      resubmit with improvements.
                                     </p>
+
                                     <div className="flex gap-2">
                                       <Button
                                         size="sm"
-                                        variant="outline"
-                                        className="border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800"
-                                      >
-                                        View Feedback
-                                      </Button>
-                                      <Button
-                                        size="sm"
                                         className="bg-red-600 hover:bg-red-700 text-white"
+                                        onClick={async () => {
+                                          try {
+                                            const contract = getContract(
+                                              CONTRACTS.SECUREFLOW_ESCROW,
+                                              SECUREFLOW_ABI,
+                                            );
+
+                                            toast({
+                                              title:
+                                                "Resubmitting milestone...",
+                                              description:
+                                                "Please wait while we process your resubmission",
+                                            });
+
+                                            // Call the resubmitMilestone function
+                                            await contract.send(
+                                              "resubmitMilestone",
+                                              "no-value",
+                                              escrow.id,
+                                              index,
+                                              milestone.description, // Use existing description
+                                            );
+
+                                            toast({
+                                              title: "Milestone resubmitted!",
+                                              description:
+                                                "Your milestone has been resubmitted for client review",
+                                            });
+
+                                            // Get client address from escrow data
+                                            const clientAddress = escrow.payer;
+
+                                            // Add notification for milestone resubmission (notify the client)
+                                            addNotification(
+                                              createMilestoneNotification(
+                                                "submitted",
+                                                escrow.id,
+                                                index,
+                                                {
+                                                  freelancerName:
+                                                    wallet.address!.slice(
+                                                      0,
+                                                      6,
+                                                    ) +
+                                                    "..." +
+                                                    wallet.address!.slice(-4),
+                                                  projectTitle:
+                                                    escrow.projectTitle ||
+                                                    `Project #${escrow.id}`,
+                                                },
+                                              ),
+                                              clientAddress
+                                                ? [clientAddress]
+                                                : undefined, // Notify the client
+                                            );
+
+                                            // Refresh the page to show updated status
+                                            window.location.reload();
+                                          } catch (error: any) {
+                                            toast({
+                                              title: "Resubmission failed",
+                                              description:
+                                                error.message ||
+                                                "Failed to resubmit milestone",
+                                              variant: "destructive",
+                                            });
+                                          }
+                                        }}
                                       >
-                                        Resubmit
+                                        Resubmit Work
                                       </Button>
                                     </div>
                                   </div>

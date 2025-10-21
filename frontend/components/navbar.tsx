@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { WalletButton } from "@/components/wallet-button";
 import { SmartAccountStatus } from "@/components/smart-account-status";
+import { NotificationCenter } from "@/components/notification-center";
 import { Shield, Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -165,6 +166,9 @@ export function Navbar() {
             </div>
             <div className="hidden md:block">
               <SmartAccountStatus />
+            </div>
+            <div className="flex-shrink-0">
+              <NotificationCenter />
             </div>
             <div className="flex-shrink-0">
               <WalletButton />

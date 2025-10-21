@@ -4,7 +4,7 @@ pragma solidity ^0.8.19;
 interface ISecureFlow {
     // ===== Enums =====
     enum EscrowStatus { Pending, InProgress, Released, Refunded, Disputed, Expired }
-    enum MilestoneStatus { NotStarted, Submitted, Approved, Disputed, Resolved }
+    enum MilestoneStatus { NotStarted, Submitted, Approved, Disputed, Resolved, Rejected }
 
     // ===== Structs =====
     struct Milestone {
@@ -60,10 +60,50 @@ interface ISecureFlow {
 
     event EscrowUpdated(uint256 indexed escrowId, EscrowStatus indexed newStatus, uint256 timestamp);
     event WorkStarted(uint256 indexed escrowId, address indexed beneficiary, uint256 startedAt);
-    event MilestoneSubmitted(uint256 indexed escrowId, uint256 indexed milestoneIndex, address indexed beneficiary, string description, uint256 submittedAt);
-    event MilestoneApproved(uint256 indexed escrowId, uint256 indexed milestoneIndex, address indexed depositor, uint256 amount, uint256 approvedAt);
-    event MilestoneDisputed(uint256 indexed escrowId, uint256 indexed milestoneIndex, address indexed depositor, string reason, uint256 disputedAt);
-    event DisputeResolved(uint256 indexed escrowId, uint256 indexed milestoneIndex, address indexed arbiter, uint256 beneficiaryAmount, uint256 refundAmount, uint256 resolvedAt);
+    event MilestoneSubmitted(
+        uint256 indexed escrowId,
+        uint256 indexed milestoneIndex,
+        address indexed beneficiary,
+        string description,
+        uint256 submittedAt
+    );
+    event MilestoneApproved(
+        uint256 indexed escrowId,
+        uint256 indexed milestoneIndex,
+        address indexed depositor,
+        uint256 amount,
+        uint256 approvedAt
+    );
+    event MilestoneRejected(
+        uint256 indexed escrowId,
+        uint256 indexed milestoneIndex,
+        address indexed depositor,
+        string reason,
+        uint256 rejectedAt
+    );
+
+    event MilestoneResubmitted(
+        uint256 indexed escrowId,
+        uint256 indexed milestoneIndex,
+        address indexed beneficiary,
+        string description,
+        uint256 resubmittedAt
+    );
+    event MilestoneDisputed(
+        uint256 indexed escrowId,
+        uint256 indexed milestoneIndex,
+        address indexed depositor,
+        string reason,
+        uint256 disputedAt
+    );
+    event DisputeResolved(
+        uint256 indexed escrowId,
+        uint256 indexed milestoneIndex,
+        address indexed arbiter,
+        uint256 beneficiaryAmount,
+        uint256 refundAmount,
+        uint256 resolvedAt
+    );
     event FundsRefunded(uint256 indexed escrowId, address indexed depositor, uint256 amount);
     event EmergencyRefundExecuted(uint256 indexed escrowId, address indexed depositor, uint256 amount);
     event EscrowCompleted(uint256 indexed escrowId, address indexed beneficiary, uint256 totalPaid);
@@ -76,7 +116,12 @@ interface ISecureFlow {
     event FeesWithdrawn(address indexed token, uint256 amount, address indexed recipient);
     event EmergencyWithdrawn(address indexed token, uint256 amount, address indexed to);
     event DeadlineExtended(uint256 indexed escrowId, uint256 newDeadline);
-    event ApplicationSubmitted(uint256 indexed escrowId, address indexed freelancer, string coverLetter, uint256 proposedTimeline);
+    event ApplicationSubmitted(
+        uint256 indexed escrowId,
+        address indexed freelancer,
+        string coverLetter,
+        uint256 proposedTimeline
+    );
     event FreelancerAccepted(uint256 indexed escrowId, address indexed freelancer);
     event ReputationUpdated(address indexed user, uint256 newReputation, string reason);
     event JobCreationPaused();
@@ -107,9 +152,28 @@ interface ISecureFlow {
     ) external payable returns (uint256);
 
     function startWork(uint256 escrowId) external;
-    function submitMilestone(uint256 escrowId, uint256 milestoneIndex, string calldata description) external;
+    function submitMilestone(
+        uint256 escrowId,
+        uint256 milestoneIndex,
+        string calldata description
+    ) external;
     function approveMilestone(uint256 escrowId, uint256 milestoneIndex) external;
-    function disputeMilestone(uint256 escrowId, uint256 milestoneIndex, string calldata reason) external;
+    function rejectMilestone(
+        uint256 escrowId,
+        uint256 milestoneIndex,
+        string calldata reason
+    ) external;
+
+    function resubmitMilestone(
+        uint256 escrowId,
+        uint256 milestoneIndex,
+        string calldata description
+    ) external;
+    function disputeMilestone(
+        uint256 escrowId,
+        uint256 milestoneIndex,
+        string calldata reason
+    ) external;
     function resolveDispute(uint256 escrowId, uint256 milestoneIndex, uint256 beneficiaryAmount) external;
     function refundEscrow(uint256 escrowId) external;
     function emergencyRefundAfterDeadline(uint256 escrowId) external;
@@ -139,7 +203,11 @@ interface ISecureFlow {
 
     function getMilestones(uint256 escrowId) external view returns (Milestone[] memory);
     function getUserEscrows(address user) external view returns (uint256[] memory);
-    function getApplicationsPage(uint256 escrowId, uint256 offset, uint256 limit) external view returns (Application[] memory);
+    function getApplicationsPage(
+        uint256 escrowId,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (Application[] memory);
     function getApplicationCount(uint256 escrowId) external view returns (uint256);
     function hasUserApplied(uint256 escrowId, address user) external view returns (bool);
     function getReputation(address user) external view returns (uint256);

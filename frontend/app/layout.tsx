@@ -6,6 +6,7 @@ import "./globals.css";
 import { Web3Provider } from "@/contexts/web3-context";
 import { SmartAccountProvider } from "@/contexts/smart-account-context";
 import { DelegationProvider } from "@/contexts/delegation-context";
+import { NotificationProvider } from "@/contexts/notification-context";
 import { Navbar } from "@/components/navbar";
 import { Toaster } from "@/components/ui/toaster";
 import { Suspense } from "react";
@@ -64,9 +65,11 @@ export default function RootLayout({
             <Web3Provider>
               <SmartAccountProvider>
                 <DelegationProvider>
-                  <Navbar />
-                  <main className="pt-16">{children}</main>
-                  <Toaster />
+                  <NotificationProvider>
+                    <Navbar />
+                    <main className="pt-16">{children}</main>
+                    <Toaster />
+                  </NotificationProvider>
                 </DelegationProvider>
               </SmartAccountProvider>
             </Web3Provider>

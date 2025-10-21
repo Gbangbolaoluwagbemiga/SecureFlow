@@ -3,7 +3,6 @@
 import { useSmartAccount } from "@/contexts/smart-account-context";
 import { useDelegation } from "@/contexts/delegation-context";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   Shield,
@@ -13,26 +12,12 @@ import {
   Clock,
   Users,
 } from "lucide-react";
-import { useState } from "react";
 
 export function SmartAccountStatus() {
-  const { smartAccount, deploySmartAccount, isSmartAccountReady } =
-    useSmartAccount();
+  const { smartAccount, isSmartAccountReady } = useSmartAccount();
   const { getActiveDelegations } = useDelegation();
-  const [isDeploying, setIsDeploying] = useState(false);
 
   const activeDelegations = getActiveDelegations();
-
-  const handleDeploy = async () => {
-    try {
-      setIsDeploying(true);
-      await deploySmartAccount();
-    } catch (error) {
-      console.error("Deployment failed:", error);
-    } finally {
-      setIsDeploying(false);
-    }
-  };
 
   if (!smartAccount.isInitialized) {
     return (
@@ -87,17 +72,6 @@ export function SmartAccountStatus() {
         </Card>
       )}
 
-      {/* Deploy Button */}
-      {!smartAccount.isDeployed && (
-        <Button
-          size="sm"
-          onClick={handleDeploy}
-          disabled={isDeploying}
-          className="text-xs"
-        >
-          {isDeploying ? "Deploying..." : "Deploy Smart Account"}
-        </Button>
-      )}
     </div>
   );
 }

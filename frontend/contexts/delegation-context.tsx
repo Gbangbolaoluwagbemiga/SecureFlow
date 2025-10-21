@@ -60,6 +60,8 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
     "whitelistToken",
     "blacklistToken",
     "approveMilestone",
+    "rejectMilestone",
+    "resubmitMilestone",
     "disputeMilestone",
     "submitMilestone",
     "startWork",

@@ -1,7 +1,13 @@
 export interface Milestone {
   description: string;
   amount: string;
-  status: "pending" | "submitted" | "approved" | "rejected" | "disputed";
+  status:
+    | "pending"
+    | "submitted"
+    | "approved"
+    | "rejected"
+    | "disputed"
+    | "resolved";
   submittedAt?: number;
   approvedAt?: number;
   rejectionReason?: string;

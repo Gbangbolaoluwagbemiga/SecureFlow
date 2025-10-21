@@ -106,6 +106,65 @@ abstract contract WorkLifecycle is EscrowCore {
         }
     }
 
+    function rejectMilestone(
+        uint256 escrowId, 
+        uint256 milestoneIndex, 
+        string calldata reason
+    ) 
+        external 
+        onlyDepositor(escrowId) 
+        validEscrow(escrowId) 
+        nonReentrant 
+        whenNotPaused 
+    {
+        EscrowData storage e = escrows[escrowId];
+        require(e.status == EscrowStatus.InProgress, "Escrow not active");
+        require(milestoneIndex < e.milestoneCount, "Invalid milestone");
+
+        Milestone storage m = milestones[escrowId][milestoneIndex];
+        require(m.status == MilestoneStatus.Submitted, "Not submitted");
+
+        // Mark milestone as rejected
+        m.status = MilestoneStatus.Rejected;
+        m.disputedAt = block.timestamp; // Reuse disputedAt field for rejectedAt
+        m.disputedBy = msg.sender; // Reuse disputedBy field for rejectedBy
+        m.disputeReason = reason; // Reuse disputeReason field for rejectionReason
+
+        emit MilestoneRejected(escrowId, milestoneIndex, msg.sender, reason, block.timestamp);
+    }
+
+    function resubmitMilestone(
+        uint256 escrowId, 
+        uint256 milestoneIndex, 
+        string calldata description
+    ) 
+        external 
+        onlyBeneficiary(escrowId) 
+        validEscrow(escrowId) 
+        nonReentrant 
+        whenNotPaused 
+    {
+        EscrowData storage e = escrows[escrowId];
+        require(e.status == EscrowStatus.InProgress, "Escrow not active");
+        require(milestoneIndex < e.milestoneCount, "Invalid milestone");
+
+        Milestone storage m = milestones[escrowId][milestoneIndex];
+        require(m.status == MilestoneStatus.Rejected, "Not rejected");
+
+        // Reset milestone to submitted status
+        m.status = MilestoneStatus.Submitted;
+        m.submittedAt = block.timestamp;
+        if (bytes(description).length > 0) m.description = description;
+
+        emit MilestoneResubmitted(
+            escrowId, 
+            milestoneIndex, 
+            msg.sender, 
+            m.description, 
+            block.timestamp
+        );
+    }
+
     function disputeMilestone(
         uint256 escrowId, 
         uint256 milestoneIndex, 

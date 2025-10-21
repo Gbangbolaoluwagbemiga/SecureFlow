@@ -7,6 +7,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useJobCreatorStatus } from "@/hooks/use-job-creator-status";
 import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
+import {
+  useNotifications,
+  createApplicationNotification,
+} from "@/contexts/notification-context";
 import type { Escrow, Application } from "@/lib/web3/types";
 import { motion } from "framer-motion";
 import { Briefcase, MessageSquare } from "lucide-react";
@@ -26,6 +30,7 @@ export default function ApprovalsPage() {
   const { wallet, getContract } = useWeb3();
   const { toast } = useToast();
   const { isJobCreator } = useJobCreatorStatus();
+  const { addNotification } = useNotifications();
   const [jobs, setJobs] = useState<JobWithApplications[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<JobWithApplications | null>(
@@ -429,6 +434,25 @@ export default function ApprovalsPage() {
         title: "Freelancer Approved",
         description: "The freelancer has been approved for this job",
       });
+
+      // Add notification for freelancer approval - notify the FREELANCER
+      addNotification(
+        createApplicationNotification(
+          "approved",
+          Number(selectedJobForApproval.id),
+          selectedFreelancer.freelancerAddress,
+          {
+            jobTitle:
+              selectedJobForApproval.projectDescription ||
+              `Job #${selectedJobForApproval.id}`,
+            freelancerName:
+              selectedFreelancer.freelancerAddress.slice(0, 6) +
+              "..." +
+              selectedFreelancer.freelancerAddress.slice(-4),
+          },
+        ),
+        [selectedFreelancer.freelancerAddress], // Notify the freelancer
+      );
 
       // Close modals first
       setSelectedJob(null);

@@ -393,11 +393,30 @@ export default function CreateEscrowPage() {
 
       if (formData.token === ZERO_ADDRESS) {
         // Use createEscrowNative for native MON tokens
-        const totalAmountInWei =
-          "0x" +
-          BigInt(
-            Math.floor(Number.parseFloat(formData.totalBudget) * 10 ** 18),
-          ).toString(16);
+        const totalAmountInWei = BigInt(
+          Math.floor(Number.parseFloat(formData.totalBudget) * 10 ** 18),
+        ).toString();
+
+        // Check native token balance
+        try {
+          const balance = await window.ethereum.request({
+            method: "eth_getBalance",
+            params: [wallet.address],
+          });
+
+          const balanceInWei = BigInt(balance);
+          const requiredAmount = BigInt(totalAmountInWei);
+
+          if (balanceInWei < requiredAmount) {
+            throw new Error(
+              `Insufficient MON balance. You have ${(Number(balanceInWei) / 10 ** 18).toFixed(4)} MON but need ${formData.totalBudget} MON.`,
+            );
+          }
+        } catch (balanceError) {
+          throw new Error(
+            "Failed to check MON balance. Please ensure you have enough MON tokens.",
+          );
+        }
 
         // Convert milestone amounts to wei (BigInt)
         const milestoneAmountsInWei = formData.milestones.map((m) =>
@@ -410,18 +429,93 @@ export default function CreateEscrowPage() {
         // Convert duration from days to seconds
         const durationInSeconds = Number(formData.duration) * 24 * 60 * 60;
 
-        txHash = await escrowContract.send(
-          "createEscrowNative",
-          totalAmountInWei, // msg.value in wei (hex format)
-          beneficiaryAddress, // beneficiary parameter
-          arbiters, // arbiters parameter
-          requiredConfirmations, // requiredConfirmations parameter
-          milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
-          milestoneDescriptions, // milestoneDescriptions parameter
-          durationInSeconds, // duration parameter (in seconds)
-          formData.projectTitle, // projectTitle parameter
-          formData.projectDescription, // projectDescription parameter
-        );
+        console.log("Creating escrow with parameters:", {
+          totalAmountInWei,
+          beneficiaryAddress,
+          arbiters,
+          requiredConfirmations,
+          milestoneAmountsInWei,
+          milestoneDescriptions,
+          durationInSeconds,
+          projectTitle: formData.projectTitle,
+          projectDescription: formData.projectDescription,
+        });
+
+        // Try to estimate gas first with retry logic
+        let gasEstimate;
+        let gasEstimateAttempts = 0;
+        const maxGasEstimateAttempts = 3;
+
+        while (gasEstimateAttempts < maxGasEstimateAttempts) {
+          try {
+            gasEstimate = await escrowContract.estimateGas(
+              "createEscrowNative",
+              totalAmountInWei, // msg.value in wei
+              beneficiaryAddress,
+              arbiters,
+              requiredConfirmations,
+              milestoneAmountsInWei,
+              milestoneDescriptions,
+              durationInSeconds,
+              formData.projectTitle,
+              formData.projectDescription,
+            );
+            console.log("Gas estimate:", gasEstimate.toString());
+            break;
+          } catch (gasError) {
+            gasEstimateAttempts++;
+            console.error(
+              `Gas estimation attempt ${gasEstimateAttempts} failed:`,
+              gasError,
+            );
+
+            if (gasEstimateAttempts >= maxGasEstimateAttempts) {
+              console.warn(
+                "Gas estimation failed, proceeding with default gas limit",
+              );
+              gasEstimate = BigInt(500000); // Default gas limit
+              break;
+            }
+
+            // Wait before retry
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+        }
+
+        // Retry transaction with exponential backoff
+        let txAttempts = 0;
+        const maxTxAttempts = 3;
+
+        while (txAttempts < maxTxAttempts) {
+          try {
+            txHash = await escrowContract.send(
+              "createEscrowNative",
+              totalAmountInWei, // msg.value in wei
+              beneficiaryAddress, // beneficiary parameter
+              arbiters, // arbiters parameter
+              requiredConfirmations, // requiredConfirmations parameter
+              milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
+              milestoneDescriptions, // milestoneDescriptions parameter
+              durationInSeconds, // duration parameter (in seconds)
+              formData.projectTitle, // projectTitle parameter
+              formData.projectDescription, // projectDescription parameter
+            );
+            console.log("Transaction submitted successfully:", txHash);
+            break;
+          } catch (txError) {
+            txAttempts++;
+            console.error(`Transaction attempt ${txAttempts} failed:`, txError);
+
+            if (txAttempts >= maxTxAttempts) {
+              throw txError;
+            }
+
+            // Wait before retry with exponential backoff
+            const waitTime = Math.pow(2, txAttempts) * 1000; // 2s, 4s, 8s
+            console.log(`Waiting ${waitTime}ms before retry...`);
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
+          }
+        }
       } else {
         // Use createEscrow for ERC20 tokens
         const arbiters = ["0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41"]; // Default arbiter
@@ -500,11 +594,50 @@ export default function CreateEscrowPage() {
         throw new Error("Transaction failed on blockchain");
       }
     } catch (error: any) {
+      console.error("Escrow creation error:", error);
+
+      let errorMessage = "Failed to create escrow";
+
+      if (error.message?.includes("insufficient funds")) {
+        errorMessage = "Insufficient funds. Please check your balance.";
+      } else if (error.message?.includes("gas")) {
+        errorMessage = "Gas estimation failed. Please try again.";
+      } else if (error.message?.includes("revert")) {
+        errorMessage = "Transaction reverted. Please check your parameters.";
+      } else if (error.message?.includes("user rejected")) {
+        errorMessage = "Transaction was rejected by user.";
+      } else if (error.message?.includes("timeout")) {
+        errorMessage = "Transaction timeout. Please try again.";
+      } else if (error.message?.includes("Internal JSON-RPC error")) {
+        errorMessage =
+          "Network error occurred. Please try again - this usually works on the second attempt.";
+      } else if (error.code === -32603) {
+        errorMessage =
+          "RPC error occurred. Please try again - this usually works on the second attempt.";
+      } else {
+        errorMessage = error.message || "Failed to create escrow";
+      }
+
       toast({
         title: "Creation failed",
-        description: error.message || "Failed to create escrow",
+        description: errorMessage,
         variant: "destructive",
       });
+
+      // If it's an RPC error, show an additional helpful message
+      if (
+        error.message?.includes("Internal JSON-RPC error") ||
+        error.code === -32603
+      ) {
+        setTimeout(() => {
+          toast({
+            title: "💡 Tip",
+            description:
+              "This is a common network issue. Please try creating the escrow again - it usually works on the second attempt!",
+            variant: "default",
+          });
+        }, 2000);
+      }
     } finally {
       setIsSubmitting(false);
     }

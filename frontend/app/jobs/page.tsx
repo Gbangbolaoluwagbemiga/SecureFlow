@@ -6,6 +6,10 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
+import {
+  useNotifications,
+  createApplicationNotification,
+} from "@/contexts/notification-context";
 import type { Escrow } from "@/lib/web3/types";
 import { Briefcase } from "lucide-react";
 import { JobsHeader } from "@/components/jobs/jobs-header";
@@ -17,6 +21,7 @@ import { JobsLoading } from "@/components/jobs/jobs-loading";
 export default function JobsPage() {
   const { wallet, getContract } = useWeb3();
   const { toast } = useToast();
+  const { addNotification } = useNotifications();
   const [jobs, setJobs] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -493,6 +498,16 @@ export default function JobsPage() {
         description:
           "The client will review your application and get back to you.",
       });
+
+      // Add notification for job application submission - notify the CLIENT (job creator)
+      addNotification(
+        createApplicationNotification("submitted", job.id, wallet.address!, {
+          jobTitle: job.projectDescription || `Job #${job.id}`,
+          freelancerName:
+            wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+        }),
+        [job.payer], // Notify the client (job creator)
+      );
 
       setCoverLetter("");
       setProposedTimeline("");
