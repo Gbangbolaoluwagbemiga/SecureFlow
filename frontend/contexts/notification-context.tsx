@@ -82,10 +82,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       read: false,
     };
 
-    // Add to current user's notifications
-    setNotifications((prev) => [newNotification, ...prev]);
-
-    // If target addresses are specified, also store for those addresses
+    // If target addresses are specified, store for those addresses (cross-wallet notifications)
     if (targetAddresses && targetAddresses.length > 0) {
       targetAddresses.forEach((address) => {
         if (address && address !== wallet.address) {
@@ -102,6 +99,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           );
         }
       });
+    } else {
+      // Only add to current user's notifications if no target addresses specified
+      setNotifications((prev) => [newNotification, ...prev]);
     }
 
     // Show toast for important notifications

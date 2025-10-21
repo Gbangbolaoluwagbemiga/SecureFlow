@@ -75,6 +75,9 @@ export default function HomePage() {
               const isTerminated = await isEscrowTerminated(i);
               if (!isTerminated) {
                 activeEscrows++;
+              } else {
+                // Terminated projects should be counted as completed
+                completedEscrows++;
               }
             } else if (status === 2) {
               // Completed

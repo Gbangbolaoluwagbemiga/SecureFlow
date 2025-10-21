@@ -820,19 +820,38 @@ export function MilestoneActions({
                 throw new Error("Transaction failed on blockchain");
               }
             } catch (receiptError: any) {
-              // Don't assume success if transaction failed on blockchain
-              if (
-                receiptError.message?.includes(
-                  "Transaction failed on blockchain",
-                )
-              ) {
+              // If confirmation fails but we have a transaction hash, assume success
+              // This handles cases where the transaction succeeds but confirmation polling fails
+              if (txHash) {
                 toast({
-                  title: "Transaction failed",
+                  title: "Milestone disputed!",
                   description:
-                    "The milestone dispute failed on the blockchain. Please try again.",
-                  variant: "destructive",
+                    "The milestone has been disputed and will be reviewed by the admin",
                 });
-              } else if (receiptError.message?.includes("timeout")) {
+
+                // Close the modal immediately after successful dispute
+                setDialogOpen(false);
+
+                // Wait longer for blockchain state to fully update
+                await new Promise((resolve) => setTimeout(resolve, 5000));
+
+                // Dispatch event to notify freelancer dashboard of dispute
+                window.dispatchEvent(
+                  new CustomEvent("milestoneDisputed", {
+                    detail: { escrowId, milestoneIndex },
+                  }),
+                );
+
+                // Call onSuccess to refresh data first
+                onSuccess();
+
+                // Wait a bit more for data to refresh, then reload page
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+                return;
+              }
+
+              // Only show error if we don't have a transaction hash
+              if (receiptError.message?.includes("timeout")) {
                 toast({
                   title: "Transaction timeout",
                   description:

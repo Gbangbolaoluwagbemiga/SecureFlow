@@ -98,6 +98,14 @@ export default function FreelancerPage() {
   >({});
   const [showDisputeDialog, setShowDisputeDialog] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
+  const [resubmitDescription, setResubmitDescription] = useState("");
+  const [showResubmitDialog, setShowResubmitDialog] = useState(false);
+  const [selectedResubmitEscrow, setSelectedResubmitEscrow] = useState<
+    string | null
+  >(null);
+  const [selectedResubmitMilestone, setSelectedResubmitMilestone] = useState<
+    number | null
+  >(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -726,6 +734,115 @@ export default function FreelancerPage() {
     }
   };
 
+  const resubmitMilestone = async (
+    escrowId: string,
+    milestoneIndex: number,
+    description: string,
+  ) => {
+    if (!description.trim()) {
+      toast({
+        title: "Description required",
+        description: "Please describe the improvements you've made",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+
+      toast({
+        title: "Resubmitting milestone...",
+        description: "Submitting transaction to resubmit your milestone",
+      });
+
+      const txHash = await contract.send(
+        "resubmitMilestone",
+        "no-value",
+        escrowId,
+        milestoneIndex,
+        description,
+      );
+
+      // Wait for transaction confirmation
+      toast({
+        title: "Transaction submitted",
+        description: "Waiting for blockchain confirmation...",
+      });
+
+      // Wait for transaction to be mined using polling
+      let receipt;
+      let attempts = 0;
+      const maxAttempts = 30; // 30 attempts * 2 seconds = 1 minute timeout
+
+      while (attempts < maxAttempts) {
+        try {
+          receipt = await window.ethereum.request({
+            method: "eth_getTransactionReceipt",
+            params: [txHash],
+          });
+
+          if (receipt) {
+            break;
+          }
+        } catch (error) {}
+
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+        attempts++;
+      }
+
+      if (!receipt) {
+        throw new Error(
+          "Transaction timeout - please check the blockchain explorer",
+        );
+      }
+
+      if (receipt.status === "0x1") {
+        toast({
+          title: "Milestone resubmitted!",
+          description: "Your milestone has been resubmitted for client review",
+        });
+
+        // Get client address from escrow data
+        const escrow = escrows.find((e) => e.id === escrowId);
+        const clientAddress = escrow?.payer;
+
+        // Add notification for milestone resubmission (notify the client)
+        addNotification(
+          createMilestoneNotification("submitted", escrowId, milestoneIndex, {
+            freelancerName:
+              wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+            projectTitle: escrow?.projectTitle || `Project #${escrowId}`,
+          }),
+          clientAddress ? [clientAddress] : undefined, // Notify the client
+        );
+
+        // Clear form and close dialog
+        setResubmitDescription("");
+        setShowResubmitDialog(false);
+        setSelectedResubmitEscrow(null);
+        setSelectedResubmitMilestone(null);
+
+        // Refresh escrows
+        await fetchFreelancerEscrows();
+
+        // Dispatch event to notify other components
+        window.dispatchEvent(new CustomEvent("milestoneResubmitted"));
+      } else {
+        throw new Error("Transaction failed on blockchain");
+      }
+    } catch (error) {
+      toast({
+        title: "Failed to resubmit milestone",
+        description: "Could not resubmit your milestone",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingMilestone(null);
+    }
+  };
+
   const openDispute = async (
     escrowId: string,
     milestoneIndex: number,
@@ -1264,73 +1381,11 @@ export default function FreelancerPage() {
                                       <Button
                                         size="sm"
                                         className="bg-red-600 hover:bg-red-700 text-white"
-                                        onClick={async () => {
-                                          try {
-                                            const contract = getContract(
-                                              CONTRACTS.SECUREFLOW_ESCROW,
-                                              SECUREFLOW_ABI,
-                                            );
-
-                                            toast({
-                                              title:
-                                                "Resubmitting milestone...",
-                                              description:
-                                                "Please wait while we process your resubmission",
-                                            });
-
-                                            // Call the resubmitMilestone function
-                                            await contract.send(
-                                              "resubmitMilestone",
-                                              "no-value",
-                                              escrow.id,
-                                              index,
-                                              milestone.description, // Use existing description
-                                            );
-
-                                            toast({
-                                              title: "Milestone resubmitted!",
-                                              description:
-                                                "Your milestone has been resubmitted for client review",
-                                            });
-
-                                            // Get client address from escrow data
-                                            const clientAddress = escrow.payer;
-
-                                            // Add notification for milestone resubmission (notify the client)
-                                            addNotification(
-                                              createMilestoneNotification(
-                                                "submitted",
-                                                escrow.id,
-                                                index,
-                                                {
-                                                  freelancerName:
-                                                    wallet.address!.slice(
-                                                      0,
-                                                      6,
-                                                    ) +
-                                                    "..." +
-                                                    wallet.address!.slice(-4),
-                                                  projectTitle:
-                                                    escrow.projectTitle ||
-                                                    `Project #${escrow.id}`,
-                                                },
-                                              ),
-                                              clientAddress
-                                                ? [clientAddress]
-                                                : undefined, // Notify the client
-                                            );
-
-                                            // Refresh the page to show updated status
-                                            window.location.reload();
-                                          } catch (error: any) {
-                                            toast({
-                                              title: "Resubmission failed",
-                                              description:
-                                                error.message ||
-                                                "Failed to resubmit milestone",
-                                              variant: "destructive",
-                                            });
-                                          }
+                                        onClick={() => {
+                                          setSelectedResubmitEscrow(escrow.id);
+                                          setSelectedResubmitMilestone(index);
+                                          setResubmitDescription("");
+                                          setShowResubmitDialog(true);
                                         }}
                                       >
                                         Resubmit Work
@@ -1678,6 +1733,74 @@ export default function FreelancerPage() {
                     <Button
                       variant="outline"
                       onClick={() => setShowDisputeDialog(false)}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Resubmit Dialog */}
+        {showResubmitDialog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md mx-4">
+              <CardHeader>
+                <CardTitle>Resubmit Milestone</CardTitle>
+                <CardDescription>
+                  Describe the improvements you've made to address the client's
+                  feedback
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Improvements Made
+                    </label>
+                    <textarea
+                      value={resubmitDescription}
+                      onChange={(e) => setResubmitDescription(e.target.value)}
+                      placeholder="Describe the improvements you've made to address the client's feedback..."
+                      className="w-full p-3 border rounded-lg resize-none"
+                      rows={4}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => {
+                        if (
+                          selectedResubmitEscrow &&
+                          selectedResubmitMilestone !== null
+                        ) {
+                          resubmitMilestone(
+                            selectedResubmitEscrow,
+                            selectedResubmitMilestone,
+                            resubmitDescription,
+                          );
+                        }
+                      }}
+                      disabled={
+                        !resubmitDescription.trim() ||
+                        submittingMilestone !== null
+                      }
+                      className="flex-1"
+                    >
+                      {submittingMilestone
+                        ? "Resubmitting..."
+                        : "Resubmit Milestone"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowResubmitDialog(false);
+                        setResubmitDescription("");
+                        setSelectedResubmitEscrow(null);
+                        setSelectedResubmitMilestone(null);
+                      }}
                       className="flex-1"
                     >
                       Cancel
