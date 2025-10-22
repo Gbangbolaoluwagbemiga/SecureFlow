@@ -8,11 +8,8 @@ import { useSmartAccount } from "@/contexts/smart-account-context";
 import { useDelegation } from "@/contexts/delegation-context";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
-import { SECUREFLOW_ABI } from "@/lib/web3/abis";
-import { CONTRACTS } from "@/lib/web3/config";
 import {
   Shield,
-  Zap,
   Users,
   CheckCircle2,
   AlertCircle,
@@ -24,13 +21,8 @@ import {
 import { motion } from "framer-motion";
 
 export default function SmartAccountDemoPage() {
-  const {
-    smartAccount,
-    deploySmartAccount,
-    executeTransaction,
-    executeBatchTransaction,
-    isSmartAccountReady,
-  } = useSmartAccount();
+  const { smartAccount, deploySmartAccount, isSmartAccountReady } =
+    useSmartAccount();
   const {
     delegations,
     createDelegation,
@@ -40,7 +32,6 @@ export default function SmartAccountDemoPage() {
   const { wallet, getContract } = useWeb3();
   const { toast } = useToast();
   const [isDeploying, setIsDeploying] = useState(false);
-  const [isExecuting, setIsExecuting] = useState(false);
 
   const handleDeploySmartAccount = async () => {
     try {
@@ -50,85 +41,6 @@ export default function SmartAccountDemoPage() {
       console.error("Deployment failed:", error);
     } finally {
       setIsDeploying(false);
-    }
-  };
-
-  const handleGaslessTransaction = async () => {
-    try {
-      setIsExecuting(true);
-
-      if (!wallet.isConnected) {
-        toast({
-          title: "Wallet Not Connected",
-          description: "Please connect your wallet first",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Use a safe, view-only function that exists in current ABI
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-
-      if (contract) {
-        // Call an existing method (e.g., paused)
-        const paused = await contract.call("paused");
-
-        toast({
-          title: "🚀 Smart Account Transaction Executed!",
-          description: `Contract paused: ${paused.toString()}`,
-        });
-      } else {
-        throw new Error("Contract not available");
-      }
-    } catch (error) {
-      console.error("Gasless transaction failed:", error);
-      toast({
-        title: "Transaction Failed",
-        description: "Please ensure your wallet is connected",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExecuting(false);
-    }
-  };
-
-  const handleBatchTransaction = async () => {
-    try {
-      setIsExecuting(true);
-
-      if (!wallet.isConnected) {
-        toast({
-          title: "Wallet Not Connected",
-          description: "Please connect your wallet first",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Use read-only calls to existing functions to validate connectivity
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-
-      if (contract) {
-        // Execute multiple existing view calls
-        const paused = await contract.call("paused");
-        const owner = await contract.call("owner");
-
-        toast({
-          title: "🚀 Batch Transaction Executed!",
-          description: `Batch completed. paused=${paused.toString()}, owner=${owner}`,
-        });
-      } else {
-        throw new Error("Contract not available");
-      }
-    } catch (error) {
-      console.error("Batch transaction failed:", error);
-      toast({
-        title: "Batch Transaction Failed",
-        description: "Please ensure your wallet is connected",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExecuting(false);
     }
   };
 
@@ -220,59 +132,6 @@ export default function SmartAccountDemoPage() {
               )}
             </div>
           </Card>
-
-          {/* Smart Account Features */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {/* Gasless Transactions */}
-            <Card className="glass border-accent/20 p-6">
-              <div className="flex items-start gap-4">
-                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-accent/10">
-                  <Zap className="h-6 w-6 text-accent" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold mb-2">
-                    Gasless Transactions
-                  </h3>
-                  <p className="text-muted-foreground mb-4">
-                    Execute milestone operations without paying gas fees.
-                    Perfect for freelancers and clients.
-                  </p>
-                  <Button
-                    onClick={handleGaslessTransaction}
-                    disabled={!isSmartAccountReady || isExecuting}
-                    className="gap-2"
-                  >
-                    <Zap className="h-4 w-4" />
-                    {isExecuting ? "Executing..." : "Test Smart Transaction"}
-                  </Button>
-                </div>
-              </div>
-            </Card>
-
-            {/* Batch Operations */}
-            <Card className="glass border-primary/20 p-6">
-              <div className="flex items-start gap-4">
-                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-                  <Send className="h-6 w-6 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold mb-2">Batch Operations</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Execute multiple milestone actions in a single transaction.
-                    Efficient and cost-effective.
-                  </p>
-                  <Button
-                    onClick={handleBatchTransaction}
-                    disabled={!isSmartAccountReady || isExecuting}
-                    className="gap-2"
-                  >
-                    <Send className="h-4 w-4" />
-                    {isExecuting ? "Executing..." : "Test Smart Batch"}
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          </div>
 
           {/* Delegation System */}
           <Card className="glass border-accent/20 p-6 mb-8">

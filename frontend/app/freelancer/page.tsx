@@ -9,6 +9,7 @@ import {
   createEscrowNotification,
   createMilestoneNotification,
 } from "@/contexts/notification-context";
+import { useSmartAccount } from "@/contexts/smart-account-context";
 import {
   Card,
   CardContent,
@@ -73,11 +74,13 @@ interface Milestone {
   submittedAt?: number;
   approvedAt?: number;
   disputeReason?: string;
+  rejectionReason?: string;
 }
 
 export default function FreelancerPage() {
   const { wallet, getContract } = useWeb3();
   const { addNotification } = useNotifications();
+  const { executeTransaction, isSmartAccountReady } = useSmartAccount();
   const [escrows, setEscrows] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(false);
   const [submittingMilestone, setSubmittingMilestone] = useState<string | null>(
@@ -244,6 +247,8 @@ export default function FreelancerPage() {
                     let status = 0;
                     let submittedAt = undefined;
                     let approvedAt = undefined;
+                    let disputeReason = "";
+                    let rejectionReason = "";
 
                     if (m && typeof m === "object") {
                       try {
@@ -306,11 +311,17 @@ export default function FreelancerPage() {
                             }
 
                             // Parse dispute reason (index 7 in contract)
-                            let disputeReason = "";
                             if (m.disputeReason !== undefined) {
                               disputeReason = String(m.disputeReason);
                             } else if (m[7] !== undefined) {
                               disputeReason = String(m[7]);
+                            }
+
+                            // Parse rejection reason (also index 7 in contract)
+                            if (m.rejectionReason !== undefined) {
+                              rejectionReason = String(m.rejectionReason);
+                            } else if (m[7] !== undefined) {
+                              rejectionReason = String(m[7]);
                             }
 
                             // Debug amount conversion
@@ -404,6 +415,7 @@ export default function FreelancerPage() {
                       submittedAt,
                       approvedAt,
                       disputeReason,
+                      rejectionReason,
                     };
                   } catch (error) {
                     return {
@@ -461,16 +473,52 @@ export default function FreelancerPage() {
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
 
+      // Debug: Check escrow details before starting work
+      console.log("Starting work for escrow:", escrowId);
+      console.log("User address:", wallet.address);
+
+      // Get escrow details to debug
+      try {
+        const escrowSummary = await contract.call(
+          "getEscrowSummary",
+          Number(escrowId),
+        );
+        console.log("Escrow summary:", escrowSummary);
+        console.log("Beneficiary:", escrowSummary[1]);
+        console.log("Status:", escrowSummary[3]);
+        console.log(
+          "Is user beneficiary?",
+          escrowSummary[1].toLowerCase() === wallet.address?.toLowerCase(),
+        );
+      } catch (debugError) {
+        console.error("Failed to get escrow details:", debugError);
+      }
+
       toast({
         title: "Starting work...",
         description: "Submitting transaction to start work on this escrow",
       });
 
-      const txHash = await contract.send(
-        "startWork",
-        "no-value",
-        Number(escrowId),
-      );
+      // Check if Smart Account is ready for gasless transaction
+
+      let txHash;
+      if (isSmartAccountReady) {
+        // Use Smart Account for gasless start work
+        const { ethers } = await import("ethers");
+        const iface = new ethers.Interface(SECUREFLOW_ABI);
+        const data = iface.encodeFunctionData("startWork", [Number(escrowId)]);
+
+        txHash = await executeTransaction(CONTRACTS.SECUREFLOW_ESCROW, data);
+
+        toast({
+          title: "🚀 Gasless Work Started!",
+          description:
+            "Work started with no gas fees using Smart Account delegation",
+        });
+      } else {
+        // Use regular transaction
+        txHash = await contract.send("startWork", "no-value", Number(escrowId));
+      }
 
       toast({
         title: "Work started!",
@@ -490,12 +538,36 @@ export default function FreelancerPage() {
 
       // Refresh escrows
       await fetchFreelancerEscrows();
-    } catch (error) {
-      toast({
-        title: "Failed to start work",
-        description: "Could not start work on this escrow",
-        variant: "destructive",
-      });
+    } catch (error: any) {
+      console.error("Start work error:", error);
+      console.error("Error message:", error.message);
+      console.error("Error code:", error.code);
+      console.error("Error data:", error.data);
+
+      // Check for MetaMask disconnection
+      if (
+        error.message?.includes("Disconnected from MetaMask") ||
+        error.message?.includes("Premature close") ||
+        error.code === "UNPREDICTABLE_GAS_LIMIT"
+      ) {
+        toast({
+          title: "MetaMask Connection Lost",
+          description: "Please refresh the page and reconnect your wallet",
+          variant: "destructive",
+        });
+      } else if (error.message?.includes("Only beneficiary")) {
+        toast({
+          title: "Not Authorized",
+          description: "Only the beneficiary can start work on this escrow",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Failed to start work",
+          description: error.message || "Could not start work on this escrow",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -642,13 +714,36 @@ export default function FreelancerPage() {
         description: "Submitting transaction to submit your milestone",
       });
 
-      const txHash = await contract.send(
-        "submitMilestone",
-        "no-value",
-        escrowId,
-        milestoneIndex,
-        description,
-      );
+      // Check if Smart Account is ready for gasless transaction
+
+      let txHash;
+      if (isSmartAccountReady) {
+        // Use Smart Account for gasless submission
+        const { ethers } = await import("ethers");
+        const iface = new ethers.Interface(SECUREFLOW_ABI);
+        const data = iface.encodeFunctionData("submitMilestone", [
+          escrowId,
+          milestoneIndex,
+          description,
+        ]);
+
+        txHash = await executeTransaction(CONTRACTS.SECUREFLOW_ESCROW, data);
+
+        toast({
+          title: "🚀 Gasless Milestone Submitted!",
+          description:
+            "Milestone submitted with no gas fees using Smart Account delegation",
+        });
+      } else {
+        // Use regular transaction
+        txHash = await contract.send(
+          "submitMilestone",
+          "no-value",
+          escrowId,
+          milestoneIndex,
+          description,
+        );
+      }
 
       // Wait for transaction confirmation
       toast({
@@ -757,13 +852,36 @@ export default function FreelancerPage() {
         description: "Submitting transaction to resubmit your milestone",
       });
 
-      const txHash = await contract.send(
-        "resubmitMilestone",
-        "no-value",
-        escrowId,
-        milestoneIndex,
-        description,
-      );
+      // Check if Smart Account is ready for gasless transaction
+
+      let txHash;
+      if (isSmartAccountReady) {
+        // Use Smart Account for gasless resubmission
+        const { ethers } = await import("ethers");
+        const iface = new ethers.Interface(SECUREFLOW_ABI);
+        const data = iface.encodeFunctionData("resubmitMilestone", [
+          escrowId,
+          milestoneIndex,
+          description,
+        ]);
+
+        txHash = await executeTransaction(CONTRACTS.SECUREFLOW_ESCROW, data);
+
+        toast({
+          title: "🚀 Gasless Milestone Resubmitted!",
+          description:
+            "Milestone resubmitted with no gas fees using Smart Account delegation",
+        });
+      } else {
+        // Use regular transaction
+        txHash = await contract.send(
+          "resubmitMilestone",
+          "no-value",
+          escrowId,
+          milestoneIndex,
+          description,
+        );
+      }
 
       // Wait for transaction confirmation
       toast({
@@ -866,13 +984,36 @@ export default function FreelancerPage() {
         description: "Submitting transaction to open dispute",
       });
 
-      const txHash = await contract.send(
-        "openDispute",
-        "no-value",
-        escrowId,
-        milestoneIndex,
-        reason,
-      );
+      // Check if Smart Account is ready for gasless transaction
+
+      let txHash;
+      if (isSmartAccountReady) {
+        // Use Smart Account for gasless dispute
+        const { ethers } = await import("ethers");
+        const iface = new ethers.Interface(SECUREFLOW_ABI);
+        const data = iface.encodeFunctionData("openDispute", [
+          escrowId,
+          milestoneIndex,
+          reason,
+        ]);
+
+        txHash = await executeTransaction(CONTRACTS.SECUREFLOW_ESCROW, data);
+
+        toast({
+          title: "🚀 Gasless Dispute Opened!",
+          description:
+            "Dispute opened with no gas fees using Smart Account delegation",
+        });
+      } else {
+        // Use regular transaction
+        txHash = await contract.send(
+          "openDispute",
+          "no-value",
+          escrowId,
+          milestoneIndex,
+          reason,
+        );
+      }
 
       toast({
         title: "Dispute opened!",
@@ -1751,15 +1892,46 @@ export default function FreelancerPage() {
               <CardHeader>
                 <CardTitle>Resubmit Milestone</CardTitle>
                 <CardDescription>
-                  Describe the improvements you've made to address the client's
-                  feedback
+                  Resubmit milestone 1 for client review. Make sure you've
+                  addressed the feedback.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
+                  {/* Show rejection reason if available */}
+                  {selectedResubmitEscrow &&
+                    selectedResubmitMilestone !== null && (
+                      <div>
+                        <label className="block text-sm font-medium mb-2 text-red-600">
+                          Rejection Reason
+                        </label>
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                          {(() => {
+                            const escrow = escrows.find(
+                              (e) => e.id === selectedResubmitEscrow,
+                            );
+                            if (
+                              escrow &&
+                              escrow.milestones &&
+                              escrow.milestones[selectedResubmitMilestone]
+                            ) {
+                              const milestone =
+                                escrow.milestones[selectedResubmitMilestone];
+                              // The rejection reason should be in the last field of the milestone data
+                              return (
+                                milestone.rejectionReason ||
+                                "No reason provided"
+                              );
+                            }
+                            return "No reason provided";
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
                   <div>
                     <label className="block text-sm font-medium mb-2">
-                      Improvements Made
+                      Update Message
                     </label>
                     <textarea
                       value={resubmitDescription}
@@ -1768,6 +1940,10 @@ export default function FreelancerPage() {
                       className="w-full p-3 border rounded-lg resize-none"
                       rows={4}
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      This message will be sent to the client along with your
+                      resubmission.
+                    </p>
                   </div>
                   <div className="flex gap-2">
                     <Button

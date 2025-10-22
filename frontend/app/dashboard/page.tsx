@@ -158,6 +158,8 @@ export default function DashboardPage() {
             let status = 0;
             let submittedAt = undefined;
             let approvedAt = undefined;
+            let disputeReason = "";
+            let rejectionReason = "";
 
             if (m && typeof m === "object") {
               try {
@@ -214,6 +216,20 @@ export default function DashboardPage() {
                       approvedAt = Number(m.approvedAt) * 1000;
                     } else if (m[4] !== undefined && Number(m[4]) > 0) {
                       approvedAt = Number(m[4]) * 1000;
+                    }
+
+                    // Parse dispute reason (index 7 in contract)
+                    if (m.disputeReason !== undefined) {
+                      disputeReason = String(m.disputeReason);
+                    } else if (m[7] !== undefined) {
+                      disputeReason = String(m[7]);
+                    }
+
+                    // Parse rejection reason (also index 7 in contract)
+                    if (m.rejectionReason !== undefined) {
+                      rejectionReason = String(m.rejectionReason);
+                    } else if (m[7] !== undefined) {
+                      rejectionReason = String(m[7]);
                     }
 
                     // Debug amount conversion
@@ -294,6 +310,8 @@ export default function DashboardPage() {
               status: finalStatus,
               submittedAt,
               approvedAt,
+              disputeReason,
+              rejectionReason,
             };
           } catch (error) {
             return {

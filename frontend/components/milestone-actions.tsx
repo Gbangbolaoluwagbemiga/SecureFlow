@@ -78,6 +78,7 @@ export function MilestoneActions({
     | null
   >(null);
   const [disputeReason, setDisputeReason] = useState("");
+  const [resubmitMessage, setResubmitMessage] = useState("");
 
   // Check if this project is terminated (has disputed milestones)
   const isProjectTerminated = allMilestones.some(
@@ -161,6 +162,7 @@ export function MilestoneActions({
   const openDialog = (type: typeof actionType) => {
     setActionType(type);
     setDisputeReason(""); // Clear dispute reason when opening dialog
+    setResubmitMessage(""); // Clear resubmit message when opening dialog
     setDialogOpen(true);
   };
 
@@ -231,9 +233,9 @@ export function MilestoneActions({
               data,
             );
             toast({
-              title: "🚀 Smart Account Milestone submitted!",
+              title: "🚀 Gasless Milestone Submitted!",
               description:
-                "Milestone submitted using Smart Account with enhanced features",
+                "Milestone submitted with no gas fees using Smart Account delegation",
             });
 
             // Add notification - notify the CLIENT (payer)
@@ -299,9 +301,9 @@ export function MilestoneActions({
                 data,
               );
               toast({
-                title: "🚀 Smart Account Milestone approved!",
+                title: "🚀 Gasless Milestone Approved!",
                 description:
-                  "Milestone approved using Smart Account with enhanced features",
+                  "Milestone approved with no gas fees using Smart Account delegation",
               });
             } else {
               // Use regular transaction
@@ -625,7 +627,7 @@ export function MilestoneActions({
               const data = iface.encodeFunctionData("resubmitMilestone", [
                 escrowId,
                 milestoneIndex,
-                milestone.description, // Use existing description or allow new one
+                resubmitMessage || milestone.description, // Use resubmit message or fallback to description
               ]);
               txHash = await executeTransaction(
                 CONTRACTS.SECUREFLOW_ESCROW,
@@ -643,7 +645,7 @@ export function MilestoneActions({
                 "no-value",
                 escrowId,
                 milestoneIndex,
-                milestone.description, // Use existing description or allow new one
+                resubmitMessage || milestone.description, // Use resubmit message or fallback to description
               );
             }
 
@@ -1225,6 +1227,41 @@ export function MilestoneActions({
                   {actionType === "dispute" ? "dispute" : "rejection"}
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Rejection reason display and resubmit message for resubmit action */}
+          {actionType === "resubmit" && (
+            <div className="my-4 space-y-4">
+              {/* Show rejection reason if available */}
+              {milestone.rejectionReason && (
+                <div>
+                  <label className="block text-sm font-medium text-red-600 mb-2">
+                    Rejection Reason
+                  </label>
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                    {milestone.rejectionReason}
+                  </div>
+                </div>
+              )}
+
+              {/* Update message field */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Update Message
+                </label>
+                <textarea
+                  value={resubmitMessage}
+                  onChange={(e) => setResubmitMessage(e.target.value)}
+                  placeholder="Describe the improvements you've made to address the client's feedback..."
+                  className="w-full p-3 border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  rows={4}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  This message will be sent to the client along with your
+                  resubmission.
+                </p>
+              </div>
             </div>
           )}
 

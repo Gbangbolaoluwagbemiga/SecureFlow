@@ -63,15 +63,15 @@ export default function RootLayout({
         >
           <Suspense fallback={<div>Loading...</div>}>
             <Web3Provider>
-              <SmartAccountProvider>
-                <DelegationProvider>
+              <DelegationProvider>
+                <SmartAccountProvider>
                   <NotificationProvider>
                     <Navbar />
                     <main className="pt-16">{children}</main>
                     <Toaster />
                   </NotificationProvider>
-                </DelegationProvider>
-              </SmartAccountProvider>
+                </SmartAccountProvider>
+              </DelegationProvider>
             </Web3Provider>
           </Suspense>
         </ThemeProvider>

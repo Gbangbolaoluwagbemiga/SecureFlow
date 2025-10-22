@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useWeb3 } from "@/contexts/web3-context";
+import { useSmartAccount } from "@/contexts/smart-account-context";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,6 +22,7 @@ interface Milestone {
 export default function CreateEscrowPage() {
   const router = useRouter();
   const { wallet, getContract } = useWeb3();
+  const { executeTransaction, isSmartAccountReady } = useSmartAccount();
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -386,8 +388,8 @@ export default function CreateEscrowPage() {
       );
 
       const beneficiaryAddress = isOpenJob
-        ? ZERO_ADDRESS
-        : formData.beneficiary || ZERO_ADDRESS;
+        ? "0x0000000000000000000000000000000000000000" // Zero address for open jobs
+        : formData.beneficiary || "0x0000000000000000000000000000000000000000";
 
       let txHash;
 
@@ -488,18 +490,53 @@ export default function CreateEscrowPage() {
 
         while (txAttempts < maxTxAttempts) {
           try {
-            txHash = await escrowContract.send(
-              "createEscrowNative",
-              totalAmountInWei, // msg.value in wei
-              beneficiaryAddress, // beneficiary parameter
-              arbiters, // arbiters parameter
-              requiredConfirmations, // requiredConfirmations parameter
-              milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
-              milestoneDescriptions, // milestoneDescriptions parameter
-              durationInSeconds, // duration parameter (in seconds)
-              formData.projectTitle, // projectTitle parameter
-              formData.projectDescription, // projectDescription parameter
-            );
+            // Check if we should use Smart Account for gasless transaction
+            if (isSmartAccountReady) {
+              // Use Smart Account for gasless escrow creation
+              const { ethers } = await import("ethers");
+              const iface = new ethers.Interface(SECUREFLOW_ABI);
+              const data = iface.encodeFunctionData("createEscrowNative", [
+                beneficiaryAddress, // beneficiary parameter
+                arbiters, // arbiters parameter
+                requiredConfirmations, // requiredConfirmations parameter
+                milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
+                milestoneDescriptions, // milestoneDescriptions parameter
+                durationInSeconds, // duration parameter (in seconds)
+                formData.projectTitle, // projectTitle parameter
+                formData.projectDescription, // projectDescription parameter
+              ]);
+
+              txHash = await executeTransaction(
+                CONTRACTS.SECUREFLOW_ESCROW,
+                data,
+                (Number(totalAmountInWei) / 1e18).toString(), // Convert wei to ETH for value
+              );
+
+              toast({
+                title: "🚀 Gasless Escrow Created!",
+                description:
+                  "Escrow created with no gas fees using Smart Account delegation",
+              });
+            } else {
+              // Use regular transaction
+              txHash = await escrowContract.send(
+                "createEscrowNative",
+                `0x${BigInt(totalAmountInWei).toString(16)}`, // Convert wei to hex for msg.value
+                beneficiaryAddress, // beneficiary parameter
+                arbiters, // arbiters parameter
+                requiredConfirmations, // requiredConfirmations parameter
+                milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
+                milestoneDescriptions, // milestoneDescriptions parameter
+                durationInSeconds, // duration parameter (in seconds)
+                formData.projectTitle, // projectTitle parameter
+                formData.projectDescription, // projectDescription parameter
+              );
+
+              toast({
+                title: "Escrow Created!",
+                description: "Your escrow has been created successfully",
+              });
+            }
             console.log("Transaction submitted successfully:", txHash);
             break;
           } catch (txError) {
@@ -529,69 +566,154 @@ export default function CreateEscrowPage() {
         // Convert duration from days to seconds
         const durationInSeconds = Number(formData.duration) * 24 * 60 * 60;
 
-        txHash = await escrowContract.send(
-          "createEscrow",
-          "no-value", // No msg.value for ERC20
-          beneficiaryAddress, // beneficiary parameter
-          arbiters, // arbiters parameter
-          requiredConfirmations, // requiredConfirmations parameter
-          milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
-          milestoneDescriptions, // milestoneDescriptions parameter
-          formData.token, // token parameter
-          durationInSeconds, // duration parameter (in seconds)
-          formData.projectTitle, // projectTitle parameter
-          formData.projectDescription, // projectDescription parameter
-        );
+        // Check if we should use Smart Account for gasless transaction
+        if (isSmartAccountReady) {
+          // Use Smart Account for gasless ERC20 escrow creation
+          const { ethers } = await import("ethers");
+          const iface = new ethers.Interface(SECUREFLOW_ABI);
+          const data = iface.encodeFunctionData("createEscrow", [
+            beneficiaryAddress, // beneficiary parameter
+            arbiters, // arbiters parameter
+            requiredConfirmations, // requiredConfirmations parameter
+            milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
+            milestoneDescriptions, // milestoneDescriptions parameter
+            formData.token, // token parameter
+            durationInSeconds, // duration parameter (in seconds)
+            formData.projectTitle, // projectTitle parameter
+            formData.projectDescription, // projectDescription parameter
+          ]);
+
+          txHash = await executeTransaction(
+            CONTRACTS.SECUREFLOW_ESCROW,
+            data,
+            "0", // No ETH value for ERC20
+          );
+
+          toast({
+            title: "🚀 Gasless ERC20 Escrow Created!",
+            description:
+              "ERC20 escrow created with no gas fees using Smart Account delegation",
+          });
+        } else {
+          // Use regular transaction
+          txHash = await escrowContract.send(
+            "createEscrow",
+            "no-value", // No msg.value for ERC20
+            beneficiaryAddress, // beneficiary parameter
+            arbiters, // arbiters parameter
+            requiredConfirmations, // requiredConfirmations parameter
+            milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
+            milestoneDescriptions, // milestoneDescriptions parameter
+            formData.token, // token parameter
+            durationInSeconds, // duration parameter (in seconds)
+            formData.projectTitle, // projectTitle parameter
+            formData.projectDescription, // projectDescription parameter
+          );
+
+          toast({
+            title: "ERC20 Escrow Created!",
+            description: "Your ERC20 escrow has been created successfully",
+          });
+        }
       }
 
       // Wait for transaction confirmation
-      toast({
-        title: "Transaction submitted",
-        description: "Waiting for blockchain confirmation...",
-      });
+      // Note: Success toast is already shown in Smart Account/regular transaction logic above
 
-      // Wait for transaction to be mined using polling
-      let receipt;
-      let attempts = 0;
-      const maxAttempts = 30; // 30 attempts * 2 seconds = 1 minute timeout
+      // For Smart Account transactions, we still need to wait for confirmation
+      // but the Smart Account pays the gas fees
+      if (isSmartAccountReady) {
+        // Smart Account transactions are real but gasless for the user
+        console.log("Smart Account transaction completed:", txHash);
 
-      while (attempts < maxAttempts) {
-        try {
-          receipt = await window.ethereum.request({
-            method: "eth_getTransactionReceipt",
-            params: [txHash],
+        // Wait for real blockchain confirmation
+        let receipt;
+        let attempts = 0;
+        const maxAttempts = 30; // 30 attempts * 2 seconds = 1 minute timeout
+
+        while (attempts < maxAttempts) {
+          try {
+            receipt = await window.ethereum.request({
+              method: "eth_getTransactionReceipt",
+              params: [txHash],
+            });
+
+            if (receipt) {
+              break;
+            }
+          } catch (error) {}
+
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+          attempts++;
+        }
+
+        if (!receipt) {
+          throw new Error(
+            "Transaction timeout - please check the blockchain explorer",
+          );
+        }
+
+        if (receipt.status === "0x1") {
+          // Transaction successful
+          toast({
+            title: isOpenJob
+              ? "🚀 Gasless Job Posted!"
+              : "🚀 Gasless Escrow Created!",
+            description: isOpenJob
+              ? "Your job is now live with no gas fees! Freelancers can apply on the Browse Jobs page."
+              : "Your escrow has been created successfully with no gas fees! The freelancer can now start working.",
           });
 
-          if (receipt) {
-            break;
-          }
-        } catch (error) {}
-
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
-        attempts++;
-      }
-
-      if (!receipt) {
-        throw new Error(
-          "Transaction timeout - please check the blockchain explorer",
-        );
-      }
-
-      if (receipt.status === "0x1") {
-        // Transaction successful
-        toast({
-          title: isOpenJob ? "Job posted!" : "Escrow created!",
-          description: isOpenJob
-            ? "Your job is now live. Freelancers can apply on the Browse Jobs page."
-            : "Your escrow has been successfully created",
-        });
-
-        setTimeout(() => {
-          router.push(isOpenJob ? "/jobs" : "/dashboard");
-        }, 2000);
+          setTimeout(() => {
+            router.push(isOpenJob ? "/jobs" : "/dashboard");
+          }, 2000);
+        } else {
+          throw new Error("Transaction failed on blockchain");
+        }
       } else {
-        // Transaction failed
-        throw new Error("Transaction failed on blockchain");
+        // For regular transactions, wait for blockchain confirmation
+        let receipt;
+        let attempts = 0;
+        const maxAttempts = 30; // 30 attempts * 2 seconds = 1 minute timeout
+
+        while (attempts < maxAttempts) {
+          try {
+            receipt = await window.ethereum.request({
+              method: "eth_getTransactionReceipt",
+              params: [txHash],
+            });
+
+            if (receipt) {
+              break;
+            }
+          } catch (error) {}
+
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+          attempts++;
+        }
+
+        if (!receipt) {
+          throw new Error(
+            "Transaction timeout - please check the blockchain explorer",
+          );
+        }
+
+        if (receipt.status === "0x1") {
+          // Transaction successful
+          toast({
+            title: isOpenJob ? "Job posted!" : "Escrow created!",
+            description: isOpenJob
+              ? "Your job is now live. Freelancers can apply on the Browse Jobs page."
+              : "Your escrow has been successfully created",
+          });
+
+          setTimeout(() => {
+            router.push(isOpenJob ? "/jobs" : "/dashboard");
+          }, 2000);
+        } else {
+          // Transaction failed
+          throw new Error("Transaction failed on blockchain");
+        }
       }
     } catch (error: any) {
       console.error("Escrow creation error:", error);

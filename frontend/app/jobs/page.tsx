@@ -60,6 +60,8 @@ export default function JobsPage() {
     checkContractPauseStatus();
   }, [wallet.address]);
 
+  // Removed automatic refresh to prevent constant reloading
+
   // Check application status when jobs are loaded
   useEffect(() => {
     if (wallet.address && jobs.length > 0) {
@@ -67,12 +69,7 @@ export default function JobsPage() {
     }
   }, [wallet.address, jobs]);
 
-  // Also refresh project count when component mounts
-  useEffect(() => {
-    if (wallet.address) {
-      countOngoingProjects();
-    }
-  }, []);
+  // Removed duplicate project count refresh
 
   const checkContractPauseStatus = async () => {
     try {
@@ -111,29 +108,34 @@ export default function JobsPage() {
 
       let ongoingCount = 0;
 
-      // Check all escrows to count ongoing projects for this freelancer
+      // Check all escrows to count ongoing projects for this user (both as client and freelancer)
       if (escrowCount > 1) {
         for (let i = 1; i < escrowCount; i++) {
           try {
             const escrowSummary = await contract.call("getEscrowSummary", i);
 
-            // Check if current user is the beneficiary (freelancer)
-            const beneficiaryAddress = escrowSummary[1];
+            const payerAddress = escrowSummary[0]; // depositor/client
+            const beneficiaryAddress = escrowSummary[1]; // beneficiary/freelancer
             const userAddress = wallet.address;
+
+            // Check if current user is either the payer (client) or beneficiary (freelancer)
+            const isPayer =
+              payerAddress &&
+              userAddress &&
+              payerAddress.toLowerCase() === userAddress.toLowerCase();
             const isBeneficiary =
               beneficiaryAddress &&
               userAddress &&
               beneficiaryAddress.toLowerCase() === userAddress.toLowerCase();
 
-            if (isBeneficiary) {
-              const status = Number(escrowSummary[0]);
+            // Count projects where user is involved (as client or freelancer)
+            if (isPayer || isBeneficiary) {
+              const status = Number(escrowSummary[3]); // status is at index 3
               // Count active and pending projects (status 0 = pending, 1 = active)
               // Also count any project that's not completed, disputed, or cancelled
               if (status === 0 || status === 1) {
                 ongoingCount++;
-              } else {
               }
-            } else {
             }
           } catch (error) {
             // Skip escrows that don't exist or can't be accessed
