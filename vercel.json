@@ -1,6 +1,5 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "frontend/.next",
-  "installCommand": "npm install --legacy-peer-deps",
-  "devCommand": "npm run dev"
+  "version": 2,
+  "builds": [{ "src": "frontend/package.json", "use": "@vercel/next" }],
+  "routes": [{ "src": "/(.*)", "dest": "frontend/$1" }]
 }
