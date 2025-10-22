@@ -1,11 +1,8 @@
 {
-  "version": 2,
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/.next",
+  "installCommand": "cd frontend && npm install",
+  "devCommand": "cd frontend && npm run dev",
   "framework": "nextjs",
-  "buildCommand": "corepack enable && pnpm -C frontend install --frozen-lockfile=false && pnpm -C frontend build",
-  "installCommand": "corepack enable && pnpm -C frontend install --frozen-lockfile=false",
-  "outputDirectory": ".next",
-
-  "env": {
-    "NEXT_TELEMETRY_DISABLED": "1"
-  }
+  "rootDirectory": "frontend"
 }

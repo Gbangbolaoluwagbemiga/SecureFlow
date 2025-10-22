@@ -61,7 +61,6 @@ async function main() {
       "⏰ AUTO-APPROVAL - Dispute window management",
       "🛡️ ANTI-GAMING - Minimum value thresholds",
       "📈 SCALABLE - Gas optimized modular design",
-      "🎯 HACKATHON READY - Production-grade features",
     ],
     deploymentTime: new Date().toISOString(),
   };
