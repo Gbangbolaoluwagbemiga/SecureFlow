@@ -431,18 +431,6 @@ export default function CreateEscrowPage() {
         // Convert duration from days to seconds
         const durationInSeconds = Number(formData.duration) * 24 * 60 * 60;
 
-        console.log("Creating escrow with parameters:", {
-          totalAmountInWei,
-          beneficiaryAddress,
-          arbiters,
-          requiredConfirmations,
-          milestoneAmountsInWei,
-          milestoneDescriptions,
-          durationInSeconds,
-          projectTitle: formData.projectTitle,
-          projectDescription: formData.projectDescription,
-        });
-
         // Try to estimate gas first with retry logic
         let gasEstimate;
         let gasEstimateAttempts = 0;
@@ -462,19 +450,11 @@ export default function CreateEscrowPage() {
               formData.projectTitle,
               formData.projectDescription,
             );
-            console.log("Gas estimate:", gasEstimate.toString());
             break;
           } catch (gasError) {
             gasEstimateAttempts++;
-            console.error(
-              `Gas estimation attempt ${gasEstimateAttempts} failed:`,
-              gasError,
-            );
 
             if (gasEstimateAttempts >= maxGasEstimateAttempts) {
-              console.warn(
-                "Gas estimation failed, proceeding with default gas limit",
-              );
               gasEstimate = BigInt(500000); // Default gas limit
               break;
             }
@@ -537,11 +517,9 @@ export default function CreateEscrowPage() {
                 description: "Your escrow has been created successfully",
               });
             }
-            console.log("Transaction submitted successfully:", txHash);
             break;
           } catch (txError) {
             txAttempts++;
-            console.error(`Transaction attempt ${txAttempts} failed:`, txError);
 
             if (txAttempts >= maxTxAttempts) {
               throw txError;
@@ -549,7 +527,6 @@ export default function CreateEscrowPage() {
 
             // Wait before retry with exponential backoff
             const waitTime = Math.pow(2, txAttempts) * 1000; // 2s, 4s, 8s
-            console.log(`Waiting ${waitTime}ms before retry...`);
             await new Promise((resolve) => setTimeout(resolve, waitTime));
           }
         }
@@ -624,7 +601,6 @@ export default function CreateEscrowPage() {
       // but the Smart Account pays the gas fees
       if (isSmartAccountReady) {
         // Smart Account transactions are real but gasless for the user
-        console.log("Smart Account transaction completed:", txHash);
 
         // Wait for real blockchain confirmation
         let receipt;
@@ -716,8 +692,6 @@ export default function CreateEscrowPage() {
         }
       }
     } catch (error: any) {
-      console.error("Escrow creation error:", error);
-
       let errorMessage = "Failed to create escrow";
 
       if (error.message?.includes("insufficient funds")) {

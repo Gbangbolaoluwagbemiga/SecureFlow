@@ -473,22 +473,11 @@ export default function FreelancerPage() {
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
 
-      // Debug: Check escrow details before starting work
-      console.log("Starting work for escrow:", escrowId);
-      console.log("User address:", wallet.address);
-
       // Get escrow details to debug
       try {
         const escrowSummary = await contract.call(
           "getEscrowSummary",
           Number(escrowId),
-        );
-        console.log("Escrow summary:", escrowSummary);
-        console.log("Beneficiary:", escrowSummary[1]);
-        console.log("Status:", escrowSummary[3]);
-        console.log(
-          "Is user beneficiary?",
-          escrowSummary[1].toLowerCase() === wallet.address?.toLowerCase(),
         );
       } catch (debugError) {
         console.error("Failed to get escrow details:", debugError);
