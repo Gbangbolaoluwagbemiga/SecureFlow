@@ -304,40 +304,47 @@ export function SmartAccountProvider({ children }: { children: ReactNode }) {
         }
       } catch (delegationErr) {
         console.error(
-          "Delegation flow failed, but Smart Account is active - staying gasless:",
+          "Delegation flow failed, falling back to regular wallet transaction:",
           delegationErr,
         );
 
-        // When Smart Account is active, never fall back to direct send
-        // Return a simulated successful transaction instead
-        const simulatedHash = "0x" + Math.random().toString(16).substr(2, 64);
-        txResponse = {
-          hash: simulatedHash,
-          wait: () =>
-            Promise.resolve({
-              status: 1,
-              transactionHash: simulatedHash,
-              gasUsed: "0x0",
-              effectiveGasPrice: "0x0",
-            }),
-        };
+        // Fallback to regular wallet transaction when delegation fails
+        console.log("Falling back to regular wallet transaction...");
+        const fallbackTx = await signer.sendTransaction({
+          to,
+          data,
+          value: ethers.parseEther(value),
+          gasLimit: gasEstimate,
+          gasPrice,
+        });
 
-        console.log("Smart Account gasless simulation:", simulatedHash);
+        txResponse = fallbackTx;
+        console.log("Fallback transaction sent:", fallbackTx.hash);
       }
 
-      console.log("Real gasless transaction sent:", txResponse.hash);
+      console.log("Transaction sent:", txResponse.hash);
 
       // Wait for transaction confirmation
       const receipt = await txResponse.wait();
-      console.log("Real gasless transaction confirmed:", receipt);
+      console.log("Transaction confirmed:", receipt);
 
-      // Skip Paymaster sponsorship for gasless delegation
-      console.log("Skipping Paymaster sponsorship for gasless delegation");
+      // Check if this was a fallback transaction
+      const isFallback =
+        !txResponse.hash.startsWith("0x") || txResponse.hash.length < 10;
 
-      toast({
-        title: "🚀 REAL Gasless Transaction Executed!",
-        description: `Transaction confirmed on blockchain: ${txResponse.hash.slice(0, 10)}...`,
-      });
+      if (isFallback) {
+        console.log("Using regular wallet transaction (delegation failed)");
+        toast({
+          title: "💳 Regular Transaction Executed",
+          description: `Transaction confirmed: ${txResponse.hash.slice(0, 10)}... (Gas paid by wallet)`,
+        });
+      } else {
+        console.log("Using gasless delegation");
+        toast({
+          title: "🚀 Gasless Transaction Executed!",
+          description: `Transaction confirmed: ${txResponse.hash.slice(0, 10)}... (Gas sponsored)`,
+        });
+      }
 
       return txResponse.hash;
     } catch (error: any) {

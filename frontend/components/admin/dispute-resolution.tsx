@@ -56,7 +56,7 @@ export function DisputeResolution({
 }: DisputeResolutionProps) {
   const { wallet, getContract } = useWeb3();
   const { toast } = useToast();
-  const { addNotification } = useNotifications();
+  const { addNotification, addCrossWalletNotification } = useNotifications();
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastDisputeCount, setLastDisputeCount] = useState(0);
@@ -225,8 +225,27 @@ export function DisputeResolution({
         description: `Resolution submitted. Transaction: ${txHash}`,
       });
 
+      // Add cross-wallet notification with admin reason
+      addCrossWalletNotification(
+        {
+          type: "dispute",
+          title: "Dispute Resolved by Admin",
+          message: `Dispute #${selectedDispute.escrowId} has been resolved. Admin reason: ${resolutionReason}`,
+          actionUrl: `/dashboard?escrow=${selectedDispute.escrowId}`,
+          data: {
+            escrowId: selectedDispute.escrowId,
+            milestoneIndex: selectedDispute.milestoneIndex,
+            adminReason: resolutionReason,
+            beneficiaryAmount: beneficiaryAmount,
+          },
+        },
+        selectedDispute.clientAddress,
+        selectedDispute.freelancerAddress,
+      );
+
       setResolutionDialogOpen(false);
       setSelectedDispute(null);
+      setResolutionReason(""); // Clear the reason
       await fetchDisputes(false); // Refresh disputes without showing loading
       onDisputeResolved();
     } catch (error: any) {
@@ -306,7 +325,7 @@ export function DisputeResolution({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
               >
-                <Card className="border-red-200 bg-red-50/50 p-4">
+                <Card className="border-red-200 bg-red-100/80 p-4 shadow-lg">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">

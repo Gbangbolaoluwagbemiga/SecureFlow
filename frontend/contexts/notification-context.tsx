@@ -32,6 +32,11 @@ interface NotificationContextType {
   markAllAsRead: () => void;
   clearNotifications: () => void;
   removeNotification: (id: string) => void;
+  addCrossWalletNotification: (
+    notification: Omit<Notification, "id" | "timestamp" | "read">,
+    clientAddress?: string,
+    freelancerAddress?: string,
+  ) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(
@@ -43,7 +48,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // Load notifications from localStorage on mount
+  // Load notifications from localStorage on mount and when wallet changes
   useEffect(() => {
     if (wallet.isConnected && wallet.address) {
       const saved = localStorage.getItem(`notifications_${wallet.address}`);
@@ -57,7 +62,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           }),
         );
         setNotifications(notificationsWithDates);
+      } else {
+        // If no saved notifications, start with empty array
+        setNotifications([]);
       }
+    } else {
+      // If wallet not connected, clear notifications
+      setNotifications([]);
     }
   }, [wallet.isConnected, wallet.address]);
 
@@ -82,7 +93,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       read: false,
     };
 
-    // If target addresses are specified, store for those addresses (cross-wallet notifications)
+    // Always add to current user's notifications
+    setNotifications((prev) => [newNotification, ...prev]);
+
+    // If target addresses are specified, also store for those addresses (cross-wallet notifications)
     if (targetAddresses && targetAddresses.length > 0) {
       targetAddresses.forEach((address) => {
         if (address && address !== wallet.address) {
@@ -99,9 +113,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           );
         }
       });
-    } else {
-      // Only add to current user's notifications if no target addresses specified
-      setNotifications((prev) => [newNotification, ...prev]);
     }
 
     // Show toast for important notifications
@@ -137,6 +148,57 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  const addCrossWalletNotification = (
+    notification: Omit<Notification, "id" | "timestamp" | "read">,
+    clientAddress?: string,
+    freelancerAddress?: string,
+  ) => {
+    const newNotification: Notification = {
+      ...notification,
+      id: `notification_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: new Date(),
+      read: false,
+    };
+
+    // Always add to current user's notifications
+    setNotifications((prev) => [newNotification, ...prev]);
+
+    // Collect all target addresses (both client and freelancer)
+    const targetAddresses = [];
+    if (
+      clientAddress &&
+      clientAddress.toLowerCase() !== wallet.address?.toLowerCase()
+    ) {
+      targetAddresses.push(clientAddress.toLowerCase());
+    }
+    if (
+      freelancerAddress &&
+      freelancerAddress.toLowerCase() !== wallet.address?.toLowerCase()
+    ) {
+      targetAddresses.push(freelancerAddress.toLowerCase());
+    }
+
+    // Send to all target addresses
+    targetAddresses.forEach((address) => {
+      const existingNotifications = JSON.parse(
+        localStorage.getItem(`notifications_${address}`) || "[]",
+      );
+      const updatedNotifications = [newNotification, ...existingNotifications];
+      localStorage.setItem(
+        `notifications_${address}`,
+        JSON.stringify(updatedNotifications),
+      );
+    });
+
+    // Show toast for important notifications
+    if (notification.type === "milestone" || notification.type === "dispute") {
+      toast({
+        title: notification.title,
+        description: notification.message,
+      });
+    }
+  };
+
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
@@ -149,6 +211,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         markAllAsRead,
         clearNotifications,
         removeNotification,
+        addCrossWalletNotification,
       }}
     >
       {children}

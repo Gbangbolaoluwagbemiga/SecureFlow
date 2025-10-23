@@ -28,13 +28,13 @@ interface DelegationContextType {
     delegatee: string,
     functions: string[],
     duration: number,
-  ) => Promise<void>;
+  ) => Promise<string>;
   revokeDelegation: (delegationId: string) => Promise<void>;
   executeDelegatedFunction: (
     delegationId: string,
     functionName: string,
     args: any[],
-  ) => Promise<void>;
+  ) => Promise<string>;
   isDelegatedFunction: (functionName: string) => boolean;
   getActiveDelegations: () => Delegation[];
 }
@@ -135,7 +135,7 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
       });
 
       // Delegation created successfully
-      return;
+      return delegation.id;
     } catch (error: any) {
       console.error("Delegation creation failed:", error);
       toast({
@@ -222,8 +222,8 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
         description: `Function ${functionName} executed successfully`,
       });
 
-      // Transaction successful, no need to return hash
-      return;
+      // Transaction successful
+      return txHash;
     } catch (error: any) {
       console.error("Delegated function execution failed:", error);
       toast({
