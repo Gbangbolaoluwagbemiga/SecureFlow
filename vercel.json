@@ -4,7 +4,6 @@
   "buildCommand": "npm install --legacy-peer-deps && npm run build",
   "installCommand": "npm install --legacy-peer-deps",
   "outputDirectory": ".next",
-  "rootDirectory": ".",
   "env": {
     "NEXT_TELEMETRY_DISABLED": "1"
   }
