@@ -34,7 +34,7 @@ export default function JobsPage() {
   const [ongoingProjectsCount, setOngoingProjectsCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
-  const getStatusFromNumber = (status: number): string => {
+  const getStatusFromNumber = (status: number): "pending" | "disputed" | "active" | "completed" => {
     switch (status) {
       case 0:
         return "pending";
@@ -45,7 +45,7 @@ export default function JobsPage() {
       case 3:
         return "disputed";
       case 4:
-        return "cancelled";
+        return "pending"; // Map cancelled to pending
       default:
         return "pending";
     }
@@ -348,7 +348,7 @@ export default function JobsPage() {
                   ),
                 ), // Convert seconds to days, ensure non-negative and round to nearest day
                 milestones: [], // Would need to fetch milestones separately
-                projectTitle: escrowSummary[13] || "", // projectTitle
+                // projectTitle: escrowSummary[13] || "", // projectTitle - removed as not in Escrow interface
                 projectDescription: escrowSummary[14] || "", // projectDescription
                 isOpenJob: true,
                 applications: [], // Would need to fetch applications separately
@@ -468,7 +468,7 @@ export default function JobsPage() {
               const freelancerAddress = app.freelancer || app[0]; // Try different possible structures
               return (
                 freelancerAddress &&
-                freelancerAddress.toLowerCase() === wallet.address.toLowerCase()
+                freelancerAddress.toLowerCase() === wallet.address?.toLowerCase()
               );
             });
           }
@@ -503,7 +503,7 @@ export default function JobsPage() {
 
       // Add notification for job application submission - notify the CLIENT (job creator)
       addNotification(
-        createApplicationNotification("submitted", job.id, wallet.address!, {
+        createApplicationNotification("submitted", Number(job.id), wallet.address!, {
           jobTitle: job.projectDescription || `Job #${job.id}`,
           freelancerName:
             wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),

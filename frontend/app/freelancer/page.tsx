@@ -79,7 +79,7 @@ interface Milestone {
 
 export default function FreelancerPage() {
   const { wallet, getContract } = useWeb3();
-  const { addNotification } = useNotifications();
+  const { addNotification, addCrossWalletNotification } = useNotifications();
   const { executeTransaction, isSmartAccountReady } = useSmartAccount();
   const [escrows, setEscrows] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -514,8 +514,12 @@ export default function FreelancerPage() {
         description: "You can now submit milestones for this project",
       });
 
-      // Add notification for work started
-      addNotification(
+      // Get client address from escrow data
+      const escrow = escrows.find((e) => e.id === escrowId);
+      const clientAddress = escrow?.payer;
+
+      // Add cross-wallet notification for work started
+      addCrossWalletNotification(
         createEscrowNotification("work_started", escrowId, {
           projectTitle:
             escrows.find((e) => e.id === escrowId)?.projectTitle ||
@@ -523,6 +527,8 @@ export default function FreelancerPage() {
           freelancerName:
             wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
         }),
+        clientAddress, // Client address
+        wallet.address || undefined, // Freelancer address
       );
 
       // Refresh escrows
@@ -777,14 +783,15 @@ export default function FreelancerPage() {
         const escrow = escrows.find((e) => e.id === escrowId);
         const clientAddress = escrow?.payer;
 
-        // Add notification for milestone submission (notify both freelancer and client)
-        addNotification(
+        // Add cross-wallet notification for milestone submission
+        addCrossWalletNotification(
           createMilestoneNotification("submitted", escrowId, milestoneIndex, {
             freelancerName:
               wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
             projectTitle: escrow?.projectTitle || `Project #${escrowId}`,
           }),
-          clientAddress ? [clientAddress] : undefined, // Notify the client
+          clientAddress, // Client address
+          wallet.address || undefined, // Freelancer address
         );
 
         // Mark this milestone as submitted to prevent double submission

@@ -28,7 +28,7 @@ interface DelegationContextType {
     delegatee: string,
     functions: string[],
     duration: number,
-  ) => Promise<void>;
+  ) => Promise<string>;
   revokeDelegation: (delegationId: string) => Promise<void>;
   executeDelegatedFunction: (
     delegationId: string,
@@ -134,6 +134,7 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
         description: `Delegated ${functions.length} functions to ${delegatee.slice(0, 6)}...${delegatee.slice(-4)}`,
       });
 
+      // Delegation created successfully
       return delegation.id;
     } catch (error: any) {
       console.error("Delegation creation failed:", error);
@@ -221,6 +222,7 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
         description: `Function ${functionName} executed successfully`,
       });
 
+      // Transaction successful
       return txHash;
     } catch (error: any) {
       console.error("Delegated function execution failed:", error);

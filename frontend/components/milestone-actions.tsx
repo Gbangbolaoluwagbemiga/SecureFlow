@@ -63,7 +63,7 @@ export function MilestoneActions({
   const { executeTransaction, executeBatchTransaction, isSmartAccountReady } =
     useSmartAccount();
   const { isDelegatedFunction } = useDelegation();
-  const { addNotification } = useNotifications();
+  const { addNotification, addCrossWalletNotification } = useNotifications();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -210,12 +210,14 @@ export function MilestoneActions({
             description: "You can now begin working on the milestones",
           });
 
-          // Add notification for work started
-          addNotification(
+          // Add cross-wallet notification for work started
+          addCrossWalletNotification(
             createEscrowNotification("work_started", escrowId, {
               projectTitle: `Project #${escrowId}`,
               freelancerName: "Freelancer",
             }),
+            payerAddress, // Client address
+            beneficiaryAddress, // Freelancer address
           );
           break;
         case "submit":
@@ -238,14 +240,15 @@ export function MilestoneActions({
                 "Milestone submitted with no gas fees using Smart Account delegation",
             });
 
-            // Add notification - notify the CLIENT (payer)
-            addNotification(
+            // Add cross-wallet notification - notify both CLIENT and FREELANCER
+            addCrossWalletNotification(
               createMilestoneNotification(
                 "submitted",
                 escrowId,
                 milestoneIndex,
               ),
-              payerAddress ? [payerAddress] : undefined, // Notify the client
+              payerAddress, // Client address
+              beneficiaryAddress, // Freelancer address
             );
           } else {
             txHash = await contract.send(
@@ -260,14 +263,15 @@ export function MilestoneActions({
               description: "Waiting for client approval",
             });
 
-            // Add notification - notify the CLIENT (payer)
-            addNotification(
+            // Add cross-wallet notification - notify both CLIENT and FREELANCER
+            addCrossWalletNotification(
               createMilestoneNotification(
                 "submitted",
                 escrowId,
                 milestoneIndex,
               ),
-              payerAddress ? [payerAddress] : undefined, // Notify the client
+              payerAddress, // Client address
+              beneficiaryAddress, // Freelancer address
             );
           }
 
@@ -380,14 +384,15 @@ export function MilestoneActions({
                   description: "Payment has been released to the beneficiary",
                 });
 
-                // Add notification - notify the FREELANCER (beneficiary)
-                addNotification(
+                // Add cross-wallet notification - notify both CLIENT and FREELANCER
+                addCrossWalletNotification(
                   createMilestoneNotification(
                     "approved",
                     escrowId,
                     milestoneIndex,
                   ),
-                  beneficiaryAddress ? [beneficiaryAddress] : undefined, // Notify the freelancer
+                  payerAddress, // Client address
+                  beneficiaryAddress, // Freelancer address
                 );
 
                 // Close the modal immediately after successful approval
@@ -408,6 +413,12 @@ export function MilestoneActions({
 
                 // Wait a bit more for data to refresh, then reload page
                 await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Reload the page to reflect the updated state
+                window.location.reload();
+
+                // Reload the page to reflect the updated state
+                window.location.reload();
               } else {
                 throw new Error("Transaction failed on blockchain");
               }
@@ -438,6 +449,9 @@ export function MilestoneActions({
 
                 // Wait a bit more for data to refresh, then reload page
                 await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Reload the page to reflect the updated state
+                window.location.reload();
                 return;
               }
 
@@ -567,19 +581,26 @@ export function MilestoneActions({
                     "The milestone has been rejected and the freelancer can resubmit",
                 });
 
-                // Add notification - notify the FREELANCER (beneficiary)
-                addNotification(
+                // Add cross-wallet notification - notify both CLIENT and FREELANCER
+                addCrossWalletNotification(
                   createMilestoneNotification(
                     "rejected",
                     escrowId,
                     milestoneIndex,
                     { reason: disputeReason },
                   ),
-                  beneficiaryAddress ? [beneficiaryAddress] : undefined, // Notify the freelancer
+                  payerAddress, // Client address
+                  beneficiaryAddress, // Freelancer address
                 );
 
                 setDialogOpen(false);
                 onSuccess();
+
+                // Wait a bit for data to refresh, then reload page
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Reload the page to reflect the updated state
+                window.location.reload();
               } else {
                 throw new Error("Transaction failed on blockchain");
               }
@@ -592,6 +613,12 @@ export function MilestoneActions({
                 });
                 setDialogOpen(false);
                 onSuccess();
+
+                // Wait a bit for data to refresh, then reload page
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Reload the page to reflect the updated state
+                window.location.reload();
                 return;
               }
               throw new Error("Transaction failed to confirm on blockchain");
@@ -676,14 +703,15 @@ export function MilestoneActions({
                     "The milestone has been resubmitted and is waiting for client review",
                 });
 
-                // Add notification - notify the CLIENT (payer)
-                addNotification(
+                // Add cross-wallet notification - notify both CLIENT and FREELANCER
+                addCrossWalletNotification(
                   createMilestoneNotification(
                     "submitted",
                     escrowId,
                     milestoneIndex,
                   ),
-                  payerAddress ? [payerAddress] : undefined, // Notify the client
+                  payerAddress, // Client address
+                  beneficiaryAddress, // Freelancer address
                 );
 
                 setDialogOpen(false);
@@ -747,14 +775,16 @@ export function MilestoneActions({
                   "Dispute created using Smart Account with enhanced features",
               });
 
-              // Add notification
-              addNotification(
+              // Add cross-wallet notification - notify both CLIENT and FREELANCER
+              addCrossWalletNotification(
                 createMilestoneNotification(
                   "disputed",
                   escrowId,
                   milestoneIndex,
                   { reason: disputeReason },
                 ),
+                payerAddress, // Client address
+                beneficiaryAddress, // Freelancer address
               );
             } else {
               txHash = await contract.send(
@@ -818,6 +848,9 @@ export function MilestoneActions({
 
                 // Wait a bit more for data to refresh, then reload page
                 await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Reload the page to reflect the updated state
+                window.location.reload();
               } else {
                 throw new Error("Transaction failed on blockchain");
               }
@@ -849,6 +882,9 @@ export function MilestoneActions({
 
                 // Wait a bit more for data to refresh, then reload page
                 await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Reload the page to reflect the updated state
+                window.location.reload();
                 return;
               }
 
