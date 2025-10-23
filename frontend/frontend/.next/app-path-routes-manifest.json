@@ -1,0 +1,11 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/admin/page": "/admin",
+  "/dashboard/page": "/dashboard",
+  "/approvals/page": "/approvals",
+  "/create/page": "/create",
+  "/freelancer/page": "/freelancer",
+  "/jobs/page": "/jobs",
+  "/smart-account-demo/page": "/smart-account-demo",
+  "/page": "/"
+}

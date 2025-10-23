@@ -1,0 +1,26 @@
+{
+  "app/create/page.tsx -> ethers": {
+    "id": 2416,
+    "files": [
+      "static/chunks/416.da69fb647bd2073f.js"
+    ]
+  },
+  "app/freelancer/page.tsx -> ethers": {
+    "id": 2416,
+    "files": [
+      "static/chunks/416.da69fb647bd2073f.js"
+    ]
+  },
+  "components/milestone-actions.tsx -> ethers": {
+    "id": 2416,
+    "files": [
+      "static/chunks/416.da69fb647bd2073f.js"
+    ]
+  },
+  "contexts/smart-account-context.tsx -> ethers": {
+    "id": 2416,
+    "files": [
+      "static/chunks/416.da69fb647bd2073f.js"
+    ]
+  }
+}
