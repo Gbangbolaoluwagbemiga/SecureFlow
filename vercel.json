@@ -1,11 +1,5 @@
 {
   "version": 2,
-  "framework": "nextjs",
-  "buildCommand": "corepack enable && pnpm -C frontend install --frozen-lockfile=false && pnpm -C frontend build",
-  "installCommand": "corepack enable && pnpm -C frontend install --frozen-lockfile=false",
-  "outputDirectory": ".next",
-
-  "env": {
-    "NEXT_TELEMETRY_DISABLED": "1"
-  }
+  "buildCommand": "npm install --legacy-peer-deps && npm run build",
+  "routes": [{ "src": "/(.*)", "dest": "frontend/$1" }]
 }
