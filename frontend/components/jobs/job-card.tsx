@@ -50,7 +50,7 @@ export function JobCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-3">
               <h3 className="text-xl font-bold">
-                {job.projectTitle || `Job #${job.id}`}
+                {job.projectDescription || `Job #${job.id}`}
               </h3>
               <Badge variant="secondary" className="gap-1">
                 <Clock className="h-3 w-3" />

@@ -168,7 +168,7 @@ export function SmartAccountProvider({ children }: { children: ReactNode }) {
         "MON",
       );
 
-      if (paymasterBalance === 0n) {
+      if (paymasterBalance === BigInt(0)) {
         throw new Error("Paymaster contract has no funds to sponsor gas fees");
       }
 
@@ -210,6 +210,9 @@ export function SmartAccountProvider({ children }: { children: ReactNode }) {
           console.log("Processing SecureFlow contract call");
           const iface = new ethers.Interface(SECUREFLOW_ABI);
           const parsed = iface.parseTransaction({ data });
+          if (!parsed) {
+            throw new Error("Failed to parse transaction data");
+          }
           const functionName = parsed.name;
           const args = parsed.args ? Array.from(parsed.args) : [];
 
@@ -373,13 +376,13 @@ export function SmartAccountProvider({ children }: { children: ReactNode }) {
         "MON",
       );
 
-      if (paymasterBalance === 0n) {
+      if (paymasterBalance === BigInt(0)) {
         throw new Error("Paymaster contract has no funds to sponsor gas fees");
       }
 
       // Execute each transaction as a real blockchain transaction
       const txHashes = [];
-      let totalGasCost = 0n;
+      let totalGasCost = BigInt(0);
 
       for (const tx of transactions) {
         try {
@@ -399,18 +402,14 @@ export function SmartAccountProvider({ children }: { children: ReactNode }) {
           const txGasCost = gasEstimate * gasPrice;
           totalGasCost += txGasCost;
 
-          // Execute the transaction through Smart Account delegation
-          const delegationResult = await executeDelegatedFunction(
-            smartAccount.safeAddress!,
-            tx.to,
-            tx.data,
-            ethers.parseEther(tx.value || "0"),
-          );
+          // Execute the transaction directly (batch transactions don't use delegation)
+          const txResponse = await signer.sendTransaction({
+            to: tx.to,
+            data: tx.data,
+            value: ethers.parseEther(tx.value || "0"),
+          });
 
-          // If delegation returns a hash, use it; otherwise simulate success
-          const txResponse = delegationResult
-            ? { hash: delegationResult, wait: () => Promise.resolve({}) }
-            : { hash: "0x" + "0".repeat(64), wait: () => Promise.resolve({}) };
+          // Transaction sent successfully
 
           console.log("Real batch transaction sent:", txResponse.hash);
 
