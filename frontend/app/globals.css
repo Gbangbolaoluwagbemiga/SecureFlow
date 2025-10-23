@@ -155,9 +155,25 @@
   }
 
   .gradient-mesh {
-    background: radial-gradient(at 0% 0%, oklch(0.55 0.18 240 / 0.15) 0px, transparent 50%),
-      radial-gradient(at 100% 0%, oklch(0.65 0.2 200 / 0.15) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, oklch(0.55 0.18 240 / 0.15) 0px, transparent 50%),
-      radial-gradient(at 0% 100%, oklch(0.65 0.2 200 / 0.15) 0px, transparent 50%);
+    background: radial-gradient(
+        at 0% 0%,
+        oklch(0.55 0.18 240 / 0.15) 0px,
+        transparent 50%
+      ),
+      radial-gradient(
+        at 100% 0%,
+        oklch(0.65 0.2 200 / 0.15) 0px,
+        transparent 50%
+      ),
+      radial-gradient(
+        at 100% 100%,
+        oklch(0.55 0.18 240 / 0.15) 0px,
+        transparent 50%
+      ),
+      radial-gradient(
+        at 0% 100%,
+        oklch(0.65 0.2 200 / 0.15) 0px,
+        transparent 50%
+      );
   }
 }
