@@ -6,7 +6,7 @@
 
 ## 🚀 Overview
 
-SecureFlow is a comprehensive decentralized platform combining escrow services with a freelance marketplace, built on Monad blockchain. Features gasless transactions through MetaMask Smart Accounts, multi-arbiter dispute resolution, and reputation systems.
+SecureFlow is a comprehensive decentralized platform combining escrow services with a freelance marketplace, built on blockchain. Features gasless transactions through MetaMask Smart Accounts, multi-arbiter dispute resolution, and reputation systems.
 
 ## ✨ Key Features
 
@@ -57,7 +57,6 @@ SecureFlow is a comprehensive decentralized platform combining escrow services w
 
 - Node.js 18+
 - MetaMask wallet
-- Monad testnet access
 
 ### Installation
 
@@ -84,9 +83,9 @@ cp frontend/.env.example frontend/.env.local
 3. **Deploy contracts**
 
 ```bash
-# Deploy to Monad testnet
-npx hardhat run scripts/deploy.js --network monad
-npx hardhat run scripts/deploy-paymaster.js --network monad
+# Deploy to testnet
+npx hardhat run scripts/deploy.js --network
+npx hardhat run scripts/deploy-paymaster.js --network
 ```
 
 4. **Start frontend**
@@ -133,9 +132,9 @@ npm test
 ### Smart Contracts
 
 ```bash
-# Deploy to Monad testnet
-npx hardhat run scripts/deploy.js --network monad
-npx hardhat run scripts/deploy-paymaster.js --network monad
+# Deploy to testnet
+npx hardhat run scripts/deploy.js --network
+npx hardhat run scripts/deploy-paymaster.js --network
 ```
 
 ### Frontend (Vercel)
@@ -148,13 +147,6 @@ npm run build
 # Deploy to Vercel
 vercel --prod
 ```
-
-## 📊 Current Deployment
-
-- **Contract Address**: `0x540fDEc0D5675711f7Be40a648b3F8739Be3be5a`
-- **Paymaster Address**: `0x5333A1A9Aec72147E972B8A78d0bb0c42fDeE2E2`
-- **Network**: Monad Testnet (Chain ID: 10143)
-- **Status**: Production Ready
 
 ## 🔧 Configuration
 
