@@ -78,20 +78,35 @@ export function DisputeResolution({
         setLoading(true);
       }
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-      if (!contract) return;
+      if (!contract) {
+        console.error("Contract not available");
+        return;
+      }
 
       const disputes: Dispute[] = [];
 
       // Get total number of escrows
-      const totalEscrows = await contract.call("nextEscrowId");
+      let totalEscrows;
+      try {
+        totalEscrows = await contract.call("nextEscrowId");
+      } catch (error) {
+        console.error("Failed to fetch nextEscrowId:", error);
+        setDisputes([]);
+        return;
+      }
       const escrowCount = Number(totalEscrows);
+
+      if (escrowCount === 0) {
+        setDisputes([]);
+        return;
+      }
 
       // Check each escrow for disputes
       for (let escrowId = 1; escrowId < escrowCount; escrowId++) {
         try {
           const escrowSummary = await contract.call(
             "getEscrowSummary",
-            escrowId,
+            escrowId
           );
           const escrowStatus = Number(escrowSummary[3]); // status is at index 3
 
@@ -107,7 +122,7 @@ export function DisputeResolution({
               const milestone = await contract.call(
                 "milestones",
                 escrowId,
-                milestoneIndex,
+                milestoneIndex
               );
               const milestoneStatus = Number(milestone[2]); // status is at index 2
 
@@ -139,7 +154,7 @@ export function DisputeResolution({
                 const milestone = await contract.call(
                   "milestones",
                   escrowId,
-                  milestoneIndex,
+                  milestoneIndex
                 );
                 const milestoneStatus = Number(milestone[2]); // status is at index 2
 
@@ -174,18 +189,24 @@ export function DisputeResolution({
         const newDisputeCount = disputes.length - lastDisputeCount;
         toast({
           title: "New Disputes Detected",
-          description: `${newDisputeCount} new dispute${newDisputeCount > 1 ? "s" : ""} require${newDisputeCount > 1 ? "" : "s"} your attention`,
+          description: `${newDisputeCount} new dispute${
+            newDisputeCount > 1 ? "s" : ""
+          } require${newDisputeCount > 1 ? "" : "s"} your attention`,
           variant: "destructive",
         });
       }
 
       setLastDisputeCount(disputes.length);
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Error fetching disputes:", error);
       toast({
         title: "Error",
-        description: "Failed to fetch disputes",
+        description:
+          error?.message ||
+          "Failed to fetch disputes. Please check your connection and try again.",
         variant: "destructive",
       });
+      setDisputes([]);
     } finally {
       setLoading(false);
     }
@@ -217,7 +238,7 @@ export function DisputeResolution({
         "no-value",
         selectedDispute.escrowId,
         selectedDispute.milestoneIndex,
-        beneficiaryAmountWei,
+        beneficiaryAmountWei
       );
 
       toast({
@@ -240,7 +261,7 @@ export function DisputeResolution({
           },
         },
         selectedDispute.clientAddress,
-        selectedDispute.freelancerAddress,
+        selectedDispute.freelancerAddress
       );
 
       setResolutionDialogOpen(false);

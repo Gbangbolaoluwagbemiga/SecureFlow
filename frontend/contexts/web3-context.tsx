@@ -15,6 +15,7 @@ import {
   useDisconnect,
   useSwitchChain,
   useWalletClient,
+  useConnect,
 } from "wagmi";
 import { BASE_MAINNET, CONTRACTS } from "@/lib/web3/config";
 import type { WalletState } from "@/lib/web3/types";
@@ -68,6 +69,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const { address, chainId, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
+  const { connect, connectors } = useConnect();
   const { data: walletClient } = useWalletClient();
   const [wallet, setWallet] = useState<WalletState>({
     address: null,
@@ -124,7 +126,18 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
   const connectWallet = async () => {
     try {
-      await appKit.open();
+      // Try using Reown AppKit modal first
+      if (appKit && typeof appKit.open === "function") {
+        await appKit.open();
+      } else {
+        // Fallback to wagmi connect with first available connector
+        const connector = connectors[0];
+        if (connector) {
+          connect({ connector });
+        } else {
+          throw new Error("No wallet connectors available");
+        }
+      }
     } catch (error: any) {
       toast({
         title: "Connection failed",
