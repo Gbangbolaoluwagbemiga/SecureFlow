@@ -812,14 +812,14 @@ export default function AdminPage() {
                   Network
                 </Label>
                 <p className="text-sm bg-muted/50 p-3 rounded-lg">
-                  Monad Testnet
+                  Base Mainnet
                 </p>
               </div>
               <div>
                 <Label className="text-muted-foreground mb-2 block">
                   Chain ID
                 </Label>
-                <p className="text-sm bg-muted/50 p-3 rounded-lg">10143</p>
+                <p className="text-sm bg-muted/50 p-3 rounded-lg">8453</p>
               </div>
               <div>
                 <Label className="text-muted-foreground mb-2 block">

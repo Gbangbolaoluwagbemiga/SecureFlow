@@ -1,7 +1,7 @@
 {
-  "name": "SecureFlow - Trustless Escrow on Monad",
+  "name": "SecureFlow - Trustless Escrow on Base",
   "short_name": "SecureFlow",
-  "description": "Trustless payments with transparent milestones powered by Monad Testnet",
+  "description": "Trustless payments with transparent milestones powered by Base",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",

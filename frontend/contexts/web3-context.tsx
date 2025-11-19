@@ -7,7 +7,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import { MONAD_TESTNET, CONTRACTS } from "@/lib/web3/config";
+import { BASE_MAINNET, CONTRACTS } from "@/lib/web3/config";
 import type { WalletState } from "@/lib/web3/types";
 import { useToast } from "@/hooks/use-toast";
 import { ethers } from "ethers";
@@ -16,7 +16,7 @@ interface Web3ContextType {
   wallet: WalletState;
   connectWallet: () => Promise<void>;
   disconnectWallet: () => void;
-  switchToMonad: () => Promise<void>;
+  switchToBase: () => Promise<void>;
   getContract: (address: string, abi: any) => any;
   isOwner: boolean;
 }
@@ -46,7 +46,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       if (typeof window !== "undefined" && window.ethereum) {
         window.ethereum.removeListener(
           "accountsChanged",
-          handleAccountsChanged,
+          handleAccountsChanged
         );
         window.ethereum.removeListener("chainChanged", handleChainChanged);
       }
@@ -135,18 +135,21 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
       await checkOwnerStatus(accounts[0]);
 
-      const targetChainId = Number.parseInt(MONAD_TESTNET.chainId, 16);
+      const targetChainId = Number.parseInt(BASE_MAINNET.chainId, 16);
 
       if (chainIdNumber !== targetChainId) {
         toast({
           title: "Wrong network",
-          description: "Please switch to Monad Testnet to use this app",
+          description: "Please switch to Base Mainnet to use this app",
           variant: "destructive",
         });
       } else {
         toast({
           title: "Wallet connected",
-          description: `Connected to ${accounts[0].slice(0, 6)}...${accounts[0].slice(-4)}`,
+          description: `Connected to ${accounts[0].slice(
+            0,
+            6
+          )}...${accounts[0].slice(-4)}`,
         });
       }
     } catch (error: any) {
@@ -172,7 +175,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     });
   };
 
-  const switchToMonad = async () => {
+  const switchToBase = async () => {
     if (typeof window === "undefined" || !window.ethereum) return;
 
     if (isSwitchingNetwork) {
@@ -183,12 +186,12 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       method: "eth_chainId",
     });
     const currentChainIdNumber = Number.parseInt(currentChainId, 16);
-    const targetChainId = Number.parseInt(MONAD_TESTNET.chainId, 16);
+    const targetChainId = Number.parseInt(BASE_MAINNET.chainId, 16);
 
     if (currentChainIdNumber === targetChainId) {
       toast({
         title: "Already connected",
-        description: "You're already on Monad Testnet",
+        description: "You're already on Base Mainnet",
       });
       return;
     }
@@ -198,29 +201,29 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     try {
       await window.ethereum.request({
         method: "wallet_switchEthereumChain",
-        params: [{ chainId: MONAD_TESTNET.chainId }],
+        params: [{ chainId: BASE_MAINNET.chainId }],
       });
 
       toast({
         title: "Network switched",
-        description: "Successfully switched to Monad Testnet",
+        description: "Successfully switched to Base Mainnet",
       });
     } catch (error: any) {
       if (error.code === 4902) {
         try {
           await window.ethereum.request({
             method: "wallet_addEthereumChain",
-            params: [MONAD_TESTNET],
+            params: [BASE_MAINNET],
           });
 
           toast({
             title: "Network added",
-            description: "Monad Testnet has been added to your wallet",
+            description: "Base Mainnet has been added to your wallet",
           });
         } catch (addError: any) {
           toast({
             title: "Network error",
-            description: addError.message || "Failed to add Monad Testnet",
+            description: addError.message || "Failed to add Base Mainnet",
             variant: "destructive",
           });
         }
@@ -253,7 +256,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       async call(method: string, ...args: any[]) {
         try {
           // Use direct RPC connection for read operations to avoid MetaMask issues
-          const provider = new ethers.JsonRpcProvider(MONAD_TESTNET.rpcUrls[0]);
+          const provider = new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
           const contract = new ethers.Contract(targetAddress, abi, provider);
 
           // Call the contract method directly
@@ -353,7 +356,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         return (
           "0x095ea7b3" +
           "0000000000000000000000000000000000000000000000000000000000000000".repeat(
-            2,
+            2
           )
         );
       } else if (method === "createEscrow") {
@@ -362,7 +365,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           "0x" +
           "12345678" +
           "0000000000000000000000000000000000000000000000000000000000000000".repeat(
-            8,
+            8
           )
         );
       } else if (method === "createEscrowNative") {
@@ -371,7 +374,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           "0x" +
           "87654321" +
           "0000000000000000000000000000000000000000000000000000000000000000".repeat(
-            7,
+            7
           )
         );
       }
@@ -386,7 +389,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         wallet,
         connectWallet,
         disconnectWallet,
-        switchToMonad,
+        switchToBase,
         getContract,
         isOwner,
       }}

@@ -13,9 +13,8 @@ import { Suspense } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
-  title: "SecureFlow - Trustless Escrow on Monad",
-  description:
-    "Trustless payments with transparent milestones powered by Monad Testnet",
+  title: "SecureFlow - Trustless Escrow on Base",
+  description: "Trustless payments with transparent milestones powered by Base",
   generator: "SecureFlow",
   manifest: "/manifest.json",
   icons: {

@@ -122,9 +122,7 @@ export default function HomePage() {
           >
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass border border-primary/20 mb-6">
               <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-sm font-medium">
-                Powered by Monad Testnet
-              </span>
+              <span className="text-sm font-medium">Powered by Base</span>
             </div>
 
             <h1 className="text-5xl md:text-7xl font-bold mb-6 text-balance leading-tight">

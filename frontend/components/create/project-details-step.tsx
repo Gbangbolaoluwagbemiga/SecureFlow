@@ -100,7 +100,11 @@ export function ProjectDetailsStep({
             value={formData.projectDescription}
             onChange={(e) => onUpdate({ projectDescription: e.target.value })}
             placeholder="Describe the project requirements and deliverables..."
-            className={`min-h-[120px] ${errors.projectDescription ? "border-red-500 focus:border-red-500" : ""}`}
+            className={`min-h-[120px] ${
+              errors.projectDescription
+                ? "border-red-500 focus:border-red-500"
+                : ""
+            }`}
             required
             minLength={50}
           />
@@ -203,7 +207,7 @@ export function ProjectDetailsStep({
               ) : (
                 <p className="text-xs text-muted-foreground mt-1">
                   Enter the contract address of your ERC20 token deployed on
-                  Monad Testnet
+                  Base Mainnet
                 </p>
               )}
             </div>
