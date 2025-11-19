@@ -10,7 +10,7 @@ module.exports = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 1,
+            runs: 1, // Low runs optimizes for contract size
           },
           viaIR: true,
         },
@@ -20,7 +20,7 @@ module.exports = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 1,
+            runs: 1, // Low runs optimizes for contract size
           },
           viaIR: true,
         },
@@ -43,6 +43,25 @@ module.exports = {
       maxFeePerGas: 10000000000, // 10 gwei
       maxPriorityFeePerGas: 1000000000, // 1 gwei
     },
+    base: {
+      url: process.env.BASE_RPC_URL || "https://mainnet.base.org",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+      chainId: 8453, // Base mainnet chain ID
+    },
+  },
+  etherscan: {
+    apiKey: process.env.BASESCAN_API_KEY || process.env.ETHERSCAN_API_KEY || "",
+    customChains: [
+      {
+        network: "base",
+        chainId: 8453,
+        urls: {
+          apiURL: "https://api.basescan.org/api",
+          browserURL: "https://basescan.org",
+        },
+      },
+    ],
   },
   paths: {
     sources: "./contracts",

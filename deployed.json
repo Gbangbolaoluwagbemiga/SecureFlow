@@ -1,10 +1,10 @@
 {
-  "network": "monad",
-  "chainId": "10143",
+  "network": "base",
+  "chainId": "8453",
   "deployer": "0x3Be7fbBDbC73Fc4731D60EF09c4BA1A94DC58E41",
   "contracts": {
-    "SecureFlow": "0x540fDEc0D5675711f7Be40a648b3F8739Be3be5a",
-    "MockERC20": "0x87c0Df0ED2D84727CD568Ed991c41c044cB6875F"
+    "SecureFlow": "0x8084cDAfEB15D0C8D7F14dd88cfC3d123804A4d7",
+    "MockERC20": "0x92a0C47e819b84069eb95776497421850103aa37"
   },
   "features": [
     "🚀 MODULAR ARCHITECTURE - Clean separation of concerns",
@@ -15,9 +15,10 @@
     "💰 NATIVE & ERC20 SUPPORT - Permit integration",
     "⏰ AUTO-APPROVAL - Dispute window management",
     "🛡️ ANTI-GAMING - Minimum value thresholds",
-    "📈 SCALABLE - Gas optimized modular design"
+    "📈 SCALABLE - Gas optimized modular design",
+    "⭐ REVIEW SYSTEM - Client reviews for freelancers"
   ],
-  "deploymentTime": "2025-10-21T16:26:18.121Z",
+  "deploymentTime": "2025-11-19T08:04:27.394Z",
   "abi": [
     "constructor(address,address,uint256)",
     "event ApplicationSubmitted(uint256 indexed,address indexed,string,uint256)",

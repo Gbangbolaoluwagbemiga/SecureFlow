@@ -11,7 +11,7 @@ async function main() {
   const mockToken = await MockERC20.deploy(
     "Mock Token",
     "MTK",
-    hre.ethers.parseEther("1000000"),
+    hre.ethers.parseEther("1000000")
   );
   await mockToken.waitForDeployment();
 
@@ -25,7 +25,7 @@ async function main() {
   const secureFlow = await SecureFlow.deploy(
     await mockToken.getAddress(), // monadToken
     feeCollector, // feeCollector
-    platformFeeBP, // platformFeeBP
+    platformFeeBP // platformFeeBP
   );
   await secureFlow.waitForDeployment();
 
@@ -42,14 +42,58 @@ async function main() {
   // Whitelist the mock token
   await secureFlow.whitelistToken(await mockToken.getAddress());
 
+  const secureFlowAddress = await secureFlow.getAddress();
+  const mockTokenAddress = await mockToken.getAddress();
+
+  console.log("\n=== Deployment Summary ===");
+  console.log("Network:", hre.network.name);
+  console.log("Deployer:", deployer.address);
+  console.log("SecureFlow Address:", secureFlowAddress);
+  console.log("MockERC20 Address:", mockTokenAddress);
+
+  // Verify contracts on BaseScan if deploying to Base
+  if (hre.network.name === "base") {
+    console.log("\n=== Verifying Contracts ===");
+
+    try {
+      console.log("Verifying MockERC20...");
+      await hre.run("verify:verify", {
+        address: mockTokenAddress,
+        constructorArguments: [
+          "Mock Token",
+          "MTK",
+          hre.ethers.parseEther("1000000"),
+        ],
+      });
+      console.log("✅ MockERC20 verified successfully!");
+    } catch (error) {
+      console.log("⚠️ MockERC20 verification failed:", error.message);
+    }
+
+    try {
+      console.log("Verifying SecureFlow...");
+      await hre.run("verify:verify", {
+        address: secureFlowAddress,
+        constructorArguments: [
+          mockTokenAddress,
+          deployer.address,
+          platformFeeBP,
+        ],
+      });
+      console.log("✅ SecureFlow verified successfully!");
+    } catch (error) {
+      console.log("⚠️ SecureFlow verification failed:", error.message);
+    }
+  }
+
   // Get contract info
   const contractInfo = {
     network: hre.network.name,
     chainId: (await hre.ethers.provider.getNetwork()).chainId,
     deployer: deployer.address,
     contracts: {
-      SecureFlow: await secureFlow.getAddress(),
-      MockERC20: await mockToken.getAddress(),
+      SecureFlow: secureFlowAddress,
+      MockERC20: mockTokenAddress,
     },
     features: [
       "🚀 MODULAR ARCHITECTURE - Clean separation of concerns",
@@ -61,6 +105,7 @@ async function main() {
       "⏰ AUTO-APPROVAL - Dispute window management",
       "🛡️ ANTI-GAMING - Minimum value thresholds",
       "📈 SCALABLE - Gas optimized modular design",
+      "⭐ REVIEW SYSTEM - Client reviews for freelancers",
     ],
     deploymentTime: new Date().toISOString(),
   };
@@ -77,8 +122,8 @@ async function main() {
     JSON.stringify(
       deploymentInfo,
       (key, value) => (typeof value === "bigint" ? value.toString() : value),
-      2,
-    ),
+      2
+    )
   );
 }
 
