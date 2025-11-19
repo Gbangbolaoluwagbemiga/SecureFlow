@@ -34,7 +34,7 @@ export default function ApprovalsPage() {
   const [jobs, setJobs] = useState<JobWithApplications[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<JobWithApplications | null>(
-    null,
+    null
   );
   const [selectedFreelancer, setSelectedFreelancer] =
     useState<Application | null>(null);
@@ -50,7 +50,7 @@ export default function ApprovalsPage() {
   const [isApproving, setIsApproving] = useState(false);
 
   const getStatusFromNumber = (
-    status: number,
+    status: number
   ): "pending" | "active" | "completed" | "disputed" => {
     switch (status) {
       case 0:
@@ -94,7 +94,7 @@ export default function ApprovalsPage() {
               try {
                 const rawApplicationCount = await contract.call(
                   "getApplicationCount",
-                  i,
+                  i
                 );
 
                 applicationCount = Number(rawApplicationCount);
@@ -108,14 +108,14 @@ export default function ApprovalsPage() {
                         "getApplicationsPage",
                         i,
                         0,
-                        Math.min(applicationCount, 1), // Start with just 1 application
+                        Math.min(applicationCount, 1) // Start with just 1 application
                       );
                     } catch (initialError) {
                       applicationsData = await contract.call(
                         "getApplicationsPage",
                         i,
                         0,
-                        applicationCount,
+                        applicationCount
                       );
                     }
 
@@ -130,7 +130,7 @@ export default function ApprovalsPage() {
                             "getApplicationsPage",
                             i,
                             0,
-                            applicationCount * 2, // Try with double the limit
+                            applicationCount * 2 // Try with double the limit
                           );
 
                           if (
@@ -166,7 +166,7 @@ export default function ApprovalsPage() {
                             const rawData = JSON.stringify(app, (key, value) =>
                               typeof value === "bigint"
                                 ? value.toString()
-                                : value,
+                                : value
                             );
 
                             // Try to parse the JSON data
@@ -187,7 +187,7 @@ export default function ApprovalsPage() {
                                   appliedAt = Number(appData[3]) || 0;
                                 } else {
                                   throw new Error(
-                                    "Invalid nested array structure",
+                                    "Invalid nested array structure"
                                   );
                                 }
                               } else if (parsedData.length >= 4) {
@@ -231,28 +231,28 @@ export default function ApprovalsPage() {
                                 freelancerAddress = String(
                                   safeAccess(app, "0") ||
                                     safeAccess(app, "freelancer") ||
-                                    "",
+                                    ""
                                 );
                                 coverLetter = String(
                                   safeAccess(app, "1") ||
                                     safeAccess(app, "coverLetter") ||
-                                    "",
+                                    ""
                                 );
                                 proposedTimeline = Number(
                                   safeAccess(app, "2") ||
                                     safeAccess(app, "proposedTimeline") ||
-                                    0,
+                                    0
                                 );
                                 appliedAt = Number(
                                   safeAccess(app, "3") ||
                                     safeAccess(app, "appliedAt") ||
-                                    0,
+                                    0
                                 );
 
                                 if (freelancerAddress && coverLetter) {
                                 } else {
                                   throw new Error(
-                                    "Safe property access failed",
+                                    "Safe property access failed"
                                   );
                                 }
                               } catch (safeError) {
@@ -273,7 +273,9 @@ export default function ApprovalsPage() {
                                 fallbackAddresses[
                                   appIndex % fallbackAddresses.length
                                 ];
-                              coverLetter = `Application ${appIndex + 1} - Real blockchain data could not be parsed due to Proxy object limitations. This is a fallback display.`;
+                              coverLetter = `Application ${
+                                appIndex + 1
+                              } - Real blockchain data could not be parsed due to Proxy object limitations. This is a fallback display.`;
                               proposedTimeline = 30 + appIndex * 15;
                               appliedAt = Date.now() - appIndex * 86400000;
                             }
@@ -285,14 +287,18 @@ export default function ApprovalsPage() {
                             freelancerAddress === "0x" ||
                             freelancerAddress === ""
                           ) {
-                            freelancerAddress = `0x${Math.random().toString(16).substr(2, 40)}`;
+                            freelancerAddress = `0x${Math.random()
+                              .toString(16)
+                              .substr(2, 40)}`;
                           }
                           if (
                             !coverLetter ||
                             coverLetter === "" ||
                             coverLetter === "undefined"
                           ) {
-                            coverLetter = `Application ${appIndex + 1} - Cover letter data not available`;
+                            coverLetter = `Application ${
+                              appIndex + 1
+                            } - Cover letter data not available`;
                           }
                           if (
                             proposedTimeline === 0 ||
@@ -308,7 +314,7 @@ export default function ApprovalsPage() {
                           const existingApplication = applications.find(
                             (existingApp) =>
                               existingApp.freelancerAddress.toLowerCase() ===
-                              freelancerAddress.toLowerCase(),
+                              freelancerAddress.toLowerCase()
                           );
 
                           if (existingApplication) {
@@ -327,8 +333,12 @@ export default function ApprovalsPage() {
                         } catch (parseError) {
                           // Fallback to mock data if parsing fails - but continue processing other applications
                           const fallbackApplication: Application = {
-                            freelancerAddress: `0x${Math.random().toString(16).substr(2, 40)}`,
-                            coverLetter: `Application ${appIndex + 1} - Failed to parse from blockchain`,
+                            freelancerAddress: `0x${Math.random()
+                              .toString(16)
+                              .substr(2, 40)}`,
+                            coverLetter: `Application ${
+                              appIndex + 1
+                            } - Failed to parse from blockchain`,
                             proposedTimeline: 30,
                             appliedAt: Date.now() - appIndex * 86400000,
                             status: "pending" as const,
@@ -338,7 +348,7 @@ export default function ApprovalsPage() {
                           const existingFallback = applications.find(
                             (existingApp) =>
                               existingApp.freelancerAddress.toLowerCase() ===
-                              fallbackApplication.freelancerAddress.toLowerCase(),
+                              fallbackApplication.freelancerAddress.toLowerCase()
                           );
 
                           if (!existingFallback) {
@@ -356,8 +366,12 @@ export default function ApprovalsPage() {
                       appIndex++
                     ) {
                       const mockApplication: Application = {
-                        freelancerAddress: `0x${Math.random().toString(16).substr(2, 40)}`,
-                        coverLetter: `Application ${appIndex + 1} - Failed to fetch from blockchain`,
+                        freelancerAddress: `0x${Math.random()
+                          .toString(16)
+                          .substr(2, 40)}`,
+                        coverLetter: `Application ${
+                          appIndex + 1
+                        } - Failed to fetch from blockchain`,
                         proposedTimeline: 30,
                         appliedAt: Date.now() - appIndex * 86400000,
                         status: "pending" as const,
@@ -397,7 +411,50 @@ export default function ApprovalsPage() {
         }
       }
 
-      setJobs(myJobs);
+      // Fetch review counts for all freelancers
+      const jobsWithReviews = await Promise.all(
+        myJobs.map(async (job) => {
+          const applicationsWithReviews = await Promise.all(
+            job.applications.map(async (app) => {
+              try {
+                const contract = getContract(
+                  CONTRACTS.SECUREFLOW_ESCROW,
+                  SECUREFLOW_ABI
+                );
+                if (!contract) return app;
+
+                const reviewCount = await contract.call(
+                  "getReviewCount",
+                  app.freelancerAddress
+                );
+                const averageRating = await contract.call(
+                  "getAverageRating",
+                  app.freelancerAddress
+                );
+
+                return {
+                  ...app,
+                  reviewCount: Number(reviewCount) || 0,
+                  averageRating:
+                    Number(averageRating) > 0
+                      ? Number(averageRating)
+                      : undefined,
+                };
+              } catch (error) {
+                // Review functions might not exist in old contracts
+                return { ...app, reviewCount: 0 };
+              }
+            })
+          );
+
+          return {
+            ...job,
+            applications: applicationsWithReviews,
+          };
+        })
+      );
+
+      setJobs(jobsWithReviews);
     } catch (error) {
       toast({
         title: "Failed to load jobs",
@@ -427,7 +484,7 @@ export default function ApprovalsPage() {
         "acceptFreelancer",
         "no-value",
         Number(selectedJobForApproval.id),
-        selectedFreelancer.freelancerAddress,
+        selectedFreelancer.freelancerAddress
       );
 
       toast({
@@ -449,9 +506,9 @@ export default function ApprovalsPage() {
               selectedFreelancer.freelancerAddress.slice(0, 6) +
               "..." +
               selectedFreelancer.freelancerAddress.slice(-4),
-          },
+          }
         ),
-        [selectedFreelancer.freelancerAddress], // Notify the freelancer
+        [selectedFreelancer.freelancerAddress] // Notify the freelancer
       );
 
       // Close modals first
@@ -526,11 +583,11 @@ export default function ApprovalsPage() {
   const totalJobs = jobs.length;
   const totalApplications = jobs.reduce(
     (sum, job) => sum + job.applicationCount,
-    0,
+    0
   );
   const totalValue = jobs.reduce(
     (sum, job) => sum + Number(job.totalAmount) / 1e18,
-    0,
+    0
   );
 
   return (
@@ -580,7 +637,7 @@ export default function ApprovalsPage() {
               }}
               onApprove={(freelancer: string) => {
                 const application = job.applications.find(
-                  (app) => app.freelancerAddress === freelancer,
+                  (app) => app.freelancerAddress === freelancer
                 );
                 if (application) {
                   setSelectedJobForApproval(job); // Store job data for approval
@@ -734,7 +791,9 @@ export default function ApprovalsPage() {
                     onMouseUp={(e) => {
                       e.stopPropagation();
                     }}
-                    className={`px-4 py-2 rounded-md text-white cursor-pointer bg-green-600 hover:bg-green-700 ${approving ? "opacity-75" : ""}`}
+                    className={`px-4 py-2 rounded-md text-white cursor-pointer bg-green-600 hover:bg-green-700 ${
+                      approving ? "opacity-75" : ""
+                    }`}
                     disabled={false}
                     style={{
                       pointerEvents: "auto",

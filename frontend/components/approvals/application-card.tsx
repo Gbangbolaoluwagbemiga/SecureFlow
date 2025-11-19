@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { User, Calendar, CheckCircle } from "lucide-react";
+import { User, Calendar, CheckCircle, Star } from "lucide-react";
 
 interface Application {
   freelancerAddress: string;
@@ -31,12 +31,28 @@ export function ApplicationCard({
     <Card key={index} className="p-4 border-border/40">
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <User className="h-4 w-4 text-primary" />
             <span className="font-medium text-sm">
               {application.freelancerAddress.slice(0, 6)}...
               {application.freelancerAddress.slice(-4)}
             </span>
+            {application.reviewCount !== undefined &&
+              application.reviewCount > 0 && (
+                <Badge
+                  variant="outline"
+                  className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200"
+                >
+                  <Star className="h-3 w-3 mr-1 fill-yellow-400 text-yellow-400" />
+                  {application.reviewCount}{" "}
+                  {application.reviewCount === 1 ? "review" : "reviews"}
+                  {application.averageRating && (
+                    <span className="ml-1">
+                      ({application.averageRating.toFixed(1)}★)
+                    </span>
+                  )}
+                </Badge>
+              )}
             <Badge
               variant="secondary"
               className="text-xs bg-blue-100 text-blue-800"

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { motion } from "framer-motion";
-import { Clock, DollarSign, ChevronDown, ChevronUp } from "lucide-react";
+import { Clock, DollarSign, ChevronDown, ChevronUp, Star } from "lucide-react";
 import { MilestoneActions } from "@/components/milestone-actions";
 import type { Escrow, Milestone } from "@/lib/web3/types";
 
@@ -20,6 +20,8 @@ interface EscrowCardProps {
   onDisputeMilestone: (escrowId: string, milestoneIndex: number) => void;
   onStartWork: (escrowId: string) => void;
   onDispute: (escrowId: string) => void;
+  onLeaveReview?: (escrowId: string, freelancerAddress: string) => void;
+  hasReview?: boolean; // Whether a review already exists for this escrow
   calculateDaysLeft: (createdAt: number, duration: number) => number;
   getDaysLeftMessage: (daysLeft: number) => {
     text: string;
@@ -39,6 +41,8 @@ export function EscrowCard({
   onDisputeMilestone,
   onStartWork,
   onDispute,
+  onLeaveReview,
+  hasReview = false,
   calculateDaysLeft,
   getDaysLeftMessage,
 }: EscrowCardProps) {
@@ -62,7 +66,7 @@ export function EscrowCard({
   // Check if this escrow should be marked as terminated
   const isTerminated = escrow.milestones.some(
     (milestone) =>
-      milestone.status === "disputed" || milestone.status === "rejected",
+      milestone.status === "disputed" || milestone.status === "rejected"
   );
 
   const getMilestoneStatusColor = (status: string) => {
@@ -88,7 +92,7 @@ export function EscrowCard({
       : 0;
 
   const completedMilestones = escrow.milestones.filter(
-    (m) => m.status === "approved",
+    (m) => m.status === "approved"
   ).length;
   const totalMilestones = escrow.milestones.length;
 
@@ -124,7 +128,7 @@ export function EscrowCard({
             <div className="flex items-center gap-2">
               <Badge
                 className={getStatusColor(
-                  isTerminated ? "terminated" : escrow.status,
+                  isTerminated ? "terminated" : escrow.status
                 )}
               >
                 {isTerminated ? "terminated" : escrow.status}
@@ -179,7 +183,7 @@ export function EscrowCard({
                   {(() => {
                     const daysLeft = calculateDaysLeft(
                       escrow.createdAt,
-                      escrow.duration,
+                      escrow.duration
                     );
                     const message = getDaysLeftMessage(daysLeft);
                     return (
@@ -192,6 +196,34 @@ export function EscrowCard({
 
             {expandedEscrow === escrow.id && (
               <div className="space-y-4 pt-4 border-t">
+                {/* Review Button for Completed Escrows */}
+                {escrow.status === "completed" &&
+                  escrow.isClient &&
+                  onLeaveReview &&
+                  !hasReview && (
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={() =>
+                          onLeaveReview(escrow.id, escrow.beneficiary)
+                        }
+                        variant="outline"
+                        className="gap-2"
+                      >
+                        <Star className="h-4 w-4" />
+                        Leave a Review
+                      </Button>
+                    </div>
+                  )}
+                {escrow.status === "completed" &&
+                  escrow.isClient &&
+                  hasReview && (
+                    <div className="flex justify-end">
+                      <Badge variant="secondary" className="gap-2">
+                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                        Review Submitted
+                      </Badge>
+                    </div>
+                  )}
                 <div className="space-y-2">
                   <h4 className="font-medium">Milestones:</h4>
                   {escrow.milestones.map((milestone, idx) => (
@@ -205,7 +237,7 @@ export function EscrowCard({
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {(Number.parseFloat(milestone.amount) / 1e18).toFixed(
-                            2,
+                            2
                           )}{" "}
                           tokens
                         </p>
@@ -230,7 +262,7 @@ export function EscrowCard({
                           onSuccess={() => {
                             // Refresh the escrow data
                             window.dispatchEvent(
-                              new CustomEvent("escrowUpdated"),
+                              new CustomEvent("escrowUpdated")
                             );
                           }}
                         />

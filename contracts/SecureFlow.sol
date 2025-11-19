@@ -8,6 +8,7 @@ import "./modules/WorkLifecycle.sol";
 import "./modules/AdminFunctions.sol";
 import "./modules/RefundSystem.sol";
 import "./modules/ViewFunctions.sol";
+import "./modules/ReviewSystem.sol";
 
 /**
  * @title SecureFlow - Modular Hybrid Escrow + Marketplace Platform
@@ -21,7 +22,8 @@ contract SecureFlow is
     WorkLifecycle,
     AdminFunctions,
     RefundSystem,
-    ViewFunctions
+    ViewFunctions,
+    ReviewSystem
 {
     constructor(
         address _monadToken, 

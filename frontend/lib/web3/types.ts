@@ -54,4 +54,15 @@ export interface Application {
   proposedTimeline: number;
   appliedAt: number;
   status: "pending" | "accepted" | "rejected";
+  reviewCount?: number; // Number of reviews for this freelancer
+  averageRating?: number; // Average rating for this freelancer
+}
+
+export interface Review {
+  escrowId: string;
+  reviewer: string;
+  freelancer: string;
+  rating: number; // 1-5
+  comment: string;
+  timestamp: number;
 }

@@ -27,6 +27,7 @@ import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { DashboardStats } from "@/components/dashboard/dashboard-stats";
 import { EscrowCard } from "@/components/dashboard/escrow-card";
 import { DashboardLoading } from "@/components/dashboard/dashboard-loading";
+import { ReviewDialog } from "@/components/review-dialog";
 
 export default function DashboardPage() {
   const { wallet, getContract } = useWeb3();
@@ -36,7 +37,15 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [expandedEscrow, setExpandedEscrow] = useState<string | null>(null);
   const [submittingMilestone, setSubmittingMilestone] = useState<string | null>(
-    null,
+    null
+  );
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [selectedEscrowForReview, setSelectedEscrowForReview] = useState<{
+    escrowId: string;
+    freelancerAddress: string;
+  } | null>(null);
+  const [escrowReviews, setEscrowReviews] = useState<Record<string, boolean>>(
+    {}
   );
 
   const getStatusFromNumber = (status: number): string => {
@@ -60,7 +69,7 @@ export default function DashboardPage() {
   const isEscrowTerminated = (escrow: Escrow): boolean => {
     return escrow.milestones.some(
       (milestone) =>
-        milestone.status === "disputed" || milestone.status === "rejected",
+        milestone.status === "disputed" || milestone.status === "rejected"
     );
   };
 
@@ -92,7 +101,7 @@ export default function DashboardPage() {
   };
 
   const getDaysLeftMessage = (
-    daysLeft: number,
+    daysLeft: number
   ): { text: string; color: string; bgColor: string } => {
     if (daysLeft > 7) {
       return {
@@ -118,7 +127,7 @@ export default function DashboardPage() {
   const fetchMilestones = async (
     contract: any,
     escrowId: number,
-    escrowSummary?: any,
+    escrowSummary?: any
   ) => {
     try {
       // Get milestone count from escrow summary first
@@ -133,7 +142,7 @@ export default function DashboardPage() {
           const individualMilestone = await contract.call(
             "milestones",
             escrowId,
-            j,
+            j
           );
 
           allMilestones.push(individualMilestone);
@@ -381,7 +390,7 @@ export default function DashboardPage() {
                 milestones: (await fetchMilestones(
                   contract,
                   i,
-                  escrowSummary,
+                  escrowSummary
                 )) as Milestone[], // Fetch milestones from contract and assert correct type
                 projectDescription: escrowSummary[13] || "", // projectTitle
               };
@@ -397,6 +406,9 @@ export default function DashboardPage() {
 
       // Set the actual escrows from the contract
       setEscrows(userEscrows);
+
+      // Check reviews for completed escrows
+      await checkEscrowReviews(userEscrows);
     } catch (error) {
       toast({
         title: "Failed to load escrows",
@@ -530,7 +542,7 @@ export default function DashboardPage() {
         "disputeMilestone",
         escrowId,
         milestoneIndex,
-        "Disputed by client",
+        "Disputed by client"
       );
       toast({
         title: "Milestone Disputed",
@@ -549,7 +561,7 @@ export default function DashboardPage() {
             wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
         }),
         wallet.address || undefined, // Client address
-        freelancerAddress, // Freelancer address
+        freelancerAddress // Freelancer address
       );
 
       // Wait a moment for blockchain state to update
@@ -592,7 +604,7 @@ export default function DashboardPage() {
             wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
         }),
         wallet.address || undefined, // Client address
-        freelancerAddress, // Freelancer address
+        freelancerAddress // Freelancer address
       );
 
       // Wait a moment for blockchain state to update
@@ -635,6 +647,71 @@ export default function DashboardPage() {
     }
   };
 
+  // Check if reviews exist for completed escrows
+  const checkEscrowReviews = async (escrowsToCheck: Escrow[]) => {
+    if (!wallet.isConnected) return;
+
+    try {
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+      if (!contract) return;
+
+      const reviews: Record<string, boolean> = {};
+      const completedEscrowsList = escrowsToCheck.filter(
+        (e) => e.status === "completed" && e.isClient
+      );
+
+      for (const escrow of completedEscrowsList) {
+        try {
+          const hasReview = await contract.call("hasReview", escrow.id);
+          reviews[escrow.id] = hasReview === true || hasReview === "true";
+        } catch (error) {
+          // Review function might not exist in old contracts
+          reviews[escrow.id] = false;
+        }
+      }
+
+      setEscrowReviews(reviews);
+    } catch (error) {
+      // Silently fail - reviews might not be available
+      console.error("Error checking reviews:", error);
+    }
+  };
+
+  const handleLeaveReview = (escrowId: string, freelancerAddress: string) => {
+    setSelectedEscrowForReview({ escrowId, freelancerAddress });
+    setReviewDialogOpen(true);
+  };
+
+  const handleSubmitReview = async (rating: number, comment: string) => {
+    if (!selectedEscrowForReview) return;
+
+    try {
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+      if (!contract) return;
+
+      await contract.send(
+        "submitReview",
+        "no-value",
+        selectedEscrowForReview.escrowId,
+        rating,
+        comment
+      );
+
+      // Update local state
+      setEscrowReviews((prev) => ({
+        ...prev,
+        [selectedEscrowForReview.escrowId]: true,
+      }));
+
+      toast({
+        title: "Review Submitted",
+        description: "Thank you for your feedback!",
+      });
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
   const approveMilestone = async (escrowId: string, milestoneIndex: number) => {
     try {
       // SECURITY: Double-check that user is the depositor
@@ -664,7 +741,7 @@ export default function DashboardPage() {
         "approveMilestone",
         "no-value",
         escrowId,
-        milestoneIndex,
+        milestoneIndex
       );
 
       // Wait for transaction confirmation
@@ -686,7 +763,7 @@ export default function DashboardPage() {
 
       if (!receipt) {
         throw new Error(
-          "Transaction timeout - please check the blockchain explorer",
+          "Transaction timeout - please check the blockchain explorer"
         );
       }
 
@@ -707,7 +784,7 @@ export default function DashboardPage() {
             projectTitle: escrow.projectDescription || `Project #${escrowId}`,
           }),
           wallet.address || undefined, // Client address
-          freelancerAddress, // Freelancer address
+          freelancerAddress // Freelancer address
         );
 
         // Wait a moment for blockchain state to update
@@ -746,7 +823,7 @@ export default function DashboardPage() {
   const rejectMilestone = async (
     escrowId: string,
     milestoneIndex: number,
-    reason: string,
+    reason: string
   ) => {
     try {
       // SECURITY: Double-check that user is the depositor
@@ -777,7 +854,7 @@ export default function DashboardPage() {
         "no-value",
         escrowId,
         milestoneIndex,
-        reason,
+        reason
       );
 
       // Wait for transaction confirmation
@@ -799,7 +876,7 @@ export default function DashboardPage() {
 
       if (!receipt) {
         throw new Error(
-          "Transaction timeout - please check the blockchain explorer",
+          "Transaction timeout - please check the blockchain explorer"
         );
       }
 
@@ -910,24 +987,26 @@ export default function DashboardPage() {
                 }
                 onToggleExpanded={() =>
                   setExpandedEscrow(
-                    expandedEscrow === escrow.id ? null : escrow.id,
+                    expandedEscrow === escrow.id ? null : escrow.id
                   )
                 }
                 onApproveMilestone={approveMilestone}
                 onRejectMilestone={(
                   escrowId: string,
-                  milestoneIndex: number,
+                  milestoneIndex: number
                 ) => {
                   // For now, use empty reason - this should be handled by the component
                   rejectMilestone(
                     escrowId,
                     milestoneIndex,
-                    "No reason provided",
+                    "No reason provided"
                   );
                 }}
                 onDisputeMilestone={disputeMilestone}
                 onStartWork={startWork}
                 onDispute={openDispute}
+                onLeaveReview={handleLeaveReview}
+                hasReview={escrowReviews[escrow.id] || false}
                 calculateDaysLeft={calculateDaysLeft}
                 getDaysLeftMessage={getDaysLeftMessage}
               />
@@ -935,6 +1014,17 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Review Dialog */}
+      {selectedEscrowForReview && (
+        <ReviewDialog
+          open={reviewDialogOpen}
+          onOpenChange={setReviewDialogOpen}
+          escrowId={selectedEscrowForReview.escrowId}
+          freelancerAddress={selectedEscrowForReview.freelancerAddress}
+          onSubmitReview={handleSubmitReview}
+        />
+      )}
     </div>
   );
 }
