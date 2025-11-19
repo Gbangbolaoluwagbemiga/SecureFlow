@@ -73,7 +73,7 @@
     "@nomicfoundation/hardhat-network-helpers": "latest",
     "@nomicfoundation/hardhat-toolbox": "latest",
     "@nomicfoundation/hardhat-verify": "latest",
-    "@tailwindcss/postcss": "^4.1.9",
+    "@tailwindcss/postcss": "^4.1.17",
     "@typechain/ethers-v6": "latest",
     "@typechain/hardhat": "latest",
     "@types/chai": "latest",
