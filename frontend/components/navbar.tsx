@@ -147,16 +147,6 @@ export function Navbar() {
                 Admin
               </Link>
             )}
-            <Link
-              href="/smart-account-demo"
-              className={`text-sm font-medium transition-colors ${
-                isActive("/smart-account-demo")
-                  ? "text-primary bg-primary/10 px-3 py-2 rounded-md"
-                  : "hover:text-primary"
-              }`}
-            >
-              Smart Account Demo
-            </Link>
           </div>
 
           <div className="flex items-center gap-2 min-w-0">

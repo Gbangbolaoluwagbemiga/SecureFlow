@@ -25,7 +25,6 @@ SecureFlow is a decentralized escrow platform with marketplace functionality. Th
 - **Gasless Transactions**: Test milestone operations without gas fees
 - **Batch Operations**: Execute multiple actions in single transaction
 - **Delegation System**: Delegate admin functions to arbiters
-- **Smart Account Demo**: Visit `/smart-account-demo` for interactive demo
 
 ### Admin Functionalities
 
@@ -39,7 +38,6 @@ SecureFlow is a decentralized escrow platform with marketplace functionality. Th
 
 - The Admin link appears for non-owner wallets once a delegation is created to the connected wallet.
 - Access logic now checks that your connected wallet address matches the `delegatee` of any active delegation (not just that delegations exist).
-- On the Smart Account Demo page, the "Create Delegation" button delegates to your currently connected wallet to simplify testing. After creating it, navigate to `/admin` to access the admin panel.
 
 ### User Functionalities
 

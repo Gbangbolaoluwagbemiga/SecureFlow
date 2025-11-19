@@ -29,7 +29,6 @@ SecureFlow is a comprehensive decentralized platform combining escrow services w
 ### 🛡️ Security & Trust
 
 - **Smart Account Integration**: Delegated execution for gasless transactions
-- **Paymaster Contract**: Gas sponsorship for seamless UX
 - **Reentrancy Protection**: All external functions protected
 - **Input Validation**: Comprehensive parameter checking
 - **Emergency Controls**: Admin pause and refund mechanisms
@@ -39,14 +38,12 @@ SecureFlow is a comprehensive decentralized platform combining escrow services w
 ```
 ├── contracts/
 │   ├── SecureFlow.sol          # Main escrow & marketplace contract
-│   └── Paymaster.sol           # Gas sponsorship contract
 ├── frontend/                   # Next.js application
 │   ├── app/                    # App router pages
 │   ├── components/             # UI components
 │   └── contexts/               # React contexts
 ├── scripts/
 │   ├── deploy.js               # Contract deployment
-│   └── deploy-paymaster.js     # Paymaster deployment
 └── test/
     └── SecureFlow.test.js      # Test suite
 ```
@@ -85,7 +82,6 @@ cp frontend/.env.example frontend/.env.local
 ```bash
 # Deploy to testnet
 npx hardhat run scripts/deploy.js --network
-npx hardhat run scripts/deploy-paymaster.js --network
 ```
 
 4. **Start frontend**
@@ -134,7 +130,6 @@ npm test
 ```bash
 # Deploy to testnet
 npx hardhat run scripts/deploy.js --network
-npx hardhat run scripts/deploy-paymaster.js --network
 ```
 
 ### Frontend (Vercel)
@@ -167,7 +162,6 @@ function revokeArbiter(address arbiter) external onlyOwner
 // Contract addresses
 export const CONTRACTS = {
   SECUREFLOW_ESCROW: "0x540fDEc0D5675711f7Be40a648b3F8739Be3be5a",
-  PAYMASTER: "0x5333A1A9Aec72147E972B8A78d0bb0c42fDeE2E2",
 };
 ```
 
@@ -175,7 +169,7 @@ export const CONTRACTS = {
 
 1. **User connects MetaMask** → Smart Account initializes
 2. **Transaction request** → Delegation system activates
-3. **Gasless execution** → Paymaster sponsors gas fees
+3. **Gasless execution** → Smart Account handles transaction
 4. **Blockchain confirmation** → Transaction completed
 
 ## 🛡️ Security Features
