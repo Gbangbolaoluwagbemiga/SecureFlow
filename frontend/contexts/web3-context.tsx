@@ -13,7 +13,6 @@ import { base } from "@reown/appkit/networks";
 import {
   useAccount,
   useDisconnect,
-  useConnect,
   useSwitchChain,
   useWalletClient,
 } from "wagmi";
@@ -50,6 +49,9 @@ export const appKit = createAppKit({
   },
 });
 
+// Get wagmi config from adapter
+export const wagmiConfig = wagmiAdapter.wagmiConfig;
+
 interface Web3ContextType {
   wallet: WalletState;
   connectWallet: () => Promise<void>;
@@ -65,7 +67,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const { address, chainId, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
-  const { open } = useConnect();
   const { switchChain } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
   const [wallet, setWallet] = useState<WalletState>({
@@ -123,7 +124,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
   const connectWallet = async () => {
     try {
-      await open();
+      await appKit.open();
     } catch (error: any) {
       toast({
         title: "Connection failed",
@@ -174,11 +175,19 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     setIsSwitchingNetwork(true);
 
     try {
-      switchChain({ chainId: base.id });
-      toast({
-        title: "Network switched",
-        description: "Successfully switched to Base Mainnet",
-      });
+      if (switchChain) {
+        switchChain({ chainId: base.id });
+        toast({
+          title: "Network switched",
+          description: "Successfully switched to Base Mainnet",
+        });
+      } else {
+        await appKit.switchNetwork(base);
+        toast({
+          title: "Network switched",
+          description: "Successfully switched to Base Mainnet",
+        });
+      }
     } catch (error: any) {
       if (error.code === 4902 || error.message?.includes("not added")) {
         toast({

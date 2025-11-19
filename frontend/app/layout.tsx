@@ -3,12 +3,11 @@ import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
-import { Web3Provider } from "@/contexts/web3-context";
-import { NotificationProvider } from "@/contexts/notification-context";
 import { Navbar } from "@/components/navbar";
 import { Toaster } from "@/components/ui/toaster";
 import { Suspense } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
   title: "SecureFlow - Trustless Escrow on Base",
@@ -59,13 +58,11 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Suspense fallback={<div>Loading...</div>}>
-            <Web3Provider>
-              <NotificationProvider>
-                <Navbar />
-                <main className="pt-16">{children}</main>
-                <Toaster />
-              </NotificationProvider>
-            </Web3Provider>
+            <Providers>
+              <Navbar />
+              <main className="pt-16">{children}</main>
+              <Toaster />
+            </Providers>
           </Suspense>
         </ThemeProvider>
       </body>
