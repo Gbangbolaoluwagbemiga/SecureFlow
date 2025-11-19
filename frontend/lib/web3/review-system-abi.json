@@ -1,0 +1,15 @@
+[
+  "constructor(address)",
+  "event ReviewSubmitted(uint256 indexed,address indexed,address indexed,uint8,uint256)",
+  "function escrowReviews(uint256) view returns (uint256,address,address,uint8,string,uint256,bool)",
+  "function freelancerReviews(address,uint256) view returns (uint256,address,address,uint8,string,uint256,bool)",
+  "function getAverageRating(address) view returns (uint256)",
+  "function getEscrowReview(uint256) view returns ((uint256,address,address,uint8,string,uint256,bool))",
+  "function getFreelancerReviews(address) view returns ((uint256,address,address,uint8,string,uint256,bool)[])",
+  "function getReviewCount(address) view returns (uint256)",
+  "function hasReview(uint256) view returns (bool)",
+  "function reviewCount(address) view returns (uint256)",
+  "function secureFlow() view returns (address)",
+  "function secureFlowAddress() view returns (address)",
+  "function submitReview(uint256,uint8,string)"
+]

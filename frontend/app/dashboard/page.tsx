@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
-import { SECUREFLOW_ABI } from "@/lib/web3/abis";
+import { SECUREFLOW_ABI, REVIEW_SYSTEM_ABI } from "@/lib/web3/abis";
 import {
   useNotifications,
   createEscrowNotification,
@@ -652,8 +652,11 @@ export default function DashboardPage() {
     if (!wallet.isConnected) return;
 
     try {
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-      if (!contract) return;
+      const reviewContract = getContract(
+        CONTRACTS.REVIEW_SYSTEM,
+        REVIEW_SYSTEM_ABI
+      );
+      if (!reviewContract) return;
 
       const reviews: Record<string, boolean> = {};
       const completedEscrowsList = escrowsToCheck.filter(
@@ -662,10 +665,10 @@ export default function DashboardPage() {
 
       for (const escrow of completedEscrowsList) {
         try {
-          const hasReview = await contract.call("hasReview", escrow.id);
+          const hasReview = await reviewContract.call("hasReview", escrow.id);
           reviews[escrow.id] = hasReview === true || hasReview === "true";
         } catch (error) {
-          // Review function might not exist in old contracts
+          // Review might not exist
           reviews[escrow.id] = false;
         }
       }
@@ -686,10 +689,13 @@ export default function DashboardPage() {
     if (!selectedEscrowForReview) return;
 
     try {
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-      if (!contract) return;
+      const reviewContract = getContract(
+        CONTRACTS.REVIEW_SYSTEM,
+        REVIEW_SYSTEM_ABI
+      );
+      if (!reviewContract) return;
 
-      await contract.send(
+      await reviewContract.send(
         "submitReview",
         "no-value",
         selectedEscrowForReview.escrowId,

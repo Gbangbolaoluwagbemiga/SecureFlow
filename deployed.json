@@ -4,7 +4,8 @@
   "deployer": "0x3Be7fbBDbC73Fc4731D60EF09c4BA1A94DC58E41",
   "contracts": {
     "SecureFlow": "0x8084cDAfEB15D0C8D7F14dd88cfC3d123804A4d7",
-    "MockERC20": "0x92a0C47e819b84069eb95776497421850103aa37"
+    "MockERC20": "0x92a0C47e819b84069eb95776497421850103aa37",
+    "ReviewSystem": "0x7aB0853325529aF7EB5c4745413BF01E98c0020f"
   },
   "features": [
     "🚀 MODULAR ARCHITECTURE - Clean separation of concerns",
@@ -143,5 +144,21 @@
     "function totalSupply() view returns (uint256)",
     "function transfer(address,uint256) returns (bool)",
     "function transferFrom(address,address,uint256) returns (bool)"
+  ],
+  "reviewSystemDeploymentTime": "2025-11-19T08:14:31.177Z",
+  "reviewSystemAbi": [
+    "constructor(address)",
+    "event ReviewSubmitted(uint256 indexed,address indexed,address indexed,uint8,uint256)",
+    "function escrowReviews(uint256) view returns (uint256,address,address,uint8,string,uint256,bool)",
+    "function freelancerReviews(address,uint256) view returns (uint256,address,address,uint8,string,uint256,bool)",
+    "function getAverageRating(address) view returns (uint256)",
+    "function getEscrowReview(uint256) view returns ((uint256,address,address,uint8,string,uint256,bool))",
+    "function getFreelancerReviews(address) view returns ((uint256,address,address,uint8,string,uint256,bool)[])",
+    "function getReviewCount(address) view returns (uint256)",
+    "function hasReview(uint256) view returns (bool)",
+    "function reviewCount(address) view returns (uint256)",
+    "function secureFlow() view returns (address)",
+    "function secureFlowAddress() view returns (address)",
+    "function submitReview(uint256,uint8,string)"
   ]
 }

@@ -6,7 +6,7 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { useJobCreatorStatus } from "@/hooks/use-job-creator-status";
 import { CONTRACTS } from "@/lib/web3/config";
-import { SECUREFLOW_ABI } from "@/lib/web3/abis";
+import { SECUREFLOW_ABI, REVIEW_SYSTEM_ABI } from "@/lib/web3/abis";
 import {
   useNotifications,
   createApplicationNotification,
@@ -417,17 +417,17 @@ export default function ApprovalsPage() {
           const applicationsWithReviews = await Promise.all(
             job.applications.map(async (app) => {
               try {
-                const contract = getContract(
-                  CONTRACTS.SECUREFLOW_ESCROW,
-                  SECUREFLOW_ABI
+                const reviewContract = getContract(
+                  CONTRACTS.REVIEW_SYSTEM,
+                  REVIEW_SYSTEM_ABI
                 );
-                if (!contract) return app;
+                if (!reviewContract) return { ...app, reviewCount: 0 };
 
-                const reviewCount = await contract.call(
+                const reviewCount = await reviewContract.call(
                   "getReviewCount",
                   app.freelancerAddress
                 );
-                const averageRating = await contract.call(
+                const averageRating = await reviewContract.call(
                   "getAverageRating",
                   app.freelancerAddress
                 );
@@ -441,7 +441,7 @@ export default function ApprovalsPage() {
                       : undefined,
                 };
               } catch (error) {
-                // Review functions might not exist in old contracts
+                // Review contract might not be available
                 return { ...app, reviewCount: 0 };
               }
             })
