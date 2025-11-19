@@ -28,6 +28,9 @@ import {
   Pause,
   Download,
   AlertTriangle,
+  Coins,
+  UserCheck,
+  CheckCircle2,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +54,10 @@ export default function AdminPage() {
     amount: "",
   });
   const [testMode, setTestMode] = useState(false);
+  const [tokenAddress, setTokenAddress] = useState("");
+  const [arbiterAddress, setArbiterAddress] = useState("");
+  const [whitelisting, setWhitelisting] = useState(false);
+  const [authorizing, setAuthorizing] = useState(false);
   const [contractStats, setContractStats] = useState({
     platformFeeBP: 0,
     totalEscrows: 0,
@@ -274,7 +281,7 @@ export default function AdminPage() {
             "withdrawStuckTokens",
             "no-value",
             withdrawData.token,
-            withdrawData.amount,
+            withdrawData.amount
           );
           toast({
             title: "Tokens withdrawn",
@@ -291,6 +298,106 @@ export default function AdminPage() {
         description: error.message || "Failed to perform admin action",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleWhitelistToken = async () => {
+    if (!tokenAddress || !tokenAddress.startsWith("0x")) {
+      toast({
+        title: "Invalid Address",
+        description: "Please enter a valid token address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setWhitelisting(true);
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+
+      // Check if already whitelisted
+      const isWhitelisted = await contract.call(
+        "whitelistedTokens",
+        tokenAddress
+      );
+      if (isWhitelisted) {
+        toast({
+          title: "Token Already Whitelisted",
+          description: "This token is already whitelisted",
+          variant: "default",
+        });
+        setTokenAddress("");
+        return;
+      }
+
+      await contract.send("whitelistToken", "no-value", tokenAddress);
+      toast({
+        title: "Token Whitelisted",
+        description: `Successfully whitelisted token at ${tokenAddress.slice(
+          0,
+          6
+        )}...${tokenAddress.slice(-4)}`,
+      });
+      setTokenAddress("");
+      fetchContractStats();
+    } catch (error: any) {
+      toast({
+        title: "Whitelist Failed",
+        description: error.message || "Failed to whitelist token",
+        variant: "destructive",
+      });
+    } finally {
+      setWhitelisting(false);
+    }
+  };
+
+  const handleAuthorizeArbiter = async () => {
+    if (!arbiterAddress || !arbiterAddress.startsWith("0x")) {
+      toast({
+        title: "Invalid Address",
+        description: "Please enter a valid arbiter address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setAuthorizing(true);
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+
+      // Check if already authorized
+      const isAuthorized = await contract.call(
+        "authorizedArbiters",
+        arbiterAddress
+      );
+      if (isAuthorized) {
+        toast({
+          title: "Arbiter Already Authorized",
+          description: "This arbiter is already authorized",
+          variant: "default",
+        });
+        setArbiterAddress("");
+        return;
+      }
+
+      await contract.send("authorizeArbiter", "no-value", arbiterAddress);
+      toast({
+        title: "Arbiter Authorized",
+        description: `Successfully authorized arbiter at ${arbiterAddress.slice(
+          0,
+          6
+        )}...${arbiterAddress.slice(-4)}`,
+      });
+      setArbiterAddress("");
+      fetchContractStats();
+    } catch (error: any) {
+      toast({
+        title: "Authorization Failed",
+        description: error.message || "Failed to authorize arbiter",
+        variant: "destructive",
+      });
+    } finally {
+      setAuthorizing(false);
     }
   };
 
@@ -421,84 +528,6 @@ export default function AdminPage() {
             Manage the SecureFlow escrow contract
           </p>
 
-          {/* Test Mode Toggle */}
-          <Card className="glass border-accent/20 p-4 mb-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold mb-2">
-                  🧪 Admin Testing Mode
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Enable test mode to simulate admin functions and test the
-                  interface without executing real transactions.
-                </p>
-              </div>
-              <Button
-                variant={testMode ? "default" : "outline"}
-                onClick={() => setTestMode(!testMode)}
-                className="ml-4"
-              >
-                {testMode ? "Exit Test Mode" : "Enable Test Mode"}
-              </Button>
-            </div>
-            {testMode && (
-              <Alert className="mt-4">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Test Mode Active:</strong> All admin functions will be
-                  simulated. No real transactions will be sent to the
-                  blockchain. This allows you to test the admin interface and
-                  see how it would work for a judge or other admin user.
-                </AlertDescription>
-              </Alert>
-            )}
-          </Card>
-
-          {/* Judge Testing Instructions */}
-          <Card className="glass border-primary/20 p-6 mb-8">
-            <div className="flex items-start gap-4">
-              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-                <Shield className="h-6 w-6 text-primary" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-xl font-bold mb-3">
-                  🏆 For Hackathon Judges
-                </h3>
-                <div className="space-y-3 text-sm">
-                  <p className="text-muted-foreground">
-                    To test admin functionalities as a judge, you have several
-                    options:
-                  </p>
-                  <div className="space-y-2">
-                    <div className="flex items-start gap-2">
-                      <span className="text-primary font-bold">1.</span>
-                      <div>
-                        <strong>Test Mode (Recommended):</strong> Use the
-                        "Enable Test Mode" button above to simulate admin
-                        functions without real transactions.
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-primary font-bold">2.</span>
-                      <div>
-                        <strong>Use Different Wallet:</strong> Connect with a
-                        different wallet address to test non-admin user
-                        experience.
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-                    <p className="text-xs text-muted-foreground">
-                      <strong>Note:</strong> Test Mode provides a safe way to
-                      test all admin functionalities without affecting the live
-                      contract or requiring additional permissions.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
-
           {isPaused && (
             <Alert variant="destructive" className="mb-8">
               <AlertTriangle className="h-4 w-4" />
@@ -546,6 +575,142 @@ export default function AdminPage() {
               </div>
             </div>
           </Card>
+
+          {/* Token Management & Arbiter Management */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {/* Token Management */}
+            <Card className="glass border-primary/20 p-6">
+              <div className="flex items-start gap-4 mb-4">
+                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
+                  <Coins className="h-6 w-6 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold mb-2">Token Management</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Whitelist tokens that can be used in escrow transactions
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="token-address">Token Address</Label>
+                  <Input
+                    id="token-address"
+                    placeholder="0x..."
+                    value={tokenAddress}
+                    onChange={(e) => setTokenAddress(e.target.value)}
+                    className="font-mono"
+                    disabled={whitelisting}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter a token address to whitelist it. Only whitelisted
+                    tokens can be used in escrows.
+                  </p>
+                </div>
+                <Button
+                  onClick={handleWhitelistToken}
+                  disabled={whitelisting || !tokenAddress}
+                  className="w-full gap-2"
+                >
+                  {whitelisting ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      Whitelisting...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      Whitelist Token
+                    </>
+                  )}
+                </Button>
+                {CONTRACTS.MOCK_ERC20 && (
+                  <div className="pt-2 border-t border-border/50">
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Quick Actions:
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs"
+                      onClick={() => setTokenAddress(CONTRACTS.MOCK_ERC20)}
+                      disabled={whitelisting}
+                    >
+                      Use MockERC20 ({CONTRACTS.MOCK_ERC20.slice(0, 6)}...
+                      {CONTRACTS.MOCK_ERC20.slice(-4)})
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Arbiter Management */}
+            <Card className="glass border-primary/20 p-6">
+              <div className="flex items-start gap-4 mb-4">
+                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-accent/10">
+                  <UserCheck className="h-6 w-6 text-accent" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold mb-2">Arbiter Management</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Authorize arbiters who can resolve disputes in escrows
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="arbiter-address">Arbiter Address</Label>
+                  <Input
+                    id="arbiter-address"
+                    placeholder="0x..."
+                    value={arbiterAddress}
+                    onChange={(e) => setArbiterAddress(e.target.value)}
+                    className="font-mono"
+                    disabled={authorizing}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter an arbiter address to authorize them. Only authorized
+                    arbiters can be used in escrows.
+                  </p>
+                </div>
+                <Button
+                  onClick={handleAuthorizeArbiter}
+                  disabled={authorizing || !arbiterAddress}
+                  className="w-full gap-2"
+                  variant="default"
+                >
+                  {authorizing ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      Authorizing...
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="h-4 w-4" />
+                      Authorize Arbiter
+                    </>
+                  )}
+                </Button>
+                {wallet.address && (
+                  <div className="pt-2 border-t border-border/50">
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Quick Actions:
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs"
+                      onClick={() => setArbiterAddress(wallet.address!)}
+                      disabled={authorizing}
+                    >
+                      Use Your Wallet ({wallet.address.slice(0, 6)}...
+                      {wallet.address.slice(-4)})
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
 
           <DisputeResolution onDisputeResolved={fetchContractStats} />
 
@@ -716,7 +881,11 @@ export default function AdminPage() {
                 }`}
               >
                 <Icon
-                  className={`h-6 w-6 ${dialogContent.variant === "destructive" ? "text-destructive" : "text-primary"}`}
+                  className={`h-6 w-6 ${
+                    dialogContent.variant === "destructive"
+                      ? "text-destructive"
+                      : "text-primary"
+                  }`}
                 />
               </div>
               <DialogTitle className="text-2xl">
