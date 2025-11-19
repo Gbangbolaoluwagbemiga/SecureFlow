@@ -7,10 +7,42 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
+import { createAppKit } from "@reown/appkit/react";
+import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
+import { base } from "@reown/appkit/networks";
+import { useAccount, useDisconnect, useConnect, useSwitchChain } from "wagmi";
 import { BASE_MAINNET, CONTRACTS } from "@/lib/web3/config";
 import type { WalletState } from "@/lib/web3/types";
 import { useToast } from "@/hooks/use-toast";
 import { ethers } from "ethers";
+
+// Initialize Reown AppKit
+const projectId =
+  process.env.NEXT_PUBLIC_REOWN_ID || "1db88bda17adf26df9ab7799871788c4";
+
+const metadata = {
+  name: "SecureFlow",
+  description: "Trustless Escrow on Base",
+  url: "https://secureflow.xyz",
+  icons: ["https://secureflow.xyz/favicon.ico"],
+};
+
+const wagmiAdapter = new WagmiAdapter({
+  projectId,
+  networks: [base],
+});
+
+export const appKit = createAppKit({
+  adapters: [wagmiAdapter],
+  networks: [base],
+  projectId,
+  metadata,
+  features: {
+    analytics: true,
+    email: false,
+    socials: ["github", "x", "discord"],
+  },
+});
 
 interface Web3ContextType {
   wallet: WalletState;
@@ -25,6 +57,10 @@ const Web3Context = createContext<Web3ContextType | undefined>(undefined);
 
 export function Web3Provider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  const { address, chainId, isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
+  const { open } = useConnect();
+  const { switchChain } = useSwitchChain();
   const [wallet, setWallet] = useState<WalletState>({
     address: null,
     chainId: null,
@@ -35,123 +71,52 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false);
 
   useEffect(() => {
-    checkConnection();
-
-    if (typeof window !== "undefined" && window.ethereum) {
-      window.ethereum.on("accountsChanged", handleAccountsChanged);
-      window.ethereum.on("chainChanged", handleChainChanged);
-    }
-
-    return () => {
-      if (typeof window !== "undefined" && window.ethereum) {
-        window.ethereum.removeListener(
-          "accountsChanged",
-          handleAccountsChanged
-        );
-        window.ethereum.removeListener("chainChanged", handleChainChanged);
-      }
-    };
-  }, []);
-
-  const checkConnection = async () => {
-    if (typeof window === "undefined" || !window.ethereum) return;
-
-    try {
-      const accounts = await window.ethereum.request({
-        method: "eth_accounts",
+    if (isConnected && address && chainId) {
+      setWallet({
+        address,
+        chainId: Number(chainId),
+        isConnected: true,
+        balance: "0",
       });
-      if (accounts.length > 0) {
-        const chainId = await window.ethereum.request({
-          method: "eth_chainId",
-        });
-        const balance = await window.ethereum.request({
-          method: "eth_getBalance",
-          params: [accounts[0], "latest"],
-        });
+      checkOwnerStatus(address);
+      updateBalance(address);
+    } else {
+      setWallet({
+        address: null,
+        chainId: null,
+        isConnected: false,
+        balance: "0",
+      });
+      setIsOwner(false);
+    }
+  }, [address, chainId, isConnected]);
 
-        setWallet({
-          address: accounts[0],
-          chainId: Number.parseInt(chainId, 16),
-          isConnected: true,
-          balance: (Number.parseInt(balance, 16) / 1e18).toFixed(4),
-        });
-
-        await checkOwnerStatus(accounts[0]);
-      }
-    } catch (error) {}
+  const updateBalance = async (address: string) => {
+    try {
+      const provider = new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
+      const balance = await provider.getBalance(address);
+      const balanceInEther = ethers.formatEther(balance);
+      setWallet((prev) => ({
+        ...prev,
+        balance: parseFloat(balanceInEther).toFixed(4),
+      }));
+    } catch (error) {
+      console.error("Failed to update balance:", error);
+    }
   };
 
   const checkOwnerStatus = async (address: string) => {
     try {
       const knownOwner = "0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41";
-
       setIsOwner(address.toLowerCase() === knownOwner.toLowerCase());
     } catch (error) {
       setIsOwner(false);
     }
   };
 
-  const handleAccountsChanged = (accounts: string[]) => {
-    if (accounts.length === 0) {
-      disconnectWallet();
-    } else {
-      setWallet((prev) => ({ ...prev, address: accounts[0] }));
-      checkOwnerStatus(accounts[0]);
-    }
-  };
-
-  const handleChainChanged = () => {
-    window.location.reload();
-  };
-
   const connectWallet = async () => {
-    if (typeof window === "undefined" || !window.ethereum) {
-      toast({
-        title: "Wallet not found",
-        description: "Please install MetaMask or another Web3 wallet",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
-      const accounts = await window.ethereum.request({
-        method: "eth_requestAccounts",
-      });
-
-      const chainId = await window.ethereum.request({ method: "eth_chainId" });
-      const chainIdNumber = Number.parseInt(chainId, 16);
-      const balance = await window.ethereum.request({
-        method: "eth_getBalance",
-        params: [accounts[0], "latest"],
-      });
-
-      setWallet({
-        address: accounts[0],
-        chainId: chainIdNumber,
-        isConnected: true,
-        balance: (Number.parseInt(balance, 16) / 1e18).toFixed(4),
-      });
-
-      await checkOwnerStatus(accounts[0]);
-
-      const targetChainId = Number.parseInt(BASE_MAINNET.chainId, 16);
-
-      if (chainIdNumber !== targetChainId) {
-        toast({
-          title: "Wrong network",
-          description: "Please switch to Base Mainnet to use this app",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Wallet connected",
-          description: `Connected to ${accounts[0].slice(
-            0,
-            6
-          )}...${accounts[0].slice(-4)}`,
-        });
-      }
+      await open();
     } catch (error: any) {
       toast({
         title: "Connection failed",
@@ -161,34 +126,37 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     }
   };
 
-  const disconnectWallet = () => {
-    setWallet({
-      address: null,
-      chainId: null,
-      isConnected: false,
-      balance: "0",
-    });
-    setIsOwner(false);
-    toast({
-      title: "Wallet disconnected",
-      description: "Your wallet has been disconnected",
-    });
+  const disconnectWallet = async () => {
+    try {
+      await disconnect();
+      setWallet({
+        address: null,
+        chainId: null,
+        isConnected: false,
+        balance: "0",
+      });
+      setIsOwner(false);
+      toast({
+        title: "Wallet disconnected",
+        description: "Your wallet has been disconnected",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Disconnect failed",
+        description: error.message || "Failed to disconnect wallet",
+        variant: "destructive",
+      });
+    }
   };
 
   const switchToBase = async () => {
-    if (typeof window === "undefined" || !window.ethereum) return;
-
     if (isSwitchingNetwork) {
       return;
     }
 
-    const currentChainId = await window.ethereum.request({
-      method: "eth_chainId",
-    });
-    const currentChainIdNumber = Number.parseInt(currentChainId, 16);
     const targetChainId = Number.parseInt(BASE_MAINNET.chainId, 16);
 
-    if (currentChainIdNumber === targetChainId) {
+    if (chainId === targetChainId) {
       toast({
         title: "Already connected",
         description: "You're already on Base Mainnet",
@@ -199,34 +167,18 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     setIsSwitchingNetwork(true);
 
     try {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: BASE_MAINNET.chainId }],
-      });
-
+      switchChain({ chainId: base.id });
       toast({
         title: "Network switched",
         description: "Successfully switched to Base Mainnet",
       });
     } catch (error: any) {
-      if (error.code === 4902) {
-        try {
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [BASE_MAINNET],
-          });
-
-          toast({
-            title: "Network added",
-            description: "Base Mainnet has been added to your wallet",
-          });
-        } catch (addError: any) {
-          toast({
-            title: "Network error",
-            description: addError.message || "Failed to add Base Mainnet",
-            variant: "destructive",
-          });
-        }
+      if (error.code === 4902 || error.message?.includes("not added")) {
+        toast({
+          title: "Network error",
+          description: "Please add Base Mainnet to your wallet manually",
+          variant: "destructive",
+        });
       } else if (error.code === 4001) {
         toast({
           title: "Request cancelled",
@@ -245,7 +197,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   };
 
   const getContract = (address: string, abi: any) => {
-    if (typeof window === "undefined" || !window.ethereum) return null;
     // Normalize address to a valid checksum to avoid INVALID_ARGUMENT errors
     let targetAddress = address;
     try {
@@ -255,11 +206,9 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     return {
       async call(method: string, ...args: any[]) {
         try {
-          // Use direct RPC connection for read operations to avoid MetaMask issues
+          // Use direct RPC connection for read operations
           const provider = new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
           const contract = new ethers.Contract(targetAddress, abi, provider);
-
-          // Call the contract method directly
           const result = await contract[method](...args);
           return result;
         } catch (error) {
@@ -268,68 +217,34 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       },
       async send(method: string, value: string = "0x0", ...args: any[]) {
         try {
-          const data = encodeFunction(abi, method, args);
-
-          // Estimate gas for the transaction with optimized limits
-          let gasLimit = "0x80000"; // Reduced default fallback (524,288 gas)
-
-          // Force higher gas limits for specific functions that need it
-          if (method === "approve") {
-            gasLimit = "0xc350"; // 50,000 gas - force higher limit for ERC20 approve
-          } else {
-            try {
-              const estimatedGas = await window.ethereum.request({
-                method: "eth_estimateGas",
-                params: [
-                  {
-                    from: wallet.address,
-                    to: targetAddress,
-                    data,
-                    value:
-                      value !== "0x0" && value !== "no-value" ? value : "0x0",
-                  },
-                ],
-              });
-              // Add only 10% buffer to estimated gas (reduced from 20%)
-              const gasWithBuffer = Math.floor(Number(estimatedGas) * 1.1);
-              gasLimit = `0x${gasWithBuffer.toString(16)}`;
-            } catch (gasError) {
-              // Use much lower, function-specific gas limits
-              if (method === "unpause" || method === "pause") {
-                gasLimit = "0x20000"; // 131,072 gas - very low for simple functions
-              } else if (
-                method === "submitMilestone" ||
-                method === "approveMilestone" ||
-                method === "rejectMilestone" ||
-                method === "disputeMilestone"
-              ) {
-                gasLimit = "0x30000"; // 196,608 gas - reduced for milestone functions
-              } else if (
-                method === "createEscrow" ||
-                method === "createEscrowNative"
-              ) {
-                gasLimit = "0x60000"; // 393,216 gas - optimized for escrow creation
-              }
-            }
+          if (!address) {
+            throw new Error("Wallet not connected");
           }
 
-          const txParams: any = {
-            from: wallet.address,
-            to: targetAddress,
-            data,
-            gas: gasLimit,
-          };
+          // Get provider from wagmi
+          const provider = wagmiAdapter.getProvider();
+          if (!provider) {
+            throw new Error("Provider not available");
+          }
 
-          // Only add value field if it's not "0x0" or "no-value" (for native token transactions)
+          // Create ethers provider and signer
+          const ethersProvider = new ethers.BrowserProvider(provider as any);
+          const signer = await ethersProvider.getSigner();
+
+          const contract = new ethers.Contract(targetAddress, abi, signer);
+          const contractMethod = contract[method];
+
+          let txResponse;
           if (value !== "0x0" && value !== "no-value") {
-            txParams.value = value;
+            txResponse = await contractMethod(...args, {
+              value: ethers.parseEther(value),
+            });
+          } else {
+            txResponse = await contractMethod(...args);
           }
 
-          const txHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [txParams],
-          });
-          return txHash;
+          const receipt = await txResponse.wait();
+          return receipt.hash;
         } catch (error) {
           throw error;
         }
@@ -338,49 +253,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         return "0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41";
       },
     };
-  };
-
-  const encodeFunction = (abi: any, method: string, args: any[]) => {
-    try {
-      // Create a proper interface from the ABI
-      const iface = new ethers.Interface(abi);
-
-      // Encode the function call with proper parameters
-      const encodedData = iface.encodeFunctionData(method, args);
-
-      return encodedData;
-    } catch (error) {
-      // Fallback to basic encoding for common functions
-      if (method === "approve") {
-        // approve(address,uint256) selector
-        return (
-          "0x095ea7b3" +
-          "0000000000000000000000000000000000000000000000000000000000000000".repeat(
-            2
-          )
-        );
-      } else if (method === "createEscrow") {
-        // createEscrow function selector (this needs to be calculated from the actual function signature)
-        return (
-          "0x" +
-          "12345678" +
-          "0000000000000000000000000000000000000000000000000000000000000000".repeat(
-            8
-          )
-        );
-      } else if (method === "createEscrowNative") {
-        // createEscrowNative function selector
-        return (
-          "0x" +
-          "87654321" +
-          "0000000000000000000000000000000000000000000000000000000000000000".repeat(
-            7
-          )
-        );
-      }
-
-      return "0x";
-    }
   };
 
   return (
@@ -405,10 +277,4 @@ export function useWeb3() {
     throw new Error("useWeb3 must be used within a Web3Provider");
   }
   return context;
-}
-
-declare global {
-  interface Window {
-    ethereum?: any;
-  }
 }

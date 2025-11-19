@@ -4,8 +4,6 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { Web3Provider } from "@/contexts/web3-context";
-import { SmartAccountProvider } from "@/contexts/smart-account-context";
-import { DelegationProvider } from "@/contexts/delegation-context";
 import { NotificationProvider } from "@/contexts/notification-context";
 import { Navbar } from "@/components/navbar";
 import { Toaster } from "@/components/ui/toaster";
@@ -62,15 +60,11 @@ export default function RootLayout({
         >
           <Suspense fallback={<div>Loading...</div>}>
             <Web3Provider>
-              <DelegationProvider>
-                <SmartAccountProvider>
-                  <NotificationProvider>
-                    <Navbar />
-                    <main className="pt-16">{children}</main>
-                    <Toaster />
-                  </NotificationProvider>
-                </SmartAccountProvider>
-              </DelegationProvider>
+              <NotificationProvider>
+                <Navbar />
+                <main className="pt-16">{children}</main>
+                <Toaster />
+              </NotificationProvider>
             </Web3Provider>
           </Suspense>
         </ThemeProvider>

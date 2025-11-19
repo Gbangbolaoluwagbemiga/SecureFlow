@@ -11,8 +11,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useWeb3 } from "@/contexts/web3-context";
-import { useSmartAccount } from "@/contexts/smart-account-context";
-import { useDelegation } from "@/contexts/delegation-context";
 import {
   useNotifications,
   createMilestoneNotification,
@@ -27,7 +25,6 @@ import {
   AlertTriangle,
   Gavel,
   Play,
-  Zap,
   XCircle,
 } from "lucide-react";
 import type { Milestone } from "@/lib/web3/types";
@@ -60,9 +57,6 @@ export function MilestoneActions({
   beneficiaryAddress,
 }: MilestoneActionsProps) {
   const { getContract } = useWeb3();
-  const { executeTransaction, executeBatchTransaction, isSmartAccountReady } =
-    useSmartAccount();
-  const { isDelegatedFunction } = useDelegation();
   const { addNotification, addCrossWalletNotification } = useNotifications();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -186,22 +180,6 @@ export function MilestoneActions({
 
       let txHash;
 
-      // Check if we should use Smart Account for gasless transactions
-      const useSmartAccount =
-        isSmartAccountReady &&
-        (actionType === "approve" ||
-          actionType === "submit" ||
-          actionType === "dispute");
-
-      // Check if this is a delegated function
-      const isDelegated = isDelegatedFunction(
-        actionType === "approve"
-          ? "approveMilestone"
-          : actionType === "dispute"
-            ? "disputeMilestone"
-            : "",
-      );
-
       switch (actionType) {
         case "start":
           txHash = await contract.send("startWork", escrowId);
@@ -221,59 +199,28 @@ export function MilestoneActions({
           );
           break;
         case "submit":
-          if (useSmartAccount) {
-            // Use Smart Account for enhanced transaction
-            const { ethers } = await import("ethers");
-            const iface = new ethers.Interface(SECUREFLOW_ABI);
-            const data = iface.encodeFunctionData("submitMilestone", [
+          txHash = await contract.send(
+            "submitMilestone",
+            "no-value",
+            escrowId,
+            milestoneIndex,
+            milestone.description,
+          );
+          toast({
+            title: "Milestone submitted!",
+            description: "Waiting for client approval",
+          });
+
+          // Add cross-wallet notification - notify both CLIENT and FREELANCER
+          addCrossWalletNotification(
+            createMilestoneNotification(
+              "submitted",
               escrowId,
               milestoneIndex,
-              milestone.description,
-            ]);
-            txHash = await executeTransaction(
-              CONTRACTS.SECUREFLOW_ESCROW,
-              data,
-            );
-            toast({
-              title: "🚀 Gasless Milestone Submitted!",
-              description:
-                "Milestone submitted with no gas fees using Smart Account delegation",
-            });
-
-            // Add cross-wallet notification - notify both CLIENT and FREELANCER
-            addCrossWalletNotification(
-              createMilestoneNotification(
-                "submitted",
-                escrowId,
-                milestoneIndex,
-              ),
-              payerAddress, // Client address
-              beneficiaryAddress, // Freelancer address
-            );
-          } else {
-            txHash = await contract.send(
-              "submitMilestone",
-              "no-value",
-              escrowId,
-              milestoneIndex,
-              milestone.description,
-            );
-            toast({
-              title: "Milestone submitted!",
-              description: "Waiting for client approval",
-            });
-
-            // Add cross-wallet notification - notify both CLIENT and FREELANCER
-            addCrossWalletNotification(
-              createMilestoneNotification(
-                "submitted",
-                escrowId,
-                milestoneIndex,
-              ),
-              payerAddress, // Client address
-              beneficiaryAddress, // Freelancer address
-            );
-          }
+            ),
+            payerAddress, // Client address
+            beneficiaryAddress, // Freelancer address
+          );
 
           // Wait for blockchain state to update, then refresh data
           await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -292,29 +239,11 @@ export function MilestoneActions({
               return;
             }
 
-            if (useSmartAccount) {
-              // Use Smart Account for enhanced transaction
-              const { ethers } = await import("ethers");
-              const iface = new ethers.Interface(SECUREFLOW_ABI);
-              const data = iface.encodeFunctionData("approveMilestone", [
-                escrowId,
-                milestoneIndex,
-              ]);
-              txHash = await executeTransaction(
-                CONTRACTS.SECUREFLOW_ESCROW,
-                data,
-              );
-              toast({
-                title: "🚀 Gasless Milestone Approved!",
-                description:
-                  "Milestone approved with no gas fees using Smart Account delegation",
-              });
-            } else {
-              // Use regular transaction
-              // Try to estimate gas first to catch potential issues
-              try {
-                const gasEstimate = await contract.estimateGas(
-                  "approveMilestone",
+            // Use regular transaction
+            // Try to estimate gas first to catch potential issues
+            try {
+              const gasEstimate = await contract.estimateGas(
+                "approveMilestone",
                   escrowId,
                   milestoneIndex,
                 );
@@ -525,34 +454,14 @@ export function MilestoneActions({
               return;
             }
 
-            if (useSmartAccount) {
-              // Use Smart Account for enhanced transaction
-              const { ethers } = await import("ethers");
-              const iface = new ethers.Interface(SECUREFLOW_ABI);
-              const data = iface.encodeFunctionData("rejectMilestone", [
-                escrowId,
-                milestoneIndex,
-                disputeReason,
-              ]);
-              txHash = await executeTransaction(
-                CONTRACTS.SECUREFLOW_ESCROW,
-                data,
-              );
-              toast({
-                title: "🚀 Smart Account Milestone rejected!",
-                description:
-                  "Milestone rejected using Smart Account with enhanced features",
-              });
-            } else {
-              // Use regular transaction
-              txHash = await contract.send(
-                "rejectMilestone",
-                "no-value",
-                escrowId,
-                milestoneIndex,
-                disputeReason,
-              );
-            }
+            // Use regular transaction
+            txHash = await contract.send(
+              "rejectMilestone",
+              "no-value",
+              escrowId,
+              milestoneIndex,
+              disputeReason,
+            );
 
             // Wait for transaction to be mined and confirmed
             try {
@@ -647,26 +556,7 @@ export function MilestoneActions({
               return;
             }
 
-            if (useSmartAccount) {
-              // Use Smart Account for enhanced transaction
-              const { ethers } = await import("ethers");
-              const iface = new ethers.Interface(SECUREFLOW_ABI);
-              const data = iface.encodeFunctionData("resubmitMilestone", [
-                escrowId,
-                milestoneIndex,
-                resubmitMessage || milestone.description, // Use resubmit message or fallback to description
-              ]);
-              txHash = await executeTransaction(
-                CONTRACTS.SECUREFLOW_ESCROW,
-                data,
-              );
-              toast({
-                title: "🚀 Smart Account Milestone resubmitted!",
-                description:
-                  "Milestone resubmitted using Smart Account with enhanced features",
-              });
-            } else {
-              // Use regular transaction
+            // Use regular transaction
               txHash = await contract.send(
                 "resubmitMilestone",
                 "no-value",
@@ -756,45 +646,26 @@ export function MilestoneActions({
               return;
             }
 
-            if (useSmartAccount) {
-              // Use Smart Account for enhanced transaction
-              const { ethers } = await import("ethers");
-              const iface = new ethers.Interface(SECUREFLOW_ABI);
-              const data = iface.encodeFunctionData("disputeMilestone", [
-                escrowId,
-                milestoneIndex,
-                disputeReason,
-              ]);
-              txHash = await executeTransaction(
-                CONTRACTS.SECUREFLOW_ESCROW,
-                data,
-              );
-              toast({
-                title: "🚀 Smart Account Dispute created!",
-                description:
-                  "Dispute created using Smart Account with enhanced features",
-              });
+            // Use regular transaction
+            txHash = await contract.send(
+              "disputeMilestone",
+              "no-value",
+              escrowId,
+              milestoneIndex,
+              disputeReason,
+            );
 
-              // Add cross-wallet notification - notify both CLIENT and FREELANCER
-              addCrossWalletNotification(
-                createMilestoneNotification(
-                  "disputed",
-                  escrowId,
-                  milestoneIndex,
-                  { reason: disputeReason },
-                ),
-                payerAddress, // Client address
-                beneficiaryAddress, // Freelancer address
-              );
-            } else {
-              txHash = await contract.send(
-                "disputeMilestone",
-                "no-value",
+            // Add cross-wallet notification - notify both CLIENT and FREELANCER
+            addCrossWalletNotification(
+              createMilestoneNotification(
+                "disputed",
                 escrowId,
                 milestoneIndex,
-                disputeReason,
-              );
-            }
+                { reason: disputeReason },
+              ),
+              payerAddress, // Client address
+              beneficiaryAddress, // Freelancer address
+            );
 
             // Check if we got a valid transaction hash
             if (!txHash) {
@@ -1039,17 +910,8 @@ export function MilestoneActions({
             variant="default"
             className="gap-2"
           >
-            {isSmartAccountReady ? (
-              <>
-                <Zap className="h-4 w-4" />
-                Smart Submit
-              </>
-            ) : (
-              <>
-                <Send className="h-4 w-4" />
-                Submit
-              </>
-            )}
+            <Send className="h-4 w-4" />
+            Submit
           </Button>
         )}
 
@@ -1062,17 +924,8 @@ export function MilestoneActions({
             className="gap-2"
             disabled={isLoading}
           >
-            {isSmartAccountReady ? (
-              <>
-                <Zap className="h-4 w-4" />
-                {isLoading ? "Processing..." : "Smart Approve"}
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="h-4 w-4" />
-                {isLoading ? "Processing..." : "Approve"}
-              </>
-            )}
+            <CheckCircle2 className="h-4 w-4" />
+            {isLoading ? "Processing..." : "Approve"}
           </Button>
         )}
 
@@ -1085,17 +938,8 @@ export function MilestoneActions({
             className="gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
             disabled={isLoading}
           >
-            {isSmartAccountReady ? (
-              <>
-                <Zap className="h-4 w-4" />
-                {isLoading ? "Processing..." : "Smart Reject"}
-              </>
-            ) : (
-              <>
-                <XCircle className="h-4 w-4" />
-                {isLoading ? "Processing..." : "Reject"}
-              </>
-            )}
+            <XCircle className="h-4 w-4" />
+            {isLoading ? "Processing..." : "Reject"}
           </Button>
         )}
 
@@ -1110,17 +954,8 @@ export function MilestoneActions({
               className="gap-2"
               disabled={isLoading}
             >
-              {isSmartAccountReady ? (
-                <>
-                  <Zap className="h-4 w-4" />
-                  {isLoading ? "Processing..." : "Smart Dispute"}
-                </>
-              ) : (
-                <>
-                  <Gavel className="h-4 w-4" />
-                  {isLoading ? "Processing..." : "Dispute"}
-                </>
-              )}
+              <Gavel className="h-4 w-4" />
+              {isLoading ? "Processing..." : "Dispute"}
             </Button>
           )}
 
@@ -1148,17 +983,8 @@ export function MilestoneActions({
                 disabled={isLoading}
                 data-action="resubmit"
               >
-                {isSmartAccountReady ? (
-                  <>
-                    <Zap className="h-4 w-4" />
-                    {isLoading ? "Processing..." : "Smart Resubmit"}
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4" />
-                    {isLoading ? "Processing..." : "Resubmit"}
-                  </>
-                )}
+                <Send className="h-4 w-4" />
+                {isLoading ? "Processing..." : "Resubmit"}
               </Button>
             )}
           </div>

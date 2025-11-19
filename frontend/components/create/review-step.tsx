@@ -2,8 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Clock, DollarSign, User, Zap } from "lucide-react";
-import { useSmartAccount } from "@/contexts/smart-account-context";
+import { CheckCircle2, Clock, DollarSign, User } from "lucide-react";
 
 interface Milestone {
   description: string;
@@ -33,10 +32,9 @@ export function ReviewStep({
   isSubmitting,
   isContractPaused,
 }: ReviewStepProps) {
-  const { isSmartAccountReady } = useSmartAccount();
   const totalMilestoneAmount = formData.milestones.reduce(
     (sum, milestone) => sum + Number.parseFloat(milestone.amount || "0"),
-    0,
+    0
   );
 
   const isTotalValid =
@@ -130,16 +128,7 @@ export function ReviewStep({
             disabled={isSubmitting || isContractPaused || !isTotalValid}
             className="flex-1 bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {isSubmitting ? (
-              "Creating Escrow..."
-            ) : isSmartAccountReady ? (
-              <>
-                <Zap className="h-4 w-4" />
-                Create Gasless Escrow
-              </>
-            ) : (
-              "Create Escrow"
-            )}
+            {isSubmitting ? "Creating Escrow..." : "Create Escrow"}
           </button>
         </div>
       </CardContent>
