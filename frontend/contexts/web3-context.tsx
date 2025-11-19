@@ -48,6 +48,10 @@ export const appKit = createAppKit({
     email: false,
     socials: ["github", "x", "discord"],
   },
+  themeMode: "dark",
+  themeVariables: {
+    "--w3m-accent": "#3b82f6",
+  },
 });
 
 // Get wagmi config from adapter
@@ -56,6 +60,7 @@ export const wagmiConfig = wagmiAdapter.wagmiConfig;
 interface Web3ContextType {
   wallet: WalletState;
   connectWallet: () => Promise<void>;
+  openAccountModal: () => Promise<void>;
   disconnectWallet: () => void;
   switchToBase: () => Promise<void>;
   getContract: (address: string, abi: any) => any;
@@ -126,24 +131,44 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
   const connectWallet = async () => {
     try {
-      // Try using Reown AppKit modal first
+      // Use Reown AppKit modal - it automatically handles wallet selection
       if (appKit && typeof appKit.open === "function") {
         await appKit.open();
       } else {
-        // Fallback to wagmi connect with first available connector
-        const connector = connectors[0];
+        // Fallback: try to use wagmi connect
+        const connector = connectors.find(
+          (c) => c.id === "metaMaskSDK" || c.id === "walletConnect"
+        );
         if (connector) {
           connect({ connector });
+        } else if (connectors.length > 0) {
+          connect({ connector: connectors[0] });
         } else {
-          throw new Error("No wallet connectors available");
+          throw new Error(
+            "No wallet connectors available. Please install a wallet."
+          );
         }
       }
     } catch (error: any) {
+      console.error("Wallet connection error:", error);
       toast({
         title: "Connection failed",
-        description: error.message || "Failed to connect wallet",
+        description:
+          error.message || "Failed to connect wallet. Please try again.",
         variant: "destructive",
       });
+    }
+  };
+
+  const openAccountModal = async () => {
+    try {
+      // Open Reown AppKit account modal when wallet is connected
+      // When wallet is connected, appKit.open() opens the account overview
+      if (appKit && typeof appKit.open === "function") {
+        await appKit.open();
+      }
+    } catch (error: any) {
+      console.error("Failed to open account modal:", error);
     }
   };
 
@@ -291,6 +316,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       value={{
         wallet,
         connectWallet,
+        openAccountModal,
         disconnectWallet,
         switchToBase,
         getContract,

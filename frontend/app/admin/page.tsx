@@ -37,6 +37,8 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ethers } from "ethers";
+import { BASE_MAINNET } from "@/lib/web3/config";
 
 export default function AdminPage() {
   const { wallet, getContract } = useWeb3();
@@ -58,6 +60,8 @@ export default function AdminPage() {
   const [arbiterAddress, setArbiterAddress] = useState("");
   const [whitelisting, setWhitelisting] = useState(false);
   const [authorizing, setAuthorizing] = useState(false);
+  const [isPausing, setIsPausing] = useState(false);
+  const [isUnpausing, setIsUnpausing] = useState(false);
   const [contractStats, setContractStats] = useState({
     platformFeeBP: 0,
     totalEscrows: 0,
@@ -183,98 +187,171 @@ export default function AdminPage() {
 
       switch (actionType) {
         case "pause":
-          // Check if contract is already paused
-          const currentPausedStatusForPause = await contract.call("paused");
+          setIsPausing(true);
+          try {
+            // Check if contract is already paused
+            const currentPausedStatusForPause = await contract.call("paused");
 
-          // Handle different possible return types - including Proxy objects
-          let isPausedForPause = false;
+            // Handle different possible return types - including Proxy objects
+            let isPausedForPause = false;
 
-          if (
-            currentPausedStatusForPause === true ||
-            currentPausedStatusForPause === "true" ||
-            currentPausedStatusForPause === 1
-          ) {
-            isPausedForPause = true;
-          } else if (
-            currentPausedStatusForPause === false ||
-            currentPausedStatusForPause === "false" ||
-            currentPausedStatusForPause === 0
-          ) {
-            isPausedForPause = false;
-          } else if (
-            currentPausedStatusForPause &&
-            typeof currentPausedStatusForPause === "object"
-          ) {
-            try {
-              const pausedValue = currentPausedStatusForPause.toString();
-              isPausedForPause = pausedValue === "true" || pausedValue === "1";
-            } catch (e) {
+            if (
+              currentPausedStatusForPause === true ||
+              currentPausedStatusForPause === "true" ||
+              currentPausedStatusForPause === 1
+            ) {
+              isPausedForPause = true;
+            } else if (
+              currentPausedStatusForPause === false ||
+              currentPausedStatusForPause === "false" ||
+              currentPausedStatusForPause === 0
+            ) {
               isPausedForPause = false;
+            } else if (
+              currentPausedStatusForPause &&
+              typeof currentPausedStatusForPause === "object"
+            ) {
+              try {
+                const pausedValue = currentPausedStatusForPause.toString();
+                isPausedForPause =
+                  pausedValue === "true" || pausedValue === "1";
+              } catch (e) {
+                isPausedForPause = false;
+              }
             }
-          }
 
-          if (isPausedForPause) {
+            if (isPausedForPause) {
+              toast({
+                title: "Contract Already Paused",
+                description: "The contract is already in a paused state",
+                variant: "default",
+              });
+              setIsPausing(false);
+              return;
+            }
+
+            const pauseTxHash = await contract.send("pause", "no-value");
+
+            // Wait for transaction confirmation
             toast({
-              title: "Contract Already Paused",
-              description: "The contract is already in a paused state",
-              variant: "default",
+              title: "Transaction submitted",
+              description: "Waiting for blockchain confirmation...",
             });
-            return;
-          }
 
-          await contract.send("pause", "no-value");
-          setIsPaused(true);
-          toast({
-            title: "Contract paused",
-            description: "All escrow operations are now paused",
-          });
+            // Poll for transaction receipt
+            let receipt = null;
+            let attempts = 0;
+            const maxAttempts = 30;
+
+            while (attempts < maxAttempts && !receipt) {
+              try {
+                const provider = new ethers.JsonRpcProvider(
+                  BASE_MAINNET.rpcUrls[0]
+                );
+                receipt = await provider.getTransactionReceipt(pauseTxHash);
+                if (receipt) break;
+              } catch (error) {
+                // Continue polling
+              }
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+              attempts++;
+            }
+
+            if (receipt && receipt.status === 1) {
+              setIsPaused(true);
+              toast({
+                title: "Contract paused",
+                description: "All escrow operations are now paused",
+              });
+            } else {
+              throw new Error("Transaction failed or timed out");
+            }
+          } finally {
+            setIsPausing(false);
+          }
           break;
         case "unpause":
-          // Check if contract is already unpaused
-          const currentPausedStatus = await contract.call("paused");
+          setIsUnpausing(true);
+          try {
+            // Check if contract is already unpaused
+            const currentPausedStatus = await contract.call("paused");
 
-          // Handle different possible return types - including Proxy objects
-          let isPaused = false;
+            // Handle different possible return types - including Proxy objects
+            let isPaused = false;
 
-          if (
-            currentPausedStatus === true ||
-            currentPausedStatus === "true" ||
-            currentPausedStatus === 1
-          ) {
-            isPaused = true;
-          } else if (
-            currentPausedStatus === false ||
-            currentPausedStatus === "false" ||
-            currentPausedStatus === 0
-          ) {
-            isPaused = false;
-          } else if (
-            currentPausedStatus &&
-            typeof currentPausedStatus === "object"
-          ) {
-            try {
-              const pausedValue = currentPausedStatus.toString();
-              isPaused = pausedValue === "true" || pausedValue === "1";
-            } catch (e) {
+            if (
+              currentPausedStatus === true ||
+              currentPausedStatus === "true" ||
+              currentPausedStatus === 1
+            ) {
+              isPaused = true;
+            } else if (
+              currentPausedStatus === false ||
+              currentPausedStatus === "false" ||
+              currentPausedStatus === 0
+            ) {
               isPaused = false;
+            } else if (
+              currentPausedStatus &&
+              typeof currentPausedStatus === "object"
+            ) {
+              try {
+                const pausedValue = currentPausedStatus.toString();
+                isPaused = pausedValue === "true" || pausedValue === "1";
+              } catch (e) {
+                isPaused = false;
+              }
             }
-          }
 
-          if (!isPaused) {
+            if (!isPaused) {
+              toast({
+                title: "Contract Already Unpaused",
+                description: "The contract is already in an active state",
+                variant: "default",
+              });
+              setIsUnpausing(false);
+              return;
+            }
+
+            const unpauseTxHash = await contract.send("unpause", "no-value");
+
+            // Wait for transaction confirmation
             toast({
-              title: "Contract Already Unpaused",
-              description: "The contract is already in an active state",
-              variant: "default",
+              title: "Transaction submitted",
+              description: "Waiting for blockchain confirmation...",
             });
-            return;
-          }
 
-          await contract.send("unpause", "no-value");
-          setIsPaused(false);
-          toast({
-            title: "Contract unpaused",
-            description: "Escrow operations have been resumed",
-          });
+            // Poll for transaction receipt
+            let receipt = null;
+            let attempts = 0;
+            const maxAttempts = 30;
+
+            while (attempts < maxAttempts && !receipt) {
+              try {
+                const provider = new ethers.JsonRpcProvider(
+                  BASE_MAINNET.rpcUrls[0]
+                );
+                receipt = await provider.getTransactionReceipt(unpauseTxHash);
+                if (receipt) break;
+              } catch (error) {
+                // Continue polling
+              }
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+              attempts++;
+            }
+
+            if (receipt && receipt.status === 1) {
+              setIsPaused(false);
+              toast({
+                title: "Contract unpaused",
+                description: "Escrow operations have been resumed",
+              });
+            } else {
+              throw new Error("Transaction failed or timed out");
+            }
+          } finally {
+            setIsUnpausing(false);
+          }
           break;
         case "withdraw":
           await contract.send(
@@ -739,8 +816,14 @@ export default function AdminPage() {
                 onClick={() => openDialog(isPaused ? "unpause" : "pause")}
                 variant={isPaused ? "default" : "destructive"}
                 className="w-full gap-2"
+                disabled={isPausing || isUnpausing}
               >
-                {isPaused ? (
+                {isPausing || isUnpausing ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    {isPausing ? "Pausing..." : "Unpausing..."}
+                  </>
+                ) : isPaused ? (
                   <>
                     <Play className="h-4 w-4" />
                     Unpause Contract
@@ -941,11 +1024,26 @@ export default function AdminPage() {
           </Alert>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setDialogOpen(false)}
+              disabled={isPausing || isUnpausing}
+            >
               Cancel
             </Button>
-            <Button onClick={handleAction} variant={dialogContent.variant}>
-              {dialogContent.confirmText}
+            <Button
+              onClick={handleAction}
+              variant={dialogContent.variant}
+              disabled={isPausing || isUnpausing}
+            >
+              {isPausing || isUnpausing ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                  {isPausing ? "Pausing..." : "Unpausing..."}
+                </>
+              ) : (
+                dialogContent.confirmText
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
