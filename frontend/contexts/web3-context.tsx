@@ -10,7 +10,13 @@ import {
 import { createAppKit } from "@reown/appkit/react";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import { base } from "@reown/appkit/networks";
-import { useAccount, useDisconnect, useConnect, useSwitchChain } from "wagmi";
+import {
+  useAccount,
+  useDisconnect,
+  useConnect,
+  useSwitchChain,
+  useWalletClient,
+} from "wagmi";
 import { BASE_MAINNET, CONTRACTS } from "@/lib/web3/config";
 import type { WalletState } from "@/lib/web3/types";
 import { useToast } from "@/hooks/use-toast";
@@ -61,6 +67,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const { disconnect } = useDisconnect();
   const { open } = useConnect();
   const { switchChain } = useSwitchChain();
+  const { data: walletClient } = useWalletClient();
   const [wallet, setWallet] = useState<WalletState>({
     address: null,
     chainId: null,
@@ -221,15 +228,17 @@ export function Web3Provider({ children }: { children: ReactNode }) {
             throw new Error("Wallet not connected");
           }
 
-          // Get provider from wagmi
-          const provider = wagmiAdapter.getProvider();
-          if (!provider) {
-            throw new Error("Provider not available");
+          // Get signer from wagmi wallet client
+          if (!walletClient) {
+            throw new Error("Wallet not connected");
           }
 
-          // Create ethers provider and signer
-          const ethersProvider = new ethers.BrowserProvider(provider as any);
-          const signer = await ethersProvider.getSigner();
+          // Create ethers provider from wallet client
+          // Access the underlying provider from the wallet client
+          const provider = new ethers.BrowserProvider(
+            walletClient.transport as unknown as ethers.Eip1193Provider
+          );
+          const signer = await provider.getSigner();
 
           const contract = new ethers.Contract(targetAddress, abi, signer);
           const contractMethod = contract[method];
