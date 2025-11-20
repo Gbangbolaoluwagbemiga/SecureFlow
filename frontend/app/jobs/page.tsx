@@ -34,7 +34,9 @@ export default function JobsPage() {
   const [ongoingProjectsCount, setOngoingProjectsCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
-  const getStatusFromNumber = (status: number): "pending" | "disputed" | "active" | "completed" => {
+  const getStatusFromNumber = (
+    status: number
+  ): "pending" | "disputed" | "active" | "completed" => {
     switch (status) {
       case 0:
         return "pending";
@@ -161,7 +163,7 @@ export default function JobsPage() {
           const hasUserApplied = await contract.call(
             "hasUserApplied",
             job.id,
-            wallet.address,
+            wallet.address
           );
           applicationStatus[job.id] = Boolean(hasUserApplied);
         } catch (error) {
@@ -202,6 +204,8 @@ export default function JobsPage() {
       const totalEscrows = await contract.call("nextEscrowId");
       const escrowCount = Number(totalEscrows);
 
+      console.log("Total escrows:", escrowCount);
+
       const openJobs: Escrow[] = [];
 
       // Fetch open jobs from the contract
@@ -211,12 +215,53 @@ export default function JobsPage() {
           try {
             const escrowSummary = await contract.call("getEscrowSummary", i);
 
-            // Check if this is an open job (beneficiary is zero address)
-            // getEscrowSummary returns indexed properties: [depositor, beneficiary, arbiters, status, totalAmount, paidAmount, remaining, token, deadline, workStarted, createdAt, milestoneCount, isOpenJob, projectTitle, projectDescription]
-            const isOpenJob =
-              escrowSummary[1] === "0x0000000000000000000000000000000000000000";
+            // Debug: log the escrow summary structure
+            console.log(`Escrow ${i} summary:`, {
+              depositor: escrowSummary[0],
+              beneficiary: escrowSummary[1],
+              status: escrowSummary[3],
+              isOpenJob: escrowSummary[12],
+              projectDescription: escrowSummary[14],
+            });
 
-            if (isOpenJob) {
+            // Check if this is an open job using the isOpenJob field from contract
+            // getEscrowSummary returns indexed properties: [depositor, beneficiary, arbiters, status, totalAmount, paidAmount, remaining, token, deadline, workStarted, createdAt, milestoneCount, isOpenJob, projectTitle, projectDescription]
+            const beneficiary = escrowSummary[1]; // beneficiary at index 1
+            const isOpenJobValue = escrowSummary[12]; // isOpenJob is at index 12
+
+            // Handle boolean conversion - contract may return 0/1, true/false, or "true"/"false"
+            let isOpenJob = false;
+            if (typeof isOpenJobValue === "boolean") {
+              isOpenJob = isOpenJobValue;
+            } else if (typeof isOpenJobValue === "number") {
+              isOpenJob = isOpenJobValue === 1;
+            } else if (typeof isOpenJobValue === "string") {
+              isOpenJob = isOpenJobValue === "true" || isOpenJobValue === "1";
+            } else if (isOpenJobValue) {
+              // Try to convert object/other types
+              try {
+                const value = isOpenJobValue.toString();
+                isOpenJob = value === "true" || value === "1";
+              } catch {
+                isOpenJob = false;
+              }
+            }
+
+            // Also check if beneficiary is zero address as fallback (contract sets isOpenJob = beneficiary == address(0))
+            const isZeroAddress =
+              beneficiary === "0x0000000000000000000000000000000000000000" ||
+              beneficiary?.toLowerCase() ===
+                "0x0000000000000000000000000000000000000000";
+
+            console.log(
+              `Escrow ${i}: isOpenJob=${isOpenJob} (raw: ${JSON.stringify(
+                isOpenJobValue
+              )}, type: ${typeof isOpenJobValue}), beneficiary=${beneficiary}, isZeroAddress=${isZeroAddress}`
+            );
+
+            // Use isOpenJob from contract OR check if beneficiary is zero address
+            if (isOpenJob || isZeroAddress) {
+              console.log(`✓ Escrow ${i} is an open job - adding to list`);
               // Check if current user is the job creator (should not be able to apply to own job)
               const isJobCreator =
                 escrowSummary[0].toLowerCase() ===
@@ -229,7 +274,7 @@ export default function JobsPage() {
                   const hasAppliedResult = await contract.call(
                     "hasUserApplied",
                     i,
-                    wallet.address,
+                    wallet.address
                   );
 
                   // Handle different possible return types - be more strict about what counts as "applied"
@@ -272,7 +317,7 @@ export default function JobsPage() {
                           "getApplicationsPage",
                           i, // escrowId
                           0, // offset
-                          1, // limit - start with 1
+                          1 // limit - start with 1
                         );
                       } catch (error1) {
                         try {
@@ -280,7 +325,7 @@ export default function JobsPage() {
                             "getApplicationsPage",
                             i, // escrowId
                             0, // offset
-                            10, // limit - try 10
+                            10 // limit - try 10
                           );
                         } catch (error2) {
                           throw error2;
@@ -292,7 +337,7 @@ export default function JobsPage() {
                           (app: any) =>
                             app.freelancer &&
                             app.freelancer.toLowerCase() ===
-                              wallet.address?.toLowerCase(),
+                              wallet.address?.toLowerCase()
                         );
 
                         if (userInApplications) {
@@ -322,7 +367,7 @@ export default function JobsPage() {
                   "getApplicationsPage",
                   i, // escrowId
                   0, // offset
-                  100, // limit
+                  100 // limit
                 );
                 applicationCount = applications ? applications.length : 0;
               } catch (error) {
@@ -344,41 +389,49 @@ export default function JobsPage() {
                   0,
                   Math.round(
                     (Number(escrowSummary[8]) - Number(escrowSummary[10])) /
-                      (24 * 60 * 60),
-                  ),
+                      (24 * 60 * 60)
+                  )
                 ), // Convert seconds to days, ensure non-negative and round to nearest day
                 milestones: [], // Would need to fetch milestones separately
-                // projectTitle: escrowSummary[13] || "", // projectTitle - removed as not in Escrow interface
                 projectDescription: escrowSummary[14] || "", // projectDescription
-                isOpenJob: true,
+                isOpenJob: Boolean(escrowSummary[12]), // isOpenJob at index 12
                 applications: [], // Would need to fetch applications separately
                 applicationCount: applicationCount, // Add real application count
                 isJobCreator: isJobCreator, // Add flag to track if current user is the job creator
               };
 
               openJobs.push(job);
+              console.log(`✓ Added escrow ${i} to open jobs list`);
 
               // Store application status
               setHasApplied((prev) => ({
                 ...prev,
                 [job.id]: userHasApplied,
               }));
+            } else {
+              console.log(`✗ Escrow ${i} is NOT an open job - skipping`);
             }
           } catch (error) {
+            console.error(`Error fetching escrow ${i}:`, error);
             // Skip escrows that don't exist or user doesn't have access to
             continue;
           }
         }
       }
 
+      console.log(`Total open jobs found: ${openJobs.length}`);
       // Set the actual jobs from the contract
       setJobs(openJobs);
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Error fetching open jobs:", error);
       toast({
         title: "Failed to load jobs",
-        description: "Could not fetch available jobs from the blockchain",
+        description:
+          error?.message ||
+          "Could not fetch available jobs from the blockchain. Please check your connection and try again.",
         variant: "destructive",
       });
+      setJobs([]);
     } finally {
       setLoading(false);
     }
@@ -387,7 +440,7 @@ export default function JobsPage() {
   const handleApply = async (
     job: Escrow,
     coverLetter: string,
-    proposedTimeline: string,
+    proposedTimeline: string
   ) => {
     if (!job || !wallet.isConnected) return;
 
@@ -426,7 +479,7 @@ export default function JobsPage() {
         const hasUserAppliedResult = await contract.call(
           "hasUserApplied",
           job.id,
-          wallet.address,
+          wallet.address
         );
 
         // Handle different return types including Proxy(Result) objects
@@ -459,7 +512,7 @@ export default function JobsPage() {
             "getApplicationsPage",
             job.id,
             0, // offset
-            100, // limit
+            100 // limit
           );
 
           if (applications && Array.isArray(applications)) {
@@ -468,7 +521,8 @@ export default function JobsPage() {
               const freelancerAddress = app.freelancer || app[0]; // Try different possible structures
               return (
                 freelancerAddress &&
-                freelancerAddress.toLowerCase() === wallet.address?.toLowerCase()
+                freelancerAddress.toLowerCase() ===
+                  wallet.address?.toLowerCase()
               );
             });
           }
@@ -492,7 +546,7 @@ export default function JobsPage() {
         "no-value",
         job.id,
         coverLetter,
-        proposedTimeline,
+        proposedTimeline
       );
 
       toast({
@@ -503,12 +557,17 @@ export default function JobsPage() {
 
       // Add notification for job application submission - notify the CLIENT (job creator)
       addNotification(
-        createApplicationNotification("submitted", Number(job.id), wallet.address!, {
-          jobTitle: job.projectDescription || `Job #${job.id}`,
-          freelancerName:
-            wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
-        }),
-        [job.payer], // Notify the client (job creator)
+        createApplicationNotification(
+          "submitted",
+          Number(job.id),
+          wallet.address!,
+          {
+            jobTitle: job.projectDescription || `Job #${job.id}`,
+            freelancerName:
+              wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+          }
+        ),
+        [job.payer] // Notify the client (job creator)
       );
 
       setCoverLetter("");
@@ -543,8 +602,8 @@ export default function JobsPage() {
         ?.toLowerCase()
         .includes(searchQuery.toLowerCase()) ||
       job.milestones.some((m) =>
-        m.description.toLowerCase().includes(searchQuery.toLowerCase()),
-      ),
+        m.description.toLowerCase().includes(searchQuery.toLowerCase())
+      )
   );
 
   if (!wallet.isConnected || loading) {

@@ -444,7 +444,7 @@ export default function CreateEscrowPage() {
         (m) => m.description
       );
 
-      const beneficiaryAddress = isOpenJob
+      const beneficiaryAddress = formData.isOpenJob
         ? "0x0000000000000000000000000000000000000000" // Zero address for open jobs
         : formData.beneficiary || "0x0000000000000000000000000000000000000000";
 
@@ -638,14 +638,14 @@ export default function CreateEscrowPage() {
         // Transaction successful
         setIsSubmitting(false);
         toast({
-          title: isOpenJob ? "Job posted!" : "Escrow created!",
-          description: isOpenJob
+          title: formData.isOpenJob ? "Job posted!" : "Escrow created!",
+          description: formData.isOpenJob
             ? "Your job is now live. Freelancers can apply on the Browse Jobs page."
             : "Your escrow has been successfully created",
         });
 
         // Redirect immediately after success
-        router.push(isOpenJob ? "/jobs" : "/dashboard");
+        router.push(formData.isOpenJob ? "/jobs" : "/dashboard");
       } else {
         // Transaction failed
         setIsSubmitting(false);

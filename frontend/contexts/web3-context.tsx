@@ -89,27 +89,32 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     // Prevent state updates during SSR/hydration
     if (typeof window === "undefined") return;
 
-    if (isConnected && address && chainId) {
-      setWallet({
-        address,
-        chainId: Number(chainId),
-        isConnected: true,
-        balance: "0",
-      });
-      // Use setTimeout to defer async operations after render
-      setTimeout(() => {
-        checkOwnerStatus(address);
-        updateBalance(address);
-      }, 0);
-    } else {
-      setWallet({
-        address: null,
-        chainId: null,
-        isConnected: false,
-        balance: "0",
-      });
-      setIsOwner(false);
-    }
+    // Defer all state updates until after hydration is complete
+    const timeoutId = setTimeout(() => {
+      if (isConnected && address && chainId) {
+        setWallet({
+          address,
+          chainId: Number(chainId),
+          isConnected: true,
+          balance: "0",
+        });
+        // Defer async operations
+        setTimeout(() => {
+          checkOwnerStatus(address);
+          updateBalance(address);
+        }, 0);
+      } else {
+        setWallet({
+          address: null,
+          chainId: null,
+          isConnected: false,
+          balance: "0",
+        });
+        setIsOwner(false);
+      }
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
   }, [address, chainId, isConnected]);
 
   const updateBalance = async (address: string) => {
