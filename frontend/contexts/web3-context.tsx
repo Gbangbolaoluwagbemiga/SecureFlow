@@ -86,6 +86,9 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false);
 
   useEffect(() => {
+    // Prevent state updates during SSR/hydration
+    if (typeof window === "undefined") return;
+
     if (isConnected && address && chainId) {
       setWallet({
         address,
@@ -93,8 +96,11 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         isConnected: true,
         balance: "0",
       });
-      checkOwnerStatus(address);
-      updateBalance(address);
+      // Use setTimeout to defer async operations after render
+      setTimeout(() => {
+        checkOwnerStatus(address);
+        updateBalance(address);
+      }, 0);
     } else {
       setWallet({
         address: null,

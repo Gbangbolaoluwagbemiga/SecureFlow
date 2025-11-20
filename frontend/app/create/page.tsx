@@ -365,19 +365,75 @@ export default function CreateEscrowPage() {
           );
         }
 
-        const approvalTx = await tokenContract.send(
-          "approve",
-          "no-value", // No native value for ERC20 approval
+        // Check if token is whitelisted
+        const secureFlowContract = getContract(
           CONTRACTS.SECUREFLOW_ESCROW,
-          totalAmountInWei
+          SECUREFLOW_ABI
+        );
+        const isWhitelisted = await secureFlowContract.call(
+          "whitelistedTokens",
+          formData.token
         );
 
-        toast({
-          title: "Approval submitted",
-          description: "Waiting for token approval confirmation...",
-        });
+        if (!isWhitelisted) {
+          throw new Error(
+            "This token is not whitelisted. Please use a whitelisted token or contact an admin to whitelist this token."
+          );
+        }
 
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        // Check current allowance
+        const currentAllowance = await tokenContract.call(
+          "allowance",
+          wallet.address,
+          CONTRACTS.SECUREFLOW_ESCROW
+        );
+
+        // Only approve if allowance is insufficient
+        if (BigInt(currentAllowance) < BigInt(totalAmountInWei)) {
+          const approvalTx = await tokenContract.send(
+            "approve",
+            "no-value", // No native value for ERC20 approval
+            CONTRACTS.SECUREFLOW_ESCROW,
+            totalAmountInWei
+          );
+
+          toast({
+            title: "Approval submitted",
+            description: "Waiting for token approval confirmation...",
+          });
+
+          // Wait for approval transaction to be confirmed
+          let approvalReceipt = null;
+          let approvalAttempts = 0;
+          const maxApprovalAttempts = 30;
+
+          while (approvalAttempts < maxApprovalAttempts && !approvalReceipt) {
+            try {
+              const provider = new ethers.JsonRpcProvider(
+                "https://mainnet.base.org"
+              );
+              approvalReceipt = await provider.getTransactionReceipt(
+                approvalTx
+              );
+              if (approvalReceipt) break;
+            } catch (error) {
+              // Continue polling
+            }
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            approvalAttempts++;
+          }
+
+          if (!approvalReceipt || approvalReceipt.status !== 1) {
+            throw new Error(
+              "Token approval failed or timed out. Please try again."
+            );
+          }
+
+          toast({
+            title: "Approval confirmed",
+            description: "Token approval successful. Creating escrow...",
+          });
+        }
       }
 
       const escrowContract = getContract(
@@ -518,6 +574,18 @@ export default function CreateEscrowPage() {
         // Convert duration from days to seconds
         const durationInSeconds = Number(formData.duration) * 24 * 60 * 60;
 
+        // Verify token is still whitelisted before creating escrow
+        const isWhitelistedCheck = await escrowContract.call(
+          "whitelistedTokens",
+          formData.token
+        );
+
+        if (!isWhitelistedCheck) {
+          throw new Error(
+            "Token is not whitelisted. Please use a whitelisted token or contact an admin."
+          );
+        }
+
         // Use regular transaction
         txHash = await escrowContract.send(
           "createEscrow",
@@ -568,6 +636,7 @@ export default function CreateEscrowPage() {
 
       if (receipt.status === "0x1") {
         // Transaction successful
+        setIsSubmitting(false);
         toast({
           title: isOpenJob ? "Job posted!" : "Escrow created!",
           description: isOpenJob
@@ -575,20 +644,31 @@ export default function CreateEscrowPage() {
             : "Your escrow has been successfully created",
         });
 
-        setTimeout(() => {
-          router.push(isOpenJob ? "/jobs" : "/dashboard");
-        }, 2000);
+        // Redirect immediately after success
+        router.push(isOpenJob ? "/jobs" : "/dashboard");
       } else {
         // Transaction failed
+        setIsSubmitting(false);
         throw new Error("Transaction failed on blockchain");
       }
     } catch (error: any) {
+      setIsSubmitting(false);
+      console.error("Escrow creation error:", error);
       let errorMessage = "Failed to create escrow";
 
       if (error.message?.includes("insufficient funds")) {
         errorMessage = "Insufficient funds. Please check your balance.";
-      } else if (error.message?.includes("gas")) {
-        errorMessage = "Gas estimation failed. Please try again.";
+      } else if (
+        error.message?.includes("gas") ||
+        error.message?.includes("Gas")
+      ) {
+        errorMessage =
+          "Gas estimation failed. This usually means the transaction would fail. Please check: 1) Token is whitelisted, 2) You have sufficient balance, 3) Token approval was successful.";
+      } else if (
+        error.message?.includes("whitelist") ||
+        error.message?.includes("Whitelist")
+      ) {
+        errorMessage = error.message;
       } else if (error.message?.includes("revert")) {
         errorMessage = "Transaction reverted. Please check your parameters.";
       } else if (error.message?.includes("user rejected")) {

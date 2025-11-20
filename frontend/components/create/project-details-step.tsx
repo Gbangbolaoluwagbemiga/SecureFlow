@@ -54,7 +54,7 @@ export function ProjectDetailsStep({
   isContractPaused,
   errors = {},
 }: ProjectDetailsStepProps) {
-  const { getContract } = useWeb3();
+  const { getContract, wallet } = useWeb3();
   const [whitelistedTokens, setWhitelistedTokens] = useState<
     WhitelistedToken[]
   >([]);
@@ -62,12 +62,15 @@ export function ProjectDetailsStep({
   const [selectedToken, setSelectedToken] = useState<string>("");
 
   useEffect(() => {
-    if (!formData.useNativeToken) {
+    if (!formData.useNativeToken && wallet.isConnected) {
       fetchWhitelistedTokens();
     } else {
       setSelectedToken("");
+      if (formData.useNativeToken) {
+        setWhitelistedTokens([]);
+      }
     }
-  }, [formData.useNativeToken]);
+  }, [formData.useNativeToken, wallet.isConnected]);
 
   // Sync selectedToken with formData.token
   useEffect(() => {
@@ -84,6 +87,11 @@ export function ProjectDetailsStep({
   }, [formData.token, whitelistedTokens]);
 
   const fetchWhitelistedTokens = async () => {
+    if (!wallet.isConnected) {
+      setWhitelistedTokens([]);
+      return;
+    }
+
     setLoadingTokens(true);
     try {
       const secureFlowContract = getContract(
@@ -137,6 +145,7 @@ export function ProjectDetailsStep({
       setWhitelistedTokens(tokens);
     } catch (error) {
       console.error("Failed to fetch whitelisted tokens:", error);
+      setWhitelistedTokens([]);
     } finally {
       setLoadingTokens(false);
     }
@@ -307,7 +316,7 @@ export function ProjectDetailsStep({
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading whitelisted tokens...
                 </div>
-              ) : whitelistedTokens.length > 0 ? (
+              ) : (
                 <div className="space-y-2">
                   <Select
                     value={
@@ -318,7 +327,9 @@ export function ProjectDetailsStep({
                           formData.token.toLowerCase()
                       )
                         ? formData.token
-                        : "custom")
+                        : formData.token && formData.token !== ""
+                        ? "custom"
+                        : "")
                     }
                     onValueChange={handleTokenSelect}
                   >
@@ -329,26 +340,55 @@ export function ProjectDetailsStep({
                           : ""
                       }`}
                     >
-                      <SelectValue placeholder="Select a whitelisted token" />
+                      <SelectValue placeholder="Select a whitelisted token or enter custom" />
                     </SelectTrigger>
                     <SelectContent>
-                      {whitelistedTokens.map((token) => (
-                        <SelectItem key={token.address} value={token.address}>
-                          {token.name} ({token.symbol}) -{" "}
-                          {token.address.slice(0, 6)}...
-                          {token.address.slice(-4)}
+                      {whitelistedTokens.length > 0 ? (
+                        <>
+                          {whitelistedTokens.map((token) => (
+                            <SelectItem
+                              key={token.address}
+                              value={token.address}
+                            >
+                              {token.name} ({token.symbol}) -{" "}
+                              {token.address.slice(0, 6)}...
+                              {token.address.slice(-4)}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="custom">
+                            Enter custom address
+                          </SelectItem>
+                        </>
+                      ) : (
+                        <SelectItem value="custom">
+                          Enter custom address
                         </SelectItem>
-                      ))}
-                      <SelectItem value="custom">
-                        Enter custom address
-                      </SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
-                  {selectedToken === "custom" && (
+                  {(selectedToken === "custom" ||
+                    (formData.token &&
+                      !whitelistedTokens.find(
+                        (t) =>
+                          t.address.toLowerCase() ===
+                          formData.token.toLowerCase()
+                      ))) && (
                     <Input
                       id="tokenAddress"
                       value={formData.token}
-                      onChange={(e) => onUpdate({ token: e.target.value })}
+                      onChange={(e) => {
+                        onUpdate({ token: e.target.value });
+                        if (
+                          e.target.value &&
+                          !whitelistedTokens.find(
+                            (t) =>
+                              t.address.toLowerCase() ===
+                              e.target.value.toLowerCase()
+                          )
+                        ) {
+                          setSelectedToken("custom");
+                        }
+                      }}
                       placeholder="0x..."
                       required={!formData.useNativeToken}
                       pattern="^0x[a-fA-F0-9]{40}$"
@@ -360,20 +400,6 @@ export function ProjectDetailsStep({
                     />
                   )}
                 </div>
-              ) : (
-                <Input
-                  id="tokenAddress"
-                  value={formData.token}
-                  onChange={(e) => onUpdate({ token: e.target.value })}
-                  placeholder="0x..."
-                  required={!formData.useNativeToken}
-                  pattern="^0x[a-fA-F0-9]{40}$"
-                  className={
-                    errors.tokenAddress
-                      ? "border-red-500 focus:border-red-500"
-                      : ""
-                  }
-                />
               )}
               {errors.tokenAddress ? (
                 <p className="text-red-500 text-sm mt-1">
@@ -383,7 +409,9 @@ export function ProjectDetailsStep({
                 <p className="text-xs text-muted-foreground mt-1">
                   {whitelistedTokens.length > 0
                     ? "Select a whitelisted token or enter a custom address"
-                    : "Enter the contract address of your ERC20 token deployed on Base Mainnet"}
+                    : wallet.isConnected
+                    ? "Enter the contract address of your ERC20 token deployed on Base Mainnet"
+                    : "Connect your wallet to see whitelisted tokens"}
                 </p>
               )}
             </div>
