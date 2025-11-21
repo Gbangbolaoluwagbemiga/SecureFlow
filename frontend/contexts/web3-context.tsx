@@ -117,9 +117,26 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timeoutId);
   }, [address, chainId, isConnected]);
 
+  // Helper function to get a working RPC provider with fallback
+  const getRpcProvider = async (): Promise<ethers.JsonRpcProvider> => {
+    for (const rpcUrl of BASE_MAINNET.rpcUrls) {
+      try {
+        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        // Test the connection by getting the chain ID
+        await provider.getNetwork();
+        return provider;
+      } catch (error) {
+        console.warn(`RPC endpoint ${rpcUrl} failed, trying next...`);
+        continue;
+      }
+    }
+    // If all fail, return the first one anyway
+    return new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
+  };
+
   const updateBalance = async (address: string) => {
     try {
-      const provider = new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
+      const provider = await getRpcProvider();
       const balance = await provider.getBalance(address);
       const balanceInEther = ethers.formatEther(balance);
       setWallet((prev) => ({
@@ -271,11 +288,35 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     return {
       async call(method: string, ...args: any[]) {
         try {
-          // Use direct RPC connection for read operations
-          const provider = new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
-          const contract = new ethers.Contract(targetAddress, abi, provider);
-          const result = await contract[method](...args);
-          return result;
+          // Try each RPC endpoint until one works
+          let lastError: any = null;
+          for (const rpcUrl of BASE_MAINNET.rpcUrls) {
+            try {
+              const provider = new ethers.JsonRpcProvider(rpcUrl);
+              const contract = new ethers.Contract(
+                targetAddress,
+                abi,
+                provider
+              );
+              const result = await contract[method](...args);
+              return result;
+            } catch (error: any) {
+              lastError = error;
+              // If it's a network error, try next endpoint
+              if (
+                error.code === "NETWORK_ERROR" ||
+                error.code === "TIMEOUT" ||
+                error.message?.includes("fetch")
+              ) {
+                console.warn(`RPC ${rpcUrl} failed, trying next...`);
+                continue;
+              }
+              // If it's a contract error (method doesn't exist, etc.), throw immediately
+              throw error;
+            }
+          }
+          // If all endpoints failed, throw the last error
+          throw lastError || new Error("All RPC endpoints failed");
         } catch (error) {
           throw error;
         }

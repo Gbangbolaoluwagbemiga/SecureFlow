@@ -6,7 +6,12 @@ export const BASE_MAINNET = {
     symbol: "ETH",
     decimals: 18,
   },
-  rpcUrls: ["https://mainnet.base.org"],
+  rpcUrls: [
+    "https://base.llamarpc.com",
+    "https://base-rpc.publicnode.com",
+    "https://base-mainnet.public.blastapi.io",
+    "https://mainnet.base.org", // Fallback
+  ],
   blockExplorerUrls: ["https://basescan.org"],
 };
 
