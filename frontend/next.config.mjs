@@ -17,6 +17,10 @@ const nextConfig = {
         "@react-native-async-storage/async-storage": false,
         "pino-pretty": false,
       };
+      // Suppress warnings for optional dependencies
+      config.ignoreWarnings = [
+        { module: /@react-native-async-storage\/async-storage/ },
+      ];
     }
     return config;
   },
