@@ -1,6 +1,6 @@
 {
-  "buildCommand": "corepack enable && pnpm build",
-  "installCommand": "corepack enable && pnpm install --frozen-lockfile=false",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
   "framework": "nextjs",
   "env": {
     "NEXT_TELEMETRY_DISABLED": "1"
