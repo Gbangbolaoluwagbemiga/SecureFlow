@@ -220,13 +220,14 @@ export function ProjectDetailsStep({
                   </SelectTrigger>
                   <SelectContent>
                     {whitelistedTokens.length > 0 ? (
-                      whitelistedTokens.map((token) => {
-                        const displayName = token.name || "Unknown Token";
-                        const displaySymbol = token.symbol || "???";
-                        const shortAddress = `${token.address.slice(
-                          0,
-                          6
-                        )}...${token.address.slice(-4)}`;
+                      whitelistedTokens
+                        .filter((token) => token.address) // Filter out tokens without address
+                        .map((token) => {
+                          const displayName = token.name || "Unknown Token";
+                          const displaySymbol = token.symbol || "???";
+                          const shortAddress = token.address
+                            ? `${token.address.slice(0, 6)}...${token.address.slice(-4)}`
+                            : "0x...";
 
                         return (
                           <SelectItem key={token.address} value={token.address}>

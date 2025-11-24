@@ -202,16 +202,17 @@ export default function CreateEscrowPage() {
         })
       );
 
-      // Add cUSD as default if not in list
+      // Add USDC as default if not in list
       if (
+        CONTRACTS.USDC_MAINNET &&
         !allWhitelistedTokens.some(
-          (addr) => addr.toLowerCase() === CONTRACTS.CUSD_MAINNET.toLowerCase()
+          (addr) => addr.toLowerCase() === CONTRACTS.USDC_MAINNET.toLowerCase()
         )
       ) {
         tokensWithInfo.unshift({
-          address: CONTRACTS.CUSD_MAINNET,
-          name: "Celo Dollar",
-          symbol: "cUSD",
+          address: CONTRACTS.USDC_MAINNET,
+          name: "USD Coin",
+          symbol: "USDC",
         });
       }
 
@@ -219,13 +220,17 @@ export default function CreateEscrowPage() {
     } catch (error) {
       console.error("Failed to fetch whitelisted tokens:", error);
       // Fallback to default tokens
-      setWhitelistedTokens([
-        {
-          address: CONTRACTS.CUSD_MAINNET,
-          name: "Celo Dollar",
-          symbol: "cUSD",
-        },
-      ]);
+      setWhitelistedTokens(
+        CONTRACTS.USDC_MAINNET
+          ? [
+              {
+                address: CONTRACTS.USDC_MAINNET,
+                name: "USD Coin",
+                symbol: "USDC",
+              },
+            ]
+          : []
+      );
     }
   };
 
@@ -245,7 +250,7 @@ export default function CreateEscrowPage() {
   });
 
   const commonTokens = [
-    { name: "Native CELO", address: ZERO_ADDRESS, isNative: true },
+    { name: "Native ETH", address: ZERO_ADDRESS, isNative: true },
     { name: "Custom ERC20", address: "", isNative: false },
   ];
 
@@ -1307,11 +1312,11 @@ export default function CreateEscrowPage() {
                           ZERO_ADDRESS.toLowerCase())
                     ) {
                       // If unchecking native token and token is currently ZERO_ADDRESS, set to default
-                      console.log("Unchecking native token, setting to cUSD");
+                      console.log("Unchecking native token, setting to USDC");
                       setFormData({
                         ...formData,
                         ...data,
-                        token: CONTRACTS.CUSD_MAINNET,
+                        token: CONTRACTS.USDC_MAINNET || CONTRACTS.USDC,
                       });
                     } else {
                       console.log(
