@@ -54,6 +54,20 @@ export default function CreateEscrowPage() {
     fetchWhitelistedTokens();
   }, [wallet.chainId]);
 
+  // Refresh tokens when page becomes visible (user might have whitelisted a token in another tab)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && wallet.isConnected) {
+        fetchWhitelistedTokens();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [wallet.isConnected]);
+
   const checkNetworkStatus = async () => {
     if (!wallet.isConnected) return;
 
@@ -104,23 +118,15 @@ export default function CreateEscrowPage() {
 
       // Known token mappings
       const TOKEN_INFO: { [key: string]: { name: string; symbol: string } } = {
-        "0x765DE816845861e75A25fCA122bb6898B8B1282a": {
-          name: "Celo Dollar",
-          symbol: "cUSD",
-        },
-        "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": {
+        "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913": {
           name: "USD Coin",
           symbol: "USDC",
-        },
-        "0x471EcE3750Da237f93B8E339c536989b8978a438": {
-          name: "Celo",
-          symbol: "CELO",
         },
       };
 
       let allWhitelistedTokens: string[] = [];
 
-      // Try to query events from contract
+      // First, try to get tokens from events (query from block 0 to get all events)
       for (const rpcUrl of BASE_MAINNET.rpcUrls) {
         try {
           const provider = new ethers.JsonRpcProvider(rpcUrl);
@@ -131,21 +137,34 @@ export default function CreateEscrowPage() {
           );
 
           const currentBlock = await provider.getBlockNumber();
-          const fromBlock = Math.max(0, currentBlock - 100000); // Last ~100k blocks
+          const fromBlock = 0; // Query from block 0 to get all events
 
-          // Query TokenWhitelisted events
-          const whitelistedEvents = await contractWithProvider.queryFilter(
-            contractWithProvider.filters.TokenWhitelisted(),
-            fromBlock,
-            currentBlock
-          );
+          // Query TokenWhitelisted events in chunks to avoid RPC limits
+          const chunkSize = 10000;
+          let whitelistedEvents: any[] = [];
+          let blacklistedEvents: any[] = [];
 
-          // Query TokenBlacklisted events
-          const blacklistedEvents = await contractWithProvider.queryFilter(
-            contractWithProvider.filters.TokenBlacklisted(),
-            fromBlock,
-            currentBlock
-          );
+          for (let startBlock = fromBlock; startBlock <= currentBlock; startBlock += chunkSize) {
+            const endBlock = Math.min(startBlock + chunkSize - 1, currentBlock);
+            try {
+              const whitelistedChunk = await contractWithProvider.queryFilter(
+                contractWithProvider.filters.TokenWhitelisted(),
+                startBlock,
+                endBlock
+              );
+              whitelistedEvents.push(...whitelistedChunk);
+
+              const blacklistedChunk = await contractWithProvider.queryFilter(
+                contractWithProvider.filters.TokenBlacklisted(),
+                startBlock,
+                endBlock
+              );
+              blacklistedEvents.push(...blacklistedChunk);
+            } catch (chunkError) {
+              console.warn(`Error querying blocks ${startBlock}-${endBlock}:`, chunkError);
+              // Continue with next chunk
+            }
+          }
 
           const whitelisted = new Set(
             whitelistedEvents.map((e: any) => e.args[0].toLowerCase())
@@ -158,11 +177,40 @@ export default function CreateEscrowPage() {
           blacklisted.forEach((token) => whitelisted.delete(token));
 
           allWhitelistedTokens = Array.from(whitelisted);
+          console.log("📋 Found tokens from events:", allWhitelistedTokens);
           break; // Success, exit loop
         } catch (error) {
           console.warn(`Failed to fetch from ${rpcUrl}:`, error);
           continue; // Try next RPC
         }
+      }
+
+      // Also directly verify tokens by checking the contract's whitelistedTokens mapping
+      // This ensures we catch any tokens that might have been missed by event queries
+      try {
+        const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+        
+        // Check known tokens directly
+        const tokensToCheck = [
+          CONTRACTS.USDC_MAINNET,
+          CONTRACTS.USDC,
+          ...allWhitelistedTokens, // Check tokens we found from events
+        ].filter((t) => t && t !== "0x0000000000000000000000000000000000000000");
+
+        for (const tokenAddress of tokensToCheck) {
+          if (!tokenAddress) continue;
+          try {
+            const isWhitelisted = await contract.call("whitelistedTokens", tokenAddress);
+            if (isWhitelisted && !allWhitelistedTokens.includes(tokenAddress.toLowerCase())) {
+              allWhitelistedTokens.push(tokenAddress.toLowerCase());
+              console.log("✅ Found additional whitelisted token:", tokenAddress);
+            }
+          } catch (error) {
+            console.warn(`Error checking token ${tokenAddress}:`, error);
+          }
+        }
+      } catch (error) {
+        console.warn("Error verifying tokens directly:", error);
       }
 
       // Map addresses to names and symbols, fetch from blockchain if not in hardcoded list
@@ -1329,6 +1377,7 @@ export default function CreateEscrowPage() {
                   }}
                   isContractPaused={isContractPaused}
                   whitelistedTokens={whitelistedTokens}
+                  onRefreshTokens={fetchWhitelistedTokens}
                   errors={{
                     projectTitle: errors.projectTitle,
                     projectDescription: errors.projectDescription,
