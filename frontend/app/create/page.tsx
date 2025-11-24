@@ -113,7 +113,7 @@ export default function CreateEscrowPage() {
 
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       
-      // Query recent TokenWhitelisted events (last 200k blocks - fast enough)
+      // Query TokenWhitelisted events in 10k block chunks (RPC limit)
       let allWhitelistedTokens: string[] = [];
       
       try {
@@ -125,28 +125,35 @@ export default function CreateEscrowPage() {
         );
 
         const currentBlock = await provider.getBlockNumber();
-        const fromBlock = Math.max(0, currentBlock - 200000); // Last 200k blocks (should cover recent deployments)
+        const fromBlock = Math.max(0, currentBlock - 200000); // Last 200k blocks
 
-        // Query events with timeout
-        const queryPromise = Promise.all([
-          contractWithProvider.queryFilter(
-            contractWithProvider.filters.TokenWhitelisted(),
-            fromBlock,
-            currentBlock
-          ),
-          contractWithProvider.queryFilter(
-            contractWithProvider.filters.TokenBlacklisted(),
-            fromBlock,
-            currentBlock
-          ),
-        ]);
+        // Query in 10k block chunks to respect RPC limits
+        const chunkSize = 10000;
+        let whitelistedEvents: any[] = [];
+        let blacklistedEvents: any[] = [];
 
-        const [whitelistedEvents, blacklistedEvents] = await Promise.race([
-          queryPromise,
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Query timeout")), 10000)
-          ) as Promise<any>
-        ]) as [any[], any[]];
+        for (let startBlock = fromBlock; startBlock <= currentBlock; startBlock += chunkSize) {
+          const endBlock = Math.min(startBlock + chunkSize - 1, currentBlock);
+          try {
+            const [whitelistedChunk, blacklistedChunk] = await Promise.all([
+              contractWithProvider.queryFilter(
+                contractWithProvider.filters.TokenWhitelisted(),
+                startBlock,
+                endBlock
+              ),
+              contractWithProvider.queryFilter(
+                contractWithProvider.filters.TokenBlacklisted(),
+                startBlock,
+                endBlock
+              ),
+            ]);
+            whitelistedEvents.push(...whitelistedChunk);
+            blacklistedEvents.push(...blacklistedChunk);
+          } catch (chunkError) {
+            console.warn(`Failed to query blocks ${startBlock}-${endBlock}:`, chunkError);
+            // Continue with next chunk
+          }
+        }
 
         const whitelisted = new Set<string>();
         whitelistedEvents.forEach((e: any) => {
@@ -165,7 +172,7 @@ export default function CreateEscrowPage() {
         allWhitelistedTokens = Array.from(whitelisted);
         console.log("📋 Found tokens from events:", allWhitelistedTokens);
       } catch (error) {
-        console.warn("Failed to query events (will use direct check):", error);
+        console.warn("Failed to query events:", error);
       }
 
       // Verify ALL tokens from events are still whitelisted (in case of blacklisting)
@@ -179,12 +186,15 @@ export default function CreateEscrowPage() {
       // Remove duplicates
       const uniqueTokensToVerify = [...new Set(tokensToVerify.map(t => t.toLowerCase()))];
 
+      console.log("🔍 Verifying tokens:", uniqueTokensToVerify);
+
       const directChecks = await Promise.all(
         uniqueTokensToVerify.map(async (tokenAddress) => {
           try {
             const isWhitelisted = await contract.call("whitelistedTokens", tokenAddress);
             return isWhitelisted ? tokenAddress.toLowerCase() : null;
           } catch (error) {
+            console.warn(`Failed to verify token ${tokenAddress}:`, error);
             return null;
           }
         })
