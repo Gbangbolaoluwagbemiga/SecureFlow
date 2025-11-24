@@ -168,35 +168,31 @@ export default function CreateEscrowPage() {
         console.warn("Failed to query events (will use direct check):", error);
       }
 
-      // Directly verify known tokens by checking the contract mapping
-      // This is fast and catches any tokens missed by event queries
+      // Verify ALL tokens from events are still whitelisted (in case of blacklisting)
+      // Also check USDC directly as fallback
       const tokensToVerify = [
+        ...allWhitelistedTokens, // Verify all tokens from events
         CONTRACTS.USDC_MAINNET,
         CONTRACTS.USDC,
       ].filter((t) => t && t !== "0x0000000000000000000000000000000000000000");
 
+      // Remove duplicates
+      const uniqueTokensToVerify = [...new Set(tokensToVerify.map(t => t.toLowerCase()))];
+
       const directChecks = await Promise.all(
-        tokensToVerify.map(async (tokenAddress) => {
-          const tokenLower = tokenAddress.toLowerCase();
-          if (allWhitelistedTokens.includes(tokenLower)) {
-            return null; // Already found
-          }
+        uniqueTokensToVerify.map(async (tokenAddress) => {
           try {
             const isWhitelisted = await contract.call("whitelistedTokens", tokenAddress);
-            return isWhitelisted ? tokenLower : null;
+            return isWhitelisted ? tokenAddress.toLowerCase() : null;
           } catch (error) {
             return null;
           }
         })
       );
 
-      // Add directly verified tokens
-      directChecks.forEach((token) => {
-        if (token && !allWhitelistedTokens.includes(token)) {
-          allWhitelistedTokens.push(token);
-          console.log("✅ Found whitelisted token via direct check:", token);
-        }
-      });
+      // Use directly verified tokens (this is the source of truth)
+      allWhitelistedTokens = directChecks.filter((t) => t !== null) as string[];
+      console.log("✅ Verified whitelisted tokens:", allWhitelistedTokens);
 
       // Remove duplicates and filter out zero address
       const uniqueTokens = [...new Set(allWhitelistedTokens)].filter(
