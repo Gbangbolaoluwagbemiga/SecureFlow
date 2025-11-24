@@ -113,7 +113,7 @@ export default function CreateEscrowPage() {
 
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       
-      // Query recent TokenWhitelisted events (last 50k blocks should be enough)
+      // Query TokenWhitelisted events from block 0 to get all tokens
       let allWhitelistedTokens: string[] = [];
       
       try {
@@ -125,21 +125,55 @@ export default function CreateEscrowPage() {
         );
 
         const currentBlock = await provider.getBlockNumber();
-        const fromBlock = Math.max(0, currentBlock - 50000); // Last 50k blocks
+        const fromBlock = 0; // Query from block 0 to get all events
 
-        // Query TokenWhitelisted events
-        const whitelistedEvents = await contractWithProvider.queryFilter(
-          contractWithProvider.filters.TokenWhitelisted(),
-          fromBlock,
-          currentBlock
-        );
+        // Query TokenWhitelisted events in chunks to avoid RPC limits
+        const chunkSize = 20000;
+        let whitelistedEvents: any[] = [];
+        let blacklistedEvents: any[] = [];
 
-        // Query TokenBlacklisted events
-        const blacklistedEvents = await contractWithProvider.queryFilter(
-          contractWithProvider.filters.TokenBlacklisted(),
-          fromBlock,
-          currentBlock
-        );
+        for (let startBlock = fromBlock; startBlock <= currentBlock; startBlock += chunkSize) {
+          const endBlock = Math.min(startBlock + chunkSize - 1, currentBlock);
+          try {
+            const whitelistedChunk = await contractWithProvider.queryFilter(
+              contractWithProvider.filters.TokenWhitelisted(),
+              startBlock,
+              endBlock
+            );
+            whitelistedEvents.push(...whitelistedChunk);
+
+            const blacklistedChunk = await contractWithProvider.queryFilter(
+              contractWithProvider.filters.TokenBlacklisted(),
+              startBlock,
+              endBlock
+            );
+            blacklistedEvents.push(...blacklistedChunk);
+          } catch (chunkError) {
+            // If chunk fails, try smaller chunks
+            const halfChunk = Math.floor(chunkSize / 2);
+            for (let smallStart = startBlock; smallStart <= endBlock; smallStart += halfChunk) {
+              const smallEnd = Math.min(smallStart + halfChunk - 1, endBlock);
+              try {
+                const whitelistedSmall = await contractWithProvider.queryFilter(
+                  contractWithProvider.filters.TokenWhitelisted(),
+                  smallStart,
+                  smallEnd
+                );
+                whitelistedEvents.push(...whitelistedSmall);
+
+                const blacklistedSmall = await contractWithProvider.queryFilter(
+                  contractWithProvider.filters.TokenBlacklisted(),
+                  smallStart,
+                  smallEnd
+                );
+                blacklistedEvents.push(...blacklistedSmall);
+              } catch (smallError) {
+                // Skip this small chunk
+                console.warn(`Skipping blocks ${smallStart}-${smallEnd}`);
+              }
+            }
+          }
+        }
 
         const whitelisted = new Set<string>();
         whitelistedEvents.forEach((e: any) => {
@@ -156,18 +190,26 @@ export default function CreateEscrowPage() {
         });
 
         allWhitelistedTokens = Array.from(whitelisted);
+        console.log("📋 Found tokens from events:", allWhitelistedTokens);
       } catch (error) {
         console.warn("Failed to query events, using direct check:", error);
       }
 
-      // Also check USDC directly if not found in events
-      if (CONTRACTS.USDC_MAINNET) {
-        const usdcLower = CONTRACTS.USDC_MAINNET.toLowerCase();
-        if (!allWhitelistedTokens.includes(usdcLower)) {
+      // Also directly verify known tokens by checking the contract mapping
+      // This catches any tokens that might have been missed by event queries
+      const tokensToVerify = [
+        CONTRACTS.USDC_MAINNET,
+        CONTRACTS.USDC,
+      ].filter((t) => t && t !== "0x0000000000000000000000000000000000000000");
+
+      for (const tokenAddress of tokensToVerify) {
+        const tokenLower = tokenAddress.toLowerCase();
+        if (!allWhitelistedTokens.includes(tokenLower)) {
           try {
-            const isWhitelisted = await contract.call("whitelistedTokens", CONTRACTS.USDC_MAINNET);
+            const isWhitelisted = await contract.call("whitelistedTokens", tokenAddress);
             if (isWhitelisted) {
-              allWhitelistedTokens.push(usdcLower);
+              allWhitelistedTokens.push(tokenLower);
+              console.log("✅ Found whitelisted token via direct check:", tokenAddress);
             }
           } catch (error) {
             // Ignore
