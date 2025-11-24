@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useSmartAccount } from "@/contexts/smart-account-context";
@@ -37,6 +37,10 @@ export default function CreateEscrowPage() {
   const [whitelistedTokens, setWhitelistedTokens] = useState<
     { address: string; name?: string; symbol?: string }[]
   >([]);
+  // Cache token metadata to avoid refetching on re-renders
+  const tokenMetadataCache = useRef<
+    Map<string, { name: string; symbol: string }>
+  >(new Map());
   const [errors, setErrors] = useState<{
     projectTitle?: string;
     projectDescription?: string;
@@ -267,13 +271,29 @@ export default function CreateEscrowPage() {
         uniqueTokens.map(async (address) => {
           const addressLower = address.toLowerCase();
 
+          // Check cache first
+          const cached = tokenMetadataCache.current.get(addressLower);
+          if (cached) {
+            return {
+              address: addressLower,
+              name: cached.name,
+              symbol: cached.symbol,
+            };
+          }
+
           // Use hardcoded info if available
           if (TOKEN_INFO[addressLower]) {
-            return {
+            const info = {
               address: addressLower,
               name: TOKEN_INFO[addressLower].name,
               symbol: TOKEN_INFO[addressLower].symbol,
             };
+            // Cache it
+            tokenMetadataCache.current.set(addressLower, {
+              name: info.name,
+              symbol: info.symbol,
+            });
+            return info;
           }
 
           // Fetch from blockchain with timeout
@@ -292,53 +312,42 @@ export default function CreateEscrowPage() {
               name = await Promise.race([
                 tokenContract.name(),
                 new Promise<string>((_, reject) =>
-                  setTimeout(() => reject(new Error("Name timeout")), 3000)
+                  setTimeout(() => reject(new Error("Name timeout")), 5000)
                 ),
               ]);
             } catch (nameError) {
-              console.warn(
-                `Failed to fetch name for ${addressLower}:`,
-                nameError
-              );
+              // Silently fail - will use fallback
             }
 
             try {
               symbol = await Promise.race([
                 tokenContract.symbol(),
                 new Promise<string>((_, reject) =>
-                  setTimeout(() => reject(new Error("Symbol timeout")), 3000)
+                  setTimeout(() => reject(new Error("Symbol timeout")), 5000)
                 ),
               ]);
             } catch (symbolError) {
-              console.warn(
-                `Failed to fetch symbol for ${addressLower}:`,
-                symbolError
-              );
+              // Silently fail - will use fallback
             }
 
             // If we got at least one, use it; otherwise use address
-            if (name || symbol) {
-              return {
-                address: addressLower,
-                name:
-                  name ||
-                  `${addressLower.slice(0, 6)}...${addressLower.slice(-4)}`,
-                symbol: symbol || "???",
-              };
-            } else {
-              // Both failed, use address as name
-              return {
-                address: addressLower,
-                name: `${addressLower.slice(0, 6)}...${addressLower.slice(-4)}`,
-                symbol: "???",
-              };
+            const result = {
+              address: addressLower,
+              name:
+                name ||
+                `${addressLower.slice(0, 6)}...${addressLower.slice(-4)}`,
+              symbol: symbol || "???",
+            };
+
+            // Cache successful results (only if we got both name and symbol)
+            if (name && symbol) {
+              tokenMetadataCache.current.set(addressLower, { name, symbol });
             }
+
+            return result;
           } catch (error) {
             // If contract call completely fails, use address as fallback
-            console.warn(
-              `Failed to fetch metadata for ${addressLower}:`,
-              error
-            );
+            // Don't cache failures
             return {
               address: addressLower,
               name: `${addressLower.slice(0, 6)}...${addressLower.slice(-4)}`,
