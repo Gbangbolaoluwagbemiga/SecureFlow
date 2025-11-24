@@ -54,7 +54,6 @@ export default function CreateEscrowPage() {
     fetchWhitelistedTokens();
   }, [wallet.chainId]);
 
-
   const checkNetworkStatus = async () => {
     if (!wallet.isConnected) return;
 
@@ -112,11 +111,11 @@ export default function CreateEscrowPage() {
       };
 
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-      
+
       // Query TokenWhitelisted events in 10k block chunks (RPC limit)
-      // Use a smaller range for speed - last 50k blocks should be enough
+      // Use smaller range for speed - last 50k blocks should be enough for recent deployments
       let allWhitelistedTokens: string[] = [];
-      
+
       try {
         const provider = new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
         const contractWithProvider = new ethers.Contract(
@@ -126,57 +125,82 @@ export default function CreateEscrowPage() {
         );
 
         const currentBlock = await provider.getBlockNumber();
-        const fromBlock = Math.max(0, currentBlock - 50000); // Last 50k blocks only (5 chunks max)
+        // Query from contract deployment block or last 100k blocks, whichever is smaller
+        // Contract was deployed recently, so 100k should be enough
+        const fromBlock = Math.max(0, currentBlock - 100000);
 
         // Query in 10k block chunks to respect RPC limits
         const chunkSize = 10000;
         let whitelistedEvents: any[] = [];
         let blacklistedEvents: any[] = [];
 
-        // Query chunks in parallel (but limit to 5 at a time)
-        const chunks: Promise<any>[] = [];
-        for (let startBlock = fromBlock; startBlock <= currentBlock; startBlock += chunkSize) {
+        // Query chunks sequentially to avoid "maximum 10 calls in 1 batch" RPC limit
+        for (
+          let startBlock = fromBlock;
+          startBlock <= currentBlock;
+          startBlock += chunkSize
+        ) {
           const endBlock = Math.min(startBlock + chunkSize - 1, currentBlock);
-          chunks.push(
-            Promise.all([
-              contractWithProvider.queryFilter(
-                contractWithProvider.filters.TokenWhitelisted(),
-                startBlock,
-                endBlock
-              ).catch(() => []),
-              contractWithProvider.queryFilter(
-                contractWithProvider.filters.TokenBlacklisted(),
-                startBlock,
-                endBlock
-              ).catch(() => []),
-            ]).then(([whitelisted, blacklisted]) => ({ whitelisted, blacklisted }))
-          );
+          try {
+            const [whitelisted, blacklisted] = await Promise.all([
+              contractWithProvider
+                .queryFilter(
+                  contractWithProvider.filters.TokenWhitelisted(),
+                  startBlock,
+                  endBlock
+                )
+                .catch((err) => {
+                  console.warn(
+                    `Event query failed for blocks ${startBlock}-${endBlock}:`,
+                    err
+                  );
+                  return [];
+                }),
+              contractWithProvider
+                .queryFilter(
+                  contractWithProvider.filters.TokenBlacklisted(),
+                  startBlock,
+                  endBlock
+                )
+                .catch((err) => {
+                  console.warn(
+                    `Blacklist query failed for blocks ${startBlock}-${endBlock}:`,
+                    err
+                  );
+                  return [];
+                }),
+            ]);
+
+            whitelistedEvents.push(...whitelisted);
+            blacklistedEvents.push(...blacklisted);
+          } catch (error) {
+            console.warn(
+              `Failed to query blocks ${startBlock}-${endBlock}:`,
+              error
+            );
+            // Continue with next chunk
+          }
         }
 
-        // Wait for all chunks with timeout
-        const results = await Promise.race([
-          Promise.all(chunks),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Query timeout")), 8000)
-          ) as Promise<any>
-        ]) as Array<{ whitelisted: any[]; blacklisted: any[] }>;
-
-        results.forEach(({ whitelisted, blacklisted }) => {
-          whitelistedEvents.push(...whitelisted);
-          blacklistedEvents.push(...blacklisted);
-        });
+        console.log(
+          `✅ Queried ${whitelistedEvents.length} whitelist events and ${blacklistedEvents.length} blacklist events`
+        );
 
         const whitelisted = new Set<string>();
         whitelistedEvents.forEach((e: any) => {
           if (e.args && e.args[0]) {
-            whitelisted.add(e.args[0].toLowerCase());
+            const tokenAddr = e.args[0].toLowerCase();
+            whitelisted.add(tokenAddr);
+            console.log(`📝 Found whitelisted token in event: ${tokenAddr}`);
           }
         });
 
         // Remove blacklisted tokens
         blacklistedEvents.forEach((e: any) => {
           if (e.args && e.args[0]) {
-            whitelisted.delete(e.args[0].toLowerCase());
+            const tokenAddr = e.args[0].toLowerCase();
+            whitelisted.delete(tokenAddr);
+            console.log(`🚫 Found blacklisted token in event: ${tokenAddr}`);
           }
         });
 
@@ -195,14 +219,19 @@ export default function CreateEscrowPage() {
       ].filter((t) => t && t !== "0x0000000000000000000000000000000000000000");
 
       // Remove duplicates
-      const uniqueTokensToVerify = [...new Set(tokensToVerify.map(t => t.toLowerCase()))];
+      const uniqueTokensToVerify = [
+        ...new Set(tokensToVerify.map((t) => t.toLowerCase())),
+      ];
 
       console.log("🔍 Verifying tokens:", uniqueTokensToVerify);
 
       const directChecks = await Promise.all(
         uniqueTokensToVerify.map(async (tokenAddress) => {
           try {
-            const isWhitelisted = await contract.call("whitelistedTokens", tokenAddress);
+            const isWhitelisted = await contract.call(
+              "whitelistedTokens",
+              tokenAddress
+            );
             return isWhitelisted ? tokenAddress.toLowerCase() : null;
           } catch (error) {
             console.warn(`Failed to verify token ${tokenAddress}:`, error);
@@ -225,17 +254,19 @@ export default function CreateEscrowPage() {
         return;
       }
 
-      // Fetch token metadata in parallel
+      // Fetch token metadata in parallel with timeout
       const provider = new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
       const ERC20_ABI = [
         "function name() view returns (string)",
         "function symbol() view returns (string)",
       ];
 
+      console.log("📦 Fetching metadata for tokens:", uniqueTokens);
+
       const tokensWithInfo = await Promise.all(
         uniqueTokens.map(async (address) => {
           const addressLower = address.toLowerCase();
-          
+
           // Use hardcoded info if available
           if (TOKEN_INFO[addressLower]) {
             return {
@@ -245,28 +276,79 @@ export default function CreateEscrowPage() {
             };
           }
 
-          // Fetch from blockchain
+          // Fetch from blockchain with timeout
           try {
-            const tokenContract = new ethers.Contract(address, ERC20_ABI, provider);
-            const [name, symbol] = await Promise.all([
-              tokenContract.name(),
-              tokenContract.symbol(),
-            ]);
-            return { 
-              address: addressLower, 
-              name: name || "Unknown Token", 
-              symbol: symbol || "???" 
-            };
+            const tokenContract = new ethers.Contract(
+              address,
+              ERC20_ABI,
+              provider
+            );
+
+            // Try to fetch name and symbol separately with individual timeouts
+            let name: string | null = null;
+            let symbol: string | null = null;
+
+            try {
+              name = await Promise.race([
+                tokenContract.name(),
+                new Promise<string>((_, reject) =>
+                  setTimeout(() => reject(new Error("Name timeout")), 3000)
+                ),
+              ]);
+            } catch (nameError) {
+              console.warn(
+                `Failed to fetch name for ${addressLower}:`,
+                nameError
+              );
+            }
+
+            try {
+              symbol = await Promise.race([
+                tokenContract.symbol(),
+                new Promise<string>((_, reject) =>
+                  setTimeout(() => reject(new Error("Symbol timeout")), 3000)
+                ),
+              ]);
+            } catch (symbolError) {
+              console.warn(
+                `Failed to fetch symbol for ${addressLower}:`,
+                symbolError
+              );
+            }
+
+            // If we got at least one, use it; otherwise use address
+            if (name || symbol) {
+              return {
+                address: addressLower,
+                name:
+                  name ||
+                  `${addressLower.slice(0, 6)}...${addressLower.slice(-4)}`,
+                symbol: symbol || "???",
+              };
+            } else {
+              // Both failed, use address as name
+              return {
+                address: addressLower,
+                name: `${addressLower.slice(0, 6)}...${addressLower.slice(-4)}`,
+                symbol: "???",
+              };
+            }
           } catch (error) {
-            // If fetching fails, use address as fallback
-            return { 
-              address: addressLower, 
-              name: `${addressLower.slice(0, 6)}...${addressLower.slice(-4)}`, 
-              symbol: "???" 
+            // If contract call completely fails, use address as fallback
+            console.warn(
+              `Failed to fetch metadata for ${addressLower}:`,
+              error
+            );
+            return {
+              address: addressLower,
+              name: `${addressLower.slice(0, 6)}...${addressLower.slice(-4)}`,
+              symbol: "???",
             };
           }
         })
       );
+
+      console.log("✅ Tokens with info:", tokensWithInfo);
 
       // Remove any duplicates by address (case-insensitive)
       const seen = new Set<string>();
