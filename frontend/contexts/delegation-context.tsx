@@ -27,20 +27,20 @@ interface DelegationContextType {
   createDelegation: (
     delegatee: string,
     functions: string[],
-    duration: number,
+    duration: number
   ) => Promise<string>;
   revokeDelegation: (delegationId: string) => Promise<void>;
   executeDelegatedFunction: (
     delegationId: string,
     functionName: string,
-    args: any[],
+    args: any[]
   ) => Promise<string>;
   isDelegatedFunction: (functionName: string) => boolean;
   getActiveDelegations: () => Delegation[];
 }
 
 const DelegationContext = createContext<DelegationContextType | undefined>(
-  undefined,
+  undefined
 );
 
 export function DelegationProvider({ children }: { children: ReactNode }) {
@@ -90,14 +90,14 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
     setDelegations(newDelegations);
     localStorage.setItem(
       "secureflow_delegations",
-      JSON.stringify(newDelegations),
+      JSON.stringify(newDelegations)
     );
   };
 
   const createDelegation = async (
     delegatee: string,
     functions: string[],
-    duration: number,
+    duration: number
   ) => {
     try {
       if (!wallet.isConnected) {
@@ -106,14 +106,16 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
 
       // Validate functions
       const invalidFunctions = functions.filter(
-        (fn) => !DELEGATABLE_FUNCTIONS.includes(fn),
+        (fn) => !DELEGATABLE_FUNCTIONS.includes(fn)
       );
       if (invalidFunctions.length > 0) {
         throw new Error(`Invalid functions: ${invalidFunctions.join(", ")}`);
       }
 
       const delegation: Delegation = {
-        id: `delegation_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: `delegation_${Date.now()}_${Math.random()
+          .toString(36)
+          .substr(2, 9)}`,
         delegator: wallet.address!,
         delegatee,
         functions,
@@ -121,7 +123,7 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
         isActive: true,
       };
 
-      console.log("Creating delegation:", delegation);
+      console.log("Creating delegations:", delegation);
       const updatedDelegations = [...delegations, delegation];
       console.log("Updated delegations:", updatedDelegations);
       saveDelegations(updatedDelegations);
@@ -131,7 +133,9 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
 
       toast({
         title: "Delegation Created",
-        description: `Delegated ${functions.length} functions to ${delegatee.slice(0, 6)}...${delegatee.slice(-4)}`,
+        description: `Delegated ${
+          functions.length
+        } functions to ${delegatee.slice(0, 6)}...${delegatee.slice(-4)}`,
       });
 
       // Delegation created successfully
@@ -152,7 +156,7 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
       const updatedDelegations = delegations.map((delegation) =>
         delegation.id === delegationId
           ? { ...delegation, isActive: false }
-          : delegation,
+          : delegation
       );
 
       saveDelegations(updatedDelegations);
@@ -175,7 +179,7 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
   const executeDelegatedFunction = async (
     delegationId: string,
     functionName: string,
-    args: any[],
+    args: any[]
   ) => {
     try {
       const delegation = delegations.find((d) => d.id === delegationId);
@@ -206,7 +210,7 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
         "Executing TRULY gasless delegated function:",
         functionName,
         "with args:",
-        args,
+        args
       );
 
       // Simulate gasless execution - no MetaMask, no blockchain, no gas fees
@@ -241,15 +245,14 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
         delegation.isActive &&
         delegation.delegatee.toLowerCase() === wallet.address?.toLowerCase() &&
         delegation.functions.includes(functionName) &&
-        delegation.expiry > Math.floor(Date.now() / 1000),
+        delegation.expiry > Math.floor(Date.now() / 1000)
     );
   };
 
   const getActiveDelegations = (): Delegation[] => {
     return delegations.filter(
       (delegation) =>
-        delegation.isActive &&
-        delegation.expiry > Math.floor(Date.now() / 1000),
+        delegation.isActive && delegation.expiry > Math.floor(Date.now() / 1000)
     );
   };
 
