@@ -54,19 +54,6 @@ export default function CreateEscrowPage() {
     fetchWhitelistedTokens();
   }, [wallet.chainId]);
 
-  // Refresh tokens when page becomes visible (user might have whitelisted a token in another tab)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible" && wallet.isConnected) {
-        fetchWhitelistedTokens();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [wallet.isConnected]);
 
   const checkNetworkStatus = async () => {
     if (!wallet.isConnected) return;
@@ -124,96 +111,28 @@ export default function CreateEscrowPage() {
         },
       };
 
-      let allWhitelistedTokens: string[] = [];
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+      
+      // Start with USDC as default (show immediately)
+      const tokensToCheck = [CONTRACTS.USDC_MAINNET, CONTRACTS.USDC].filter(
+        (t) => t && t !== "0x0000000000000000000000000000000000000000"
+      );
 
-      // First, try to get tokens from events (query from block 0 to get all events)
-      for (const rpcUrl of BASE_MAINNET.rpcUrls) {
-        try {
-          const provider = new ethers.JsonRpcProvider(rpcUrl);
-          const contractWithProvider = new ethers.Contract(
-            CONTRACTS.SECUREFLOW_ESCROW,
-            SECUREFLOW_ABI,
-            provider
-          );
-
-          const currentBlock = await provider.getBlockNumber();
-          const fromBlock = 0; // Query from block 0 to get all events
-
-          // Query TokenWhitelisted events in chunks to avoid RPC limits
-          const chunkSize = 10000;
-          let whitelistedEvents: any[] = [];
-          let blacklistedEvents: any[] = [];
-
-          for (let startBlock = fromBlock; startBlock <= currentBlock; startBlock += chunkSize) {
-            const endBlock = Math.min(startBlock + chunkSize - 1, currentBlock);
-            try {
-              const whitelistedChunk = await contractWithProvider.queryFilter(
-                contractWithProvider.filters.TokenWhitelisted(),
-                startBlock,
-                endBlock
-              );
-              whitelistedEvents.push(...whitelistedChunk);
-
-              const blacklistedChunk = await contractWithProvider.queryFilter(
-                contractWithProvider.filters.TokenBlacklisted(),
-                startBlock,
-                endBlock
-              );
-              blacklistedEvents.push(...blacklistedChunk);
-            } catch (chunkError) {
-              console.warn(`Error querying blocks ${startBlock}-${endBlock}:`, chunkError);
-              // Continue with next chunk
-            }
-          }
-
-          const whitelisted = new Set(
-            whitelistedEvents.map((e: any) => e.args[0].toLowerCase())
-          );
-          const blacklisted = new Set(
-            blacklistedEvents.map((e: any) => e.args[0].toLowerCase())
-          );
-
-          // Remove blacklisted from whitelisted
-          blacklisted.forEach((token) => whitelisted.delete(token));
-
-          allWhitelistedTokens = Array.from(whitelisted);
-          console.log("📋 Found tokens from events:", allWhitelistedTokens);
-          break; // Success, exit loop
-        } catch (error) {
-          console.warn(`Failed to fetch from ${rpcUrl}:`, error);
-          continue; // Try next RPC
-        }
-      }
-
-      // Also directly verify tokens by checking the contract's whitelistedTokens mapping
-      // This ensures we catch any tokens that might have been missed by event queries
-      try {
-        const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-        
-        // Check known tokens directly
-        const tokensToCheck = [
-          CONTRACTS.USDC_MAINNET,
-          CONTRACTS.USDC,
-          ...allWhitelistedTokens, // Check tokens we found from events
-        ].filter((t) => t && t !== "0x0000000000000000000000000000000000000000");
-
-        for (const tokenAddress of tokensToCheck) {
-          if (!tokenAddress) continue;
+      // Check tokens in parallel for speed
+      const tokenChecks = await Promise.all(
+        tokensToCheck.map(async (tokenAddress) => {
           try {
             const isWhitelisted = await contract.call("whitelistedTokens", tokenAddress);
-            if (isWhitelisted && !allWhitelistedTokens.includes(tokenAddress.toLowerCase())) {
-              allWhitelistedTokens.push(tokenAddress.toLowerCase());
-              console.log("✅ Found additional whitelisted token:", tokenAddress);
-            }
+            return isWhitelisted ? tokenAddress.toLowerCase() : null;
           } catch (error) {
-            console.warn(`Error checking token ${tokenAddress}:`, error);
+            return null;
           }
-        }
-      } catch (error) {
-        console.warn("Error verifying tokens directly:", error);
-      }
+        })
+      );
 
-      // Map addresses to names and symbols, fetch from blockchain if not in hardcoded list
+      const whitelistedTokensList = tokenChecks.filter((t) => t !== null) as string[];
+
+      // Fetch token metadata in parallel
       const provider = new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
       const ERC20_ABI = [
         "function name() view returns (string)",
@@ -221,8 +140,8 @@ export default function CreateEscrowPage() {
       ];
 
       const tokensWithInfo = await Promise.all(
-        allWhitelistedTokens.map(async (address) => {
-          // Check if we have hardcoded info
+        whitelistedTokensList.map(async (address) => {
+          // Use hardcoded info if available
           if (TOKEN_INFO[address]) {
             return {
               address,
@@ -231,43 +150,44 @@ export default function CreateEscrowPage() {
             };
           }
 
-          // Fetch from blockchain
+          // Fetch from blockchain with timeout
           try {
-            const tokenContract = new ethers.Contract(
-              address,
-              ERC20_ABI,
-              provider
-            );
+            const tokenContract = new ethers.Contract(address, ERC20_ABI, provider);
             const [name, symbol] = await Promise.all([
-              tokenContract.name(),
-              tokenContract.symbol(),
+              tokenContract.name().catch(() => "Unknown Token"),
+              tokenContract.symbol().catch(() => "???"),
             ]);
             return { address, name, symbol };
           } catch (error) {
-            console.warn(`Failed to fetch metadata for ${address}:`, error);
-            return { address, name: undefined, symbol: undefined };
+            return { address, name: "Unknown Token", symbol: "???" };
           }
         })
       );
 
-      // Add USDC as default if not in list
+      // Always include USDC if it's whitelisted
       if (
         CONTRACTS.USDC_MAINNET &&
-        !allWhitelistedTokens.some(
-          (addr) => addr.toLowerCase() === CONTRACTS.USDC_MAINNET.toLowerCase()
+        !tokensWithInfo.some(
+          (t) => t.address.toLowerCase() === CONTRACTS.USDC_MAINNET.toLowerCase()
         )
       ) {
-        tokensWithInfo.unshift({
-          address: CONTRACTS.USDC_MAINNET,
-          name: "USD Coin",
-          symbol: "USDC",
-        });
+        const isUSDCWhitelisted = await contract.call(
+          "whitelistedTokens",
+          CONTRACTS.USDC_MAINNET
+        );
+        if (isUSDCWhitelisted) {
+          tokensWithInfo.unshift({
+            address: CONTRACTS.USDC_MAINNET,
+            name: "USD Coin",
+            symbol: "USDC",
+          });
+        }
       }
 
       setWhitelistedTokens(tokensWithInfo);
     } catch (error) {
       console.error("Failed to fetch whitelisted tokens:", error);
-      // Fallback to default tokens
+      // Fallback to USDC if available
       setWhitelistedTokens(
         CONTRACTS.USDC_MAINNET
           ? [
@@ -1377,7 +1297,6 @@ export default function CreateEscrowPage() {
                   }}
                   isContractPaused={isContractPaused}
                   whitelistedTokens={whitelistedTokens}
-                  onRefreshTokens={fetchWhitelistedTokens}
                   errors={{
                     projectTitle: errors.projectTitle,
                     projectDescription: errors.projectDescription,

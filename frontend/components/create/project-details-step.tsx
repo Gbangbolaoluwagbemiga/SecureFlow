@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, Coins, RefreshCw } from "lucide-react";
+import { AlertCircle, Coins } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -29,7 +29,6 @@ interface ProjectDetailsStepProps {
   onUpdate: (data: Partial<ProjectDetailsStepProps["formData"]>) => void;
   isContractPaused: boolean;
   whitelistedTokens?: { address: string; name?: string; symbol?: string }[];
-  onRefreshTokens?: () => void;
   errors?: {
     projectTitle?: string;
     projectDescription?: string;
@@ -45,7 +44,6 @@ export function ProjectDetailsStep({
   onUpdate,
   isContractPaused,
   whitelistedTokens = [],
-  onRefreshTokens,
   errors = {},
 }: ProjectDetailsStepProps) {
   return (
@@ -205,18 +203,6 @@ export function ProjectDetailsStep({
                   <Coins className="h-4 w-4 text-primary" />
                   Custom Token *
                 </Label>
-                {onRefreshTokens && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={onRefreshTokens}
-                    className="h-8 w-8 p-0"
-                    title="Refresh token list"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
-                )}
 
                 <Select
                   value={formData.token}
