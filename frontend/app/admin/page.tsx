@@ -170,7 +170,7 @@ export default function AdminPage() {
 
       // Check known tokens directly (normalize to lowercase to avoid duplicates)
       const tokensToCheck = [
-        CONTRACTS.CUSD_MAINNET,
+        CONTRACTS.USDC_MAINNET,
         CONTRACTS.MOCK_ERC20,
         ...knownWhitelistedTokens,
       ]
@@ -524,7 +524,7 @@ export default function AdminPage() {
         ...new Set([
           ...uniqueWhitelistedTokens, // From initial direct checks
           ...allWhitelistedTokensFromEvents, // From event queries
-          CONTRACTS.CUSD_MAINNET?.toLowerCase(),
+          CONTRACTS.USDC_MAINNET?.toLowerCase(),
           CONTRACTS.MOCK_ERC20?.toLowerCase(),
           ...knownWhitelistedTokens.map((t) => t.toLowerCase()),
         ]),
@@ -1566,7 +1566,7 @@ export default function AdminPage() {
                   Contract Address
                 </p>
                 <p className="font-mono text-sm">
-                  {CONTRACTS.SECUREFLOW_ESCROW.slice(0, 20)}...
+                  {CONTRACTS.SECUREFLOW_ESCROW?.slice(0, 20) || "Loading..."}...
                 </p>
               </div>
             </div>
@@ -1697,11 +1697,11 @@ export default function AdminPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setTokenAddress(CONTRACTS.CUSD_MAINNET)}
+                    onClick={() => setTokenAddress(CONTRACTS.USDC_MAINNET)}
                     className="gap-2 w-full"
                   >
                     <Shield className="h-3 w-3" />
-                    Whitelist cUSD ({CONTRACTS.CUSD_MAINNET.slice(0, 10)}...)
+                    Whitelist USDC ({CONTRACTS.USDC_MAINNET?.slice(0, 10) || "0x..."}...)
                   </Button>
                 </div>
               </div>
@@ -1805,7 +1805,7 @@ export default function AdminPage() {
                 <Label className="text-muted-foreground mb-2 block">
                   Chain ID
                 </Label>
-                <p className="text-sm bg-muted/50 p-3 rounded-lg">42220</p>
+                <p className="text-sm bg-muted/50 p-3 rounded-lg">8453</p>
               </div>
               <div>
                 <Label className="text-muted-foreground mb-2 block">
