@@ -103,9 +103,9 @@ export default function CreateEscrowPage() {
     try {
       const { ethers } = await import("ethers");
 
-      // Known token mappings
+      // Known token mappings (use lowercase keys)
       const TOKEN_INFO: { [key: string]: { name: string; symbol: string } } = {
-        "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913": {
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": {
           name: "USD Coin",
           symbol: "USDC",
         },
@@ -113,24 +113,77 @@ export default function CreateEscrowPage() {
 
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       
-      // Start with USDC as default (show immediately)
-      const tokensToCheck = [CONTRACTS.USDC_MAINNET, CONTRACTS.USDC].filter(
+      // Query recent TokenWhitelisted events (last 50k blocks should be enough)
+      let allWhitelistedTokens: string[] = [];
+      
+      try {
+        const provider = new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
+        const contractWithProvider = new ethers.Contract(
+          CONTRACTS.SECUREFLOW_ESCROW,
+          SECUREFLOW_ABI,
+          provider
+        );
+
+        const currentBlock = await provider.getBlockNumber();
+        const fromBlock = Math.max(0, currentBlock - 50000); // Last 50k blocks
+
+        // Query TokenWhitelisted events
+        const whitelistedEvents = await contractWithProvider.queryFilter(
+          contractWithProvider.filters.TokenWhitelisted(),
+          fromBlock,
+          currentBlock
+        );
+
+        // Query TokenBlacklisted events
+        const blacklistedEvents = await contractWithProvider.queryFilter(
+          contractWithProvider.filters.TokenBlacklisted(),
+          fromBlock,
+          currentBlock
+        );
+
+        const whitelisted = new Set<string>();
+        whitelistedEvents.forEach((e: any) => {
+          if (e.args && e.args[0]) {
+            whitelisted.add(e.args[0].toLowerCase());
+          }
+        });
+
+        // Remove blacklisted tokens
+        blacklistedEvents.forEach((e: any) => {
+          if (e.args && e.args[0]) {
+            whitelisted.delete(e.args[0].toLowerCase());
+          }
+        });
+
+        allWhitelistedTokens = Array.from(whitelisted);
+      } catch (error) {
+        console.warn("Failed to query events, using direct check:", error);
+      }
+
+      // Also check USDC directly if not found in events
+      if (CONTRACTS.USDC_MAINNET) {
+        const usdcLower = CONTRACTS.USDC_MAINNET.toLowerCase();
+        if (!allWhitelistedTokens.includes(usdcLower)) {
+          try {
+            const isWhitelisted = await contract.call("whitelistedTokens", CONTRACTS.USDC_MAINNET);
+            if (isWhitelisted) {
+              allWhitelistedTokens.push(usdcLower);
+            }
+          } catch (error) {
+            // Ignore
+          }
+        }
+      }
+
+      // Remove duplicates and filter out zero address
+      const uniqueTokens = [...new Set(allWhitelistedTokens)].filter(
         (t) => t && t !== "0x0000000000000000000000000000000000000000"
       );
 
-      // Check tokens in parallel for speed
-      const tokenChecks = await Promise.all(
-        tokensToCheck.map(async (tokenAddress) => {
-          try {
-            const isWhitelisted = await contract.call("whitelistedTokens", tokenAddress);
-            return isWhitelisted ? tokenAddress.toLowerCase() : null;
-          } catch (error) {
-            return null;
-          }
-        })
-      );
-
-      const whitelistedTokensList = tokenChecks.filter((t) => t !== null) as string[];
+      if (uniqueTokens.length === 0) {
+        setWhitelistedTokens([]);
+        return;
+      }
 
       // Fetch token metadata in parallel
       const provider = new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
@@ -140,65 +193,56 @@ export default function CreateEscrowPage() {
       ];
 
       const tokensWithInfo = await Promise.all(
-        whitelistedTokensList.map(async (address) => {
+        uniqueTokens.map(async (address) => {
+          const addressLower = address.toLowerCase();
+          
           // Use hardcoded info if available
-          if (TOKEN_INFO[address]) {
+          if (TOKEN_INFO[addressLower]) {
             return {
-              address,
-              name: TOKEN_INFO[address].name,
-              symbol: TOKEN_INFO[address].symbol,
+              address: addressLower,
+              name: TOKEN_INFO[addressLower].name,
+              symbol: TOKEN_INFO[addressLower].symbol,
             };
           }
 
-          // Fetch from blockchain with timeout
+          // Fetch from blockchain
           try {
             const tokenContract = new ethers.Contract(address, ERC20_ABI, provider);
             const [name, symbol] = await Promise.all([
-              tokenContract.name().catch(() => "Unknown Token"),
-              tokenContract.symbol().catch(() => "???"),
+              tokenContract.name(),
+              tokenContract.symbol(),
             ]);
-            return { address, name, symbol };
+            return { 
+              address: addressLower, 
+              name: name || "Unknown Token", 
+              symbol: symbol || "???" 
+            };
           } catch (error) {
-            return { address, name: "Unknown Token", symbol: "???" };
+            // If fetching fails, use address as fallback
+            return { 
+              address: addressLower, 
+              name: `${addressLower.slice(0, 6)}...${addressLower.slice(-4)}`, 
+              symbol: "???" 
+            };
           }
         })
       );
 
-      // Always include USDC if it's whitelisted
-      if (
-        CONTRACTS.USDC_MAINNET &&
-        !tokensWithInfo.some(
-          (t) => t.address.toLowerCase() === CONTRACTS.USDC_MAINNET.toLowerCase()
-        )
-      ) {
-        const isUSDCWhitelisted = await contract.call(
-          "whitelistedTokens",
-          CONTRACTS.USDC_MAINNET
-        );
-        if (isUSDCWhitelisted) {
-          tokensWithInfo.unshift({
-            address: CONTRACTS.USDC_MAINNET,
-            name: "USD Coin",
-            symbol: "USDC",
-          });
+      // Remove any duplicates by address (case-insensitive)
+      const seen = new Set<string>();
+      const deduplicated = tokensWithInfo.filter((token) => {
+        const key = token.address.toLowerCase();
+        if (seen.has(key)) {
+          return false;
         }
-      }
+        seen.add(key);
+        return true;
+      });
 
-      setWhitelistedTokens(tokensWithInfo);
+      setWhitelistedTokens(deduplicated);
     } catch (error) {
       console.error("Failed to fetch whitelisted tokens:", error);
-      // Fallback to USDC if available
-      setWhitelistedTokens(
-        CONTRACTS.USDC_MAINNET
-          ? [
-              {
-                address: CONTRACTS.USDC_MAINNET,
-                name: "USD Coin",
-                symbol: "USDC",
-              },
-            ]
-          : []
-      );
+      setWhitelistedTokens([]);
     }
   };
 
