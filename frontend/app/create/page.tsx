@@ -113,7 +113,7 @@ export default function CreateEscrowPage() {
 
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       
-      // Query TokenWhitelisted events from block 0 to get all tokens
+      // Query recent TokenWhitelisted events (last 200k blocks - fast enough)
       let allWhitelistedTokens: string[] = [];
       
       try {
@@ -125,55 +125,28 @@ export default function CreateEscrowPage() {
         );
 
         const currentBlock = await provider.getBlockNumber();
-        const fromBlock = 0; // Query from block 0 to get all events
+        const fromBlock = Math.max(0, currentBlock - 200000); // Last 200k blocks (should cover recent deployments)
 
-        // Query TokenWhitelisted events in chunks to avoid RPC limits
-        const chunkSize = 20000;
-        let whitelistedEvents: any[] = [];
-        let blacklistedEvents: any[] = [];
+        // Query events with timeout
+        const queryPromise = Promise.all([
+          contractWithProvider.queryFilter(
+            contractWithProvider.filters.TokenWhitelisted(),
+            fromBlock,
+            currentBlock
+          ),
+          contractWithProvider.queryFilter(
+            contractWithProvider.filters.TokenBlacklisted(),
+            fromBlock,
+            currentBlock
+          ),
+        ]);
 
-        for (let startBlock = fromBlock; startBlock <= currentBlock; startBlock += chunkSize) {
-          const endBlock = Math.min(startBlock + chunkSize - 1, currentBlock);
-          try {
-            const whitelistedChunk = await contractWithProvider.queryFilter(
-              contractWithProvider.filters.TokenWhitelisted(),
-              startBlock,
-              endBlock
-            );
-            whitelistedEvents.push(...whitelistedChunk);
-
-            const blacklistedChunk = await contractWithProvider.queryFilter(
-              contractWithProvider.filters.TokenBlacklisted(),
-              startBlock,
-              endBlock
-            );
-            blacklistedEvents.push(...blacklistedChunk);
-          } catch (chunkError) {
-            // If chunk fails, try smaller chunks
-            const halfChunk = Math.floor(chunkSize / 2);
-            for (let smallStart = startBlock; smallStart <= endBlock; smallStart += halfChunk) {
-              const smallEnd = Math.min(smallStart + halfChunk - 1, endBlock);
-              try {
-                const whitelistedSmall = await contractWithProvider.queryFilter(
-                  contractWithProvider.filters.TokenWhitelisted(),
-                  smallStart,
-                  smallEnd
-                );
-                whitelistedEvents.push(...whitelistedSmall);
-
-                const blacklistedSmall = await contractWithProvider.queryFilter(
-                  contractWithProvider.filters.TokenBlacklisted(),
-                  smallStart,
-                  smallEnd
-                );
-                blacklistedEvents.push(...blacklistedSmall);
-              } catch (smallError) {
-                // Skip this small chunk
-                console.warn(`Skipping blocks ${smallStart}-${smallEnd}`);
-              }
-            }
-          }
-        }
+        const [whitelistedEvents, blacklistedEvents] = await Promise.race([
+          queryPromise,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Query timeout")), 10000)
+          ) as Promise<any>
+        ]) as [any[], any[]];
 
         const whitelisted = new Set<string>();
         whitelistedEvents.forEach((e: any) => {
@@ -192,30 +165,38 @@ export default function CreateEscrowPage() {
         allWhitelistedTokens = Array.from(whitelisted);
         console.log("📋 Found tokens from events:", allWhitelistedTokens);
       } catch (error) {
-        console.warn("Failed to query events, using direct check:", error);
+        console.warn("Failed to query events (will use direct check):", error);
       }
 
-      // Also directly verify known tokens by checking the contract mapping
-      // This catches any tokens that might have been missed by event queries
+      // Directly verify known tokens by checking the contract mapping
+      // This is fast and catches any tokens missed by event queries
       const tokensToVerify = [
         CONTRACTS.USDC_MAINNET,
         CONTRACTS.USDC,
       ].filter((t) => t && t !== "0x0000000000000000000000000000000000000000");
 
-      for (const tokenAddress of tokensToVerify) {
-        const tokenLower = tokenAddress.toLowerCase();
-        if (!allWhitelistedTokens.includes(tokenLower)) {
+      const directChecks = await Promise.all(
+        tokensToVerify.map(async (tokenAddress) => {
+          const tokenLower = tokenAddress.toLowerCase();
+          if (allWhitelistedTokens.includes(tokenLower)) {
+            return null; // Already found
+          }
           try {
             const isWhitelisted = await contract.call("whitelistedTokens", tokenAddress);
-            if (isWhitelisted) {
-              allWhitelistedTokens.push(tokenLower);
-              console.log("✅ Found whitelisted token via direct check:", tokenAddress);
-            }
+            return isWhitelisted ? tokenLower : null;
           } catch (error) {
-            // Ignore
+            return null;
           }
+        })
+      );
+
+      // Add directly verified tokens
+      directChecks.forEach((token) => {
+        if (token && !allWhitelistedTokens.includes(token)) {
+          allWhitelistedTokens.push(token);
+          console.log("✅ Found whitelisted token via direct check:", token);
         }
-      }
+      });
 
       // Remove duplicates and filter out zero address
       const uniqueTokens = [...new Set(allWhitelistedTokens)].filter(
