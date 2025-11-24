@@ -55,8 +55,12 @@ export default function AdminPage() {
   const [testMode, setTestMode] = useState(false);
   const [tokenAddress, setTokenAddress] = useState("");
   const [arbiterAddress, setArbiterAddress] = useState("");
+  const [tokenToBlacklist, setTokenToBlacklist] = useState("");
+  const [arbiterToRevoke, setArbiterToRevoke] = useState("");
   const [isWhitelisting, setIsWhitelisting] = useState(false);
   const [isAuthorizing, setIsAuthorizing] = useState(false);
+  const [isBlacklisting, setIsBlacklisting] = useState(false);
+  const [isRevoking, setIsRevoking] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   // Load from localStorage on mount
   const [knownWhitelistedTokens, setKnownWhitelistedTokens] = useState<
@@ -1161,6 +1165,178 @@ export default function AdminPage() {
     }
   };
 
+  const handleBlacklistToken = async () => {
+    if (!wallet.isConnected || !isAdmin) {
+      toast({
+        title: "Access denied",
+        description: "Only the contract owner or arbiters can blacklist tokens",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!tokenToBlacklist || !/^0x[a-fA-F0-9]{40}$/i.test(tokenToBlacklist)) {
+      toast({
+        title: "Invalid address",
+        description: "Please enter a valid token address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsBlacklisting(true);
+    try {
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+
+      // Check if already blacklisted
+      const isWhitelistedRaw = await contract.call(
+        "whitelistedTokens",
+        tokenToBlacklist
+      );
+      // Handle different response types
+      let isWhitelisted = false;
+      if (typeof isWhitelistedRaw === "boolean") {
+        isWhitelisted = isWhitelistedRaw;
+      } else if (typeof isWhitelistedRaw === "string") {
+        isWhitelisted =
+          isWhitelistedRaw.toLowerCase() === "true" || isWhitelistedRaw === "1";
+      } else if (typeof isWhitelistedRaw === "number") {
+        isWhitelisted = isWhitelistedRaw !== 0;
+      } else if (
+        isWhitelistedRaw &&
+        typeof isWhitelistedRaw.toString === "function"
+      ) {
+        const str = isWhitelistedRaw.toString();
+        isWhitelisted = str !== "0" && str.toLowerCase() !== "false";
+      } else {
+        isWhitelisted = Boolean(isWhitelistedRaw);
+      }
+      if (!isWhitelisted) {
+        toast({
+          title: "Already blacklisted",
+          description: "This token is not whitelisted",
+          variant: "default",
+        });
+        setIsBlacklisting(false);
+        return;
+      }
+
+      await contract.send("blacklistToken", "no-value", tokenToBlacklist);
+
+      // Remove from known whitelisted tokens
+      const normalizedTokenAddress = tokenToBlacklist.toLowerCase();
+      setKnownWhitelistedTokens((prev) => {
+        const updated = prev.filter((t) => t !== normalizedTokenAddress);
+        console.log("Updated known whitelisted tokens:", updated);
+        return updated;
+      });
+
+      toast({
+        title: "Token blacklisted",
+        description: "Token has been successfully blacklisted",
+      });
+
+      setTokenToBlacklist("");
+      // Wait a moment for blockchain state to update
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      fetchContractStats();
+    } catch (error: any) {
+      toast({
+        title: "Blacklist failed",
+        description: error.message || "Failed to blacklist token",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBlacklisting(false);
+    }
+  };
+
+  const handleRevokeArbiter = async () => {
+    if (!wallet.isConnected || !isOwner) {
+      toast({
+        title: "Access denied",
+        description: "Only the contract owner can revoke arbiters",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!arbiterToRevoke || !/^0x[a-fA-F0-9]{40}$/i.test(arbiterToRevoke)) {
+      toast({
+        title: "Invalid address",
+        description: "Please enter a valid arbiter address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsRevoking(true);
+    try {
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+
+      // Check if already revoked
+      const isAuthorizedRaw = await contract.call(
+        "authorizedArbiters",
+        arbiterToRevoke
+      );
+      // Handle different response types
+      let isAuthorized = false;
+      if (typeof isAuthorizedRaw === "boolean") {
+        isAuthorized = isAuthorizedRaw;
+      } else if (typeof isAuthorizedRaw === "string") {
+        isAuthorized =
+          isAuthorizedRaw.toLowerCase() === "true" || isAuthorizedRaw === "1";
+      } else if (typeof isAuthorizedRaw === "number") {
+        isAuthorized = isAuthorizedRaw !== 0;
+      } else if (
+        isAuthorizedRaw &&
+        typeof isAuthorizedRaw.toString === "function"
+      ) {
+        const str = isAuthorizedRaw.toString();
+        isAuthorized = str !== "0" && str.toLowerCase() !== "false";
+      } else {
+        isAuthorized = Boolean(isAuthorizedRaw);
+      }
+      if (!isAuthorized) {
+        toast({
+          title: "Already revoked",
+          description: "This arbiter is not authorized",
+          variant: "default",
+        });
+        setIsRevoking(false);
+        return;
+      }
+
+      await contract.send("revokeArbiter", "no-value", arbiterToRevoke);
+
+      // Remove from known authorized arbiters
+      const normalizedArbiterAddress = arbiterToRevoke.toLowerCase();
+      setKnownAuthorizedArbiters((prev) => {
+        const updated = prev.filter((a) => a !== normalizedArbiterAddress);
+        console.log("Updated known authorized arbiters:", updated);
+        return updated;
+      });
+
+      toast({
+        title: "Arbiter revoked",
+        description: "Arbiter has been successfully revoked",
+      });
+
+      setArbiterToRevoke("");
+      // Wait a moment for blockchain state to update
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      fetchContractStats();
+    } catch (error: any) {
+      toast({
+        title: "Revoke failed",
+        description: error.message || "Failed to revoke arbiter",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRevoking(false);
+    }
+  };
+
   const checkPausedStatus = async () => {
     setLoading(true);
     try {
@@ -1693,6 +1869,36 @@ export default function AdminPage() {
                   </Button>
                 </div>
                 <div className="pt-4 border-t border-muted/50">
+                  <p className="text-sm font-semibold mb-3">Blacklist Token:</p>
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="0x..."
+                      value={tokenToBlacklist}
+                      onChange={(e) => setTokenToBlacklist(e.target.value)}
+                      className="font-mono"
+                      disabled={isBlacklisting}
+                    />
+                    <Button
+                      onClick={handleBlacklistToken}
+                      disabled={isBlacklisting || !tokenToBlacklist}
+                      variant="destructive"
+                      className="gap-2 w-full"
+                    >
+                      {isBlacklisting ? (
+                        <>
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                          Blacklisting...
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="h-4 w-4" />
+                          Blacklist Token
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <div className="pt-4 border-t border-muted/50">
                   <p className="text-sm font-semibold mb-2">Quick Actions:</p>
                   <Button
                     variant="outline"
@@ -1701,7 +1907,8 @@ export default function AdminPage() {
                     className="gap-2 w-full"
                   >
                     <Shield className="h-3 w-3" />
-                    Whitelist USDC ({CONTRACTS.USDC_MAINNET?.slice(0, 10) || "0x..."}...)
+                    Whitelist USDC (
+                    {CONTRACTS.USDC_MAINNET?.slice(0, 10) || "0x..."}...)
                   </Button>
                 </div>
               </div>
@@ -1747,6 +1954,38 @@ export default function AdminPage() {
                         </>
                       )}
                     </Button>
+                  </div>
+                  <div className="pt-4 border-t border-muted/50">
+                    <p className="text-sm font-semibold mb-3">
+                      Revoke Arbiter:
+                    </p>
+                    <div className="space-y-2">
+                      <Input
+                        placeholder="0x..."
+                        value={arbiterToRevoke}
+                        onChange={(e) => setArbiterToRevoke(e.target.value)}
+                        className="font-mono"
+                        disabled={isRevoking}
+                      />
+                      <Button
+                        onClick={handleRevokeArbiter}
+                        disabled={isRevoking || !arbiterToRevoke}
+                        variant="destructive"
+                        className="gap-2 w-full"
+                      >
+                        {isRevoking ? (
+                          <>
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                            Revoking...
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle className="h-4 w-4" />
+                            Revoke Arbiter
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                   <div className="pt-4 border-t border-muted/50">
                     <p className="text-sm font-semibold mb-2">Quick Actions:</p>

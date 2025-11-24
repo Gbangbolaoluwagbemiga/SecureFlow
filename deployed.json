@@ -167,5 +167,11 @@
     "function withdrawFees(address)",
     "receive() payable"
   ],
-  "tokenAbi": null
+  "tokenAbi": null,
+  "SecureFlowToken": {
+    "address": "0xdc2D33270ACfC4D573440B9f5648B0C915F44126",
+    "name": "SecureFlow",
+    "symbol": "STK",
+    "totalSupply": "1000000000000000000000000000"
+  }
 }
