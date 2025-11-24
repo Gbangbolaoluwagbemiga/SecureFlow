@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { User, Calendar, CheckCircle, Star } from "lucide-react";
+import { User, Calendar, CheckCircle, Star, Award } from "lucide-react";
 
 interface Application {
   freelancerAddress: string;
@@ -12,6 +12,8 @@ interface Application {
   proposedTimeline: number;
   appliedAt: number;
   status: "pending" | "accepted" | "rejected";
+  averageRating?: number; // Average rating * 100
+  totalRatings?: number;
 }
 
 interface ApplicationCardProps {
@@ -37,22 +39,30 @@ export function ApplicationCard({
               {application.freelancerAddress.slice(0, 6)}...
               {application.freelancerAddress.slice(-4)}
             </span>
-            {application.reviewCount !== undefined &&
-              application.reviewCount > 0 && (
-                <Badge
-                  variant="outline"
-                  className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200"
-                >
-                  <Star className="h-3 w-3 mr-1 fill-yellow-400 text-yellow-400" />
-                  {application.reviewCount}{" "}
-                  {application.reviewCount === 1 ? "review" : "reviews"}
-                  {application.averageRating && (
-                    <span className="ml-1">
-                      ({application.averageRating.toFixed(1)}★)
-                    </span>
-                  )}
-                </Badge>
-              )}
+
+            {/* Display rating if available */}
+            {application.totalRatings && application.totalRatings > 0 ? (
+              <Badge
+                variant="secondary"
+                className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300"
+              >
+                <Star className="h-3 w-3 mr-1 fill-yellow-500 text-yellow-500" />
+                {(application.averageRating! / 100).toFixed(1)} / 5.0
+                <span className="ml-1 text-xs opacity-70">
+                  ({application.totalRatings}{" "}
+                  {application.totalRatings === 1 ? "review" : "reviews"})
+                </span>
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="text-xs bg-gray-50 text-gray-600"
+              >
+                <Award className="h-3 w-3 mr-1" />
+                New freelancer
+              </Badge>
+            )}
+
             <Badge
               variant="secondary"
               className="text-xs bg-blue-100 text-blue-800"

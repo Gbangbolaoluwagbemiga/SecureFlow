@@ -15,7 +15,7 @@ interface MilestoneApprovalPanelProps {
   onRejectMilestone: (
     escrowId: string,
     milestoneIndex: number,
-    reason: string,
+    reason: string
   ) => void;
   submittingMilestone: string | null;
   className?: string;
@@ -29,7 +29,7 @@ export function MilestoneApprovalPanel({
   className,
 }: MilestoneApprovalPanelProps) {
   const submittedMilestones = escrow.milestones.filter(
-    (m) => m.status === "submitted",
+    (m) => m.status === "submitted"
   );
 
   // Debug: Log all milestone statuses
@@ -85,7 +85,7 @@ interface MilestoneApprovalItemProps {
   onRejectMilestone: (
     escrowId: string,
     milestoneIndex: number,
-    reason: string,
+    reason: string
   ) => void;
   submittingMilestone: string | null;
 }
@@ -169,7 +169,7 @@ function MilestoneApprovalItem({
             size="sm"
           >
             <XCircle className="h-4 w-4 mr-2" />
-            Dispute
+            Reject
           </Button>
         </div>
       ) : (
@@ -177,7 +177,7 @@ function MilestoneApprovalItem({
           <Textarea
             value={rejectionReason}
             onChange={(e) => setRejectionReason(e.target.value)}
-            placeholder="Please explain why you are disputing this milestone..."
+            placeholder="Please explain why you are rejecting this milestone..."
             className="text-sm"
             rows={3}
           />
@@ -189,7 +189,7 @@ function MilestoneApprovalItem({
               size="sm"
             >
               <XCircle className="h-4 w-4 mr-2" />
-              {isSubmitting ? "Disputing..." : "Submit Dispute"}
+              {isSubmitting ? "Rejecting..." : "Submit Rejection"}
             </Button>
             <Button
               onClick={() => {

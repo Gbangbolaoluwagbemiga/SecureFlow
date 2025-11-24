@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "./EscrowCore.sol";
+import "../Errors.sol";
 
 abstract contract WorkLifecycle is EscrowCore {
     // ===== Work lifecycle =====
@@ -13,8 +14,8 @@ abstract contract WorkLifecycle is EscrowCore {
         whenNotPaused 
     {
         EscrowData storage e = escrows[escrowId];
-        require(e.status == EscrowStatus.Pending, "Invalid status");
-        require(!e.workStarted, "Work started");
+        if (e.status != EscrowStatus.Pending) revert InvalidStatus();
+        if (e.workStarted) revert WorkAlreadyStarted();
 
         e.workStarted = true;
         e.status = EscrowStatus.InProgress;
@@ -39,8 +40,8 @@ abstract contract WorkLifecycle is EscrowCore {
         whenNotPaused 
     {
         EscrowData storage e = escrows[escrowId];
-        require(e.status == EscrowStatus.InProgress, "Invalid status");
-        require(milestoneIndex < e.milestoneCount, "Invalid milestone");
+        if (e.status != EscrowStatus.InProgress) revert EscrowNotActive();
+        if (milestoneIndex >= e.milestoneCount) revert InvalidMilestone();
 
         Milestone storage m = milestones[escrowId][milestoneIndex];
         require(
@@ -72,11 +73,11 @@ abstract contract WorkLifecycle is EscrowCore {
         whenNotPaused 
     {
         EscrowData storage e = escrows[escrowId];
-        require(e.status == EscrowStatus.InProgress, "Escrow not active");
-        require(milestoneIndex < e.milestoneCount, "Invalid milestone");
+        if (e.status != EscrowStatus.InProgress) revert EscrowNotActive();
+        if (milestoneIndex >= e.milestoneCount) revert InvalidMilestone();
 
         Milestone storage m = milestones[escrowId][milestoneIndex];
-        require(m.status == MilestoneStatus.Submitted, "Not submitted");
+        if (m.status != MilestoneStatus.Submitted) revert NotSubmitted();
 
         uint256 amount = m.amount;
         m.status = MilestoneStatus.Approved;
@@ -95,7 +96,8 @@ abstract contract WorkLifecycle is EscrowCore {
 
         if (e.paidAmount == e.totalAmount) {
             e.status = EscrowStatus.Released;
-            if (e.totalAmount >= MIN_REP_ELIGIBLE_ESCROW_VALUE) {
+            bool eligible = e.totalAmount >= MIN_REP_ELIGIBLE_ESCROW_VALUE;
+            if (eligible) {
                 _updateReputation(e.beneficiary, REPUTATION_PER_ESCROW, "Escrow completed");
                 _updateReputation(e.depositor, REPUTATION_PER_ESCROW, "Escrow completed");
             }
@@ -118,11 +120,11 @@ abstract contract WorkLifecycle is EscrowCore {
         whenNotPaused 
     {
         EscrowData storage e = escrows[escrowId];
-        require(e.status == EscrowStatus.InProgress, "Escrow not active");
-        require(milestoneIndex < e.milestoneCount, "Invalid milestone");
+        if (e.status != EscrowStatus.InProgress) revert EscrowNotActive();
+        if (milestoneIndex >= e.milestoneCount) revert InvalidMilestone();
 
         Milestone storage m = milestones[escrowId][milestoneIndex];
-        require(m.status == MilestoneStatus.Submitted, "Not submitted");
+        if (m.status != MilestoneStatus.Submitted) revert NotSubmitted();
 
         // Mark milestone as rejected
         m.status = MilestoneStatus.Rejected;
@@ -145,11 +147,11 @@ abstract contract WorkLifecycle is EscrowCore {
         whenNotPaused 
     {
         EscrowData storage e = escrows[escrowId];
-        require(e.status == EscrowStatus.InProgress, "Escrow not active");
-        require(milestoneIndex < e.milestoneCount, "Invalid milestone");
+        if (e.status != EscrowStatus.InProgress) revert EscrowNotActive();
+        if (milestoneIndex >= e.milestoneCount) revert InvalidMilestone();
 
         Milestone storage m = milestones[escrowId][milestoneIndex];
-        require(m.status == MilestoneStatus.Rejected, "Not rejected");
+        if (m.status != MilestoneStatus.Rejected) revert NotRejected();
 
         // Reset milestone to submitted status
         m.status = MilestoneStatus.Submitted;
@@ -178,11 +180,8 @@ abstract contract WorkLifecycle is EscrowCore {
     {
         EscrowData storage e = escrows[escrowId];
         Milestone storage m = milestones[escrowId][milestoneIndex];
-        require(m.status == MilestoneStatus.Submitted, "Not submitted");
-        require(
-            block.timestamp <= m.submittedAt + DISPUTE_PERIOD, 
-            "Dispute period expired"
-        );
+        if (m.status != MilestoneStatus.Submitted) revert NotSubmitted();
+        if (block.timestamp > m.submittedAt + DISPUTE_PERIOD) revert DisputePeriodExpired();
 
         m.status = MilestoneStatus.Disputed;
         m.disputedAt = block.timestamp;
@@ -198,21 +197,25 @@ abstract contract WorkLifecycle is EscrowCore {
     function resolveDispute(
         uint256 escrowId,
         uint256 milestoneIndex,
-        uint256 beneficiaryAmount
+        uint256 beneficiaryAmount,
+        string calldata resolutionReason
     ) external onlyEscrowParticipant(escrowId) validEscrow(escrowId) nonReentrant whenNotPaused {
         EscrowData storage e = escrows[escrowId];
-        require(e.status == EscrowStatus.Disputed, "Not in dispute");
+        if (e.status != EscrowStatus.Disputed) revert NotInDispute();
 
         Milestone storage m = milestones[escrowId][milestoneIndex];
-        require(m.status == MilestoneStatus.Disputed, "Not disputed");
+        if (m.status != MilestoneStatus.Disputed) revert NotInDispute();
 
         uint256 milestoneAmount = m.amount;
-        require(beneficiaryAmount <= milestoneAmount, "Invalid allocation");
+        if (beneficiaryAmount > milestoneAmount) revert InvalidAllocation();
 
         uint256 refundAmount = milestoneAmount - beneficiaryAmount;
 
         m.status = MilestoneStatus.Resolved;
         m.approvedAt = block.timestamp;
+        
+        m.disputeReason = resolutionReason;
+        m.disputedBy = beneficiaryAmount > refundAmount ? e.beneficiary : e.depositor;
 
         if (beneficiaryAmount > 0) {
             e.paidAmount += beneficiaryAmount;

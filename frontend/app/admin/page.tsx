@@ -14,12 +14,8 @@ import {
 import { useWeb3 } from "@/contexts/web3-context";
 import { useAdminStatus } from "@/hooks/use-admin-status";
 import { useToast } from "@/hooks/use-toast";
-import { CONTRACTS } from "@/lib/web3/config";
+import { CONTRACTS, BASE_MAINNET } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
-import { AdminHeader } from "@/components/admin/admin-header";
-import { AdminStats } from "@/components/admin/admin-stats";
-import { ContractControls } from "@/components/admin/contract-controls";
-import { AdminLoading } from "@/components/admin/admin-loading";
 import { DisputeResolution } from "@/components/admin/dispute-resolution";
 import {
   Lock,
@@ -28,21 +24,22 @@ import {
   Pause,
   Download,
   AlertTriangle,
-  Coins,
-  UserCheck,
-  CheckCircle2,
+  RefreshCw,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ethers } from "ethers";
-import { BASE_MAINNET } from "@/lib/web3/config";
 
 export default function AdminPage() {
   const { wallet, getContract } = useWeb3();
-  const { isAdmin, loading: adminLoading } = useAdminStatus();
+  const {
+    isAdmin,
+    isOwner,
+    isArbiter,
+    loading: adminLoading,
+  } = useAdminStatus();
   const { toast } = useToast();
   const [isPaused, setIsPaused] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -58,10 +55,47 @@ export default function AdminPage() {
   const [testMode, setTestMode] = useState(false);
   const [tokenAddress, setTokenAddress] = useState("");
   const [arbiterAddress, setArbiterAddress] = useState("");
-  const [whitelisting, setWhitelisting] = useState(false);
-  const [authorizing, setAuthorizing] = useState(false);
-  const [isPausing, setIsPausing] = useState(false);
-  const [isUnpausing, setIsUnpausing] = useState(false);
+  const [isWhitelisting, setIsWhitelisting] = useState(false);
+  const [isAuthorizing, setIsAuthorizing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  // Load from localStorage on mount
+  const [knownWhitelistedTokens, setKnownWhitelistedTokens] = useState<
+    string[]
+  >(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("secureflow_whitelisted_tokens");
+      return stored ? JSON.parse(stored) : [];
+    }
+    return [];
+  });
+  const [knownAuthorizedArbiters, setKnownAuthorizedArbiters] = useState<
+    string[]
+  >(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("secureflow_authorized_arbiters");
+      return stored ? JSON.parse(stored) : [];
+    }
+    return [];
+  });
+
+  // Save to localStorage whenever lists change
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        "secureflow_whitelisted_tokens",
+        JSON.stringify(knownWhitelistedTokens)
+      );
+    }
+  }, [knownWhitelistedTokens]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        "secureflow_authorized_arbiters",
+        JSON.stringify(knownAuthorizedArbiters)
+      );
+    }
+  }, [knownAuthorizedArbiters]);
   const [contractStats, setContractStats] = useState({
     platformFeeBP: 0,
     totalEscrows: 0,
@@ -78,33 +112,846 @@ export default function AdminPage() {
     }
   }, [wallet.isConnected]);
 
+  // Debug: Log when contractStats changes
+  useEffect(() => {
+    console.log("📈 contractStats state updated:", contractStats);
+  }, [contractStats]);
+
+  // Refresh stats when known lists change (after whitelisting/authorizing)
+  useEffect(() => {
+    if (
+      wallet.isConnected &&
+      (knownWhitelistedTokens.length > 0 || knownAuthorizedArbiters.length > 0)
+    ) {
+      fetchContractStats();
+    }
+  }, [knownWhitelistedTokens.length, knownAuthorizedArbiters.length]);
+
   const fetchContractOwner = async () => {
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-      const owner = await contract.owner();
-      setContractOwner(owner);
-    } catch (error) {}
+      if (!contract) return;
+      const owner = await contract.call("owner");
+      setContractOwner(owner?.toLowerCase() || null);
+      console.log("Contract owner:", owner);
+    } catch (error) {
+      console.error("Error fetching contract owner:", error);
+    }
   };
 
   const fetchContractStats = async () => {
+    setIsRefreshing(true);
+    console.log("🔄 Starting fetchContractStats...");
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+      if (!contract) {
+        console.error("❌ No contract instance available");
+        setIsRefreshing(false);
+        return;
+      }
+      console.log("✅ Contract instance created");
 
       // Fetch platform fee
       const platformFeeBP = await contract.call("platformFeeBP");
+      console.log("✅ Platform fee fetched:", platformFeeBP);
 
       // Fetch total escrows count
       const totalEscrows = await contract.call("nextEscrowId");
+      console.log("✅ Total escrows fetched:", totalEscrows);
 
-      // Set actual contract stats
-      setContractStats({
-        platformFeeBP: Number(platformFeeBP),
-        totalEscrows: Number(totalEscrows),
+      // Fetch contract owner (needed for arbiter checks)
+      const contractOwner = await contract.call("owner");
+      console.log("✅ Contract owner fetched:", contractOwner);
+
+      // SIMPLE DIRECT CHECKS FIRST (more reliable than events)
+      console.log("🔍 Starting direct token/arbiter checks...");
+      const directWhitelistedTokens: string[] = [];
+      const directAuthorizedArbiters: string[] = [];
+
+      // Check known tokens directly (normalize to lowercase to avoid duplicates)
+      const tokensToCheck = [
+        CONTRACTS.CUSD_MAINNET,
+        CONTRACTS.MOCK_ERC20,
+        ...knownWhitelistedTokens,
+      ]
+        .filter((t) => t && t !== "0x0000000000000000000000000000000000000000")
+        .map((t) => t.toLowerCase());
+
+      console.log("📋 Tokens to check (unique):", [...new Set(tokensToCheck)]);
+      for (const token of new Set(tokensToCheck)) {
+        try {
+          console.log(`🔎 Checking token: ${token}`);
+          const result = await contract.call("whitelistedTokens", token);
+          console.log(`   Raw result:`, result, `Type:`, typeof result);
+
+          let isWhitelisted = false;
+          if (typeof result === "boolean") {
+            isWhitelisted = result;
+          } else if (typeof result === "string") {
+            isWhitelisted = result.toLowerCase() === "true" || result === "1";
+          } else if (typeof result === "number") {
+            isWhitelisted = result !== 0;
+          } else if (result && typeof result.toString === "function") {
+            const str = result.toString();
+            isWhitelisted = str !== "0" && str.toLowerCase() !== "false";
+          } else {
+            isWhitelisted = Boolean(result);
+          }
+
+          console.log(`   ✅ Token ${token} whitelisted: ${isWhitelisted}`);
+          if (isWhitelisted) {
+            directWhitelistedTokens.push(token.toLowerCase());
+          }
+        } catch (error) {
+          console.error(`   ❌ Error checking token ${token}:`, error);
+        }
+      }
+
+      // Check known arbiters directly (including owner) - normalize to lowercase
+      const contractOwnerLower = contractOwner?.toLowerCase();
+      const walletAddressLower = wallet.address?.toLowerCase();
+      const arbitersToCheck = [
+        contractOwnerLower,
+        walletAddressLower,
+        ...knownAuthorizedArbiters.map((a) => a.toLowerCase()),
+      ]
+        .filter((a) => a && a !== "0x0000000000000000000000000000000000000000")
+        .filter((a, index, arr) => arr.indexOf(a) === index); // Remove duplicates
+
+      console.log("📋 Arbiters to check (unique):", [
+        ...new Set(arbitersToCheck),
+      ]);
+      for (const arbiter of new Set(arbitersToCheck)) {
+        try {
+          console.log(`🔎 Checking arbiter: ${arbiter}`);
+          const result = await contract.call("authorizedArbiters", arbiter);
+          console.log(`   Raw result:`, result, `Type:`, typeof result);
+
+          let isAuthorized = false;
+          if (typeof result === "boolean") {
+            isAuthorized = result;
+          } else if (typeof result === "string") {
+            isAuthorized = result.toLowerCase() === "true" || result === "1";
+          } else if (typeof result === "number") {
+            isAuthorized = result !== 0;
+          } else if (result && typeof result.toString === "function") {
+            const str = result.toString();
+            isAuthorized = str !== "0" && str.toLowerCase() !== "false";
+          } else {
+            isAuthorized = Boolean(result);
+          }
+
+          // Owner is always authorized
+          if (arbiter === contractOwnerLower) {
+            isAuthorized = true;
+            console.log(`   ✅ Owner is always authorized`);
+          }
+
+          console.log(`   ✅ Arbiter ${arbiter} authorized: ${isAuthorized}`);
+          if (isAuthorized && !directAuthorizedArbiters.includes(arbiter)) {
+            directAuthorizedArbiters.push(arbiter);
+          }
+        } catch (error) {
+          console.error(`   ❌ Error checking arbiter ${arbiter}:`, error);
+        }
+      }
+
+      console.log("📊 Direct check results:", {
+        whitelistedTokens: directWhitelistedTokens,
+        authorizedArbiters: directAuthorizedArbiters,
+      });
+
+      // Remove duplicates from direct check results (they're already lowercase)
+      const uniqueWhitelistedTokens = [...new Set(directWhitelistedTokens)];
+      const uniqueAuthorizedArbiters = [...new Set(directAuthorizedArbiters)];
+
+      console.log("📊 Direct check results (deduplicated):", {
+        whitelistedTokens: uniqueWhitelistedTokens,
+        authorizedArbiters: uniqueAuthorizedArbiters,
+        counts: {
+          tokens: uniqueWhitelistedTokens.length,
+          arbiters: uniqueAuthorizedArbiters.length,
+        },
+      });
+
+      // Update known lists with direct check results
+      if (uniqueWhitelistedTokens.length > 0) {
+        setKnownWhitelistedTokens((prev) => {
+          const merged = [
+            ...new Set([
+              ...prev.map((t) => t.toLowerCase()),
+              ...uniqueWhitelistedTokens,
+            ]),
+          ];
+          console.log("📝 Updated knownWhitelistedTokens:", merged);
+          return merged;
+        });
+      }
+      if (uniqueAuthorizedArbiters.length > 0) {
+        setKnownAuthorizedArbiters((prev) => {
+          const merged = [
+            ...new Set([
+              ...prev.map((a) => a.toLowerCase()),
+              ...uniqueAuthorizedArbiters,
+            ]),
+          ];
+          console.log("📝 Updated knownAuthorizedArbiters:", merged);
+          return merged;
+        });
+      }
+
+      // Query TokenWhitelisted events to get ALL whitelisted tokens
+      // Then verify each one directly with the contract
+      let allWhitelistedTokensFromEvents: string[] = [];
+      let allAuthorizedArbitersFromEvents: string[] = [];
+      let verifiedTokens: string[] = [];
+      let verifiedArbiters: string[] = [];
+
+      try {
+        const { ethers } = await import("ethers");
+
+        // Try multiple RPC endpoints with fallback
+        let provider: any = null;
+        let events: any[] = [];
+        let lastError: any = null;
+
+        for (const rpcUrl of BASE_MAINNET.rpcUrls) {
+          try {
+            provider = new ethers.JsonRpcProvider(rpcUrl);
+            const contractWithProvider = new ethers.Contract(
+              CONTRACTS.SECUREFLOW_ESCROW,
+              SECUREFLOW_ABI,
+              provider
+            );
+
+            // Query all TokenWhitelisted events - query in chunks to avoid RPC limits
+            const currentBlock = await provider.getBlockNumber();
+            // Query from block 0 to get all events (contract might be older than 200k blocks)
+            const chunkSize = 10000;
+            events = [];
+            // Start from block 0 to ensure we get all events
+            let fromBlock = 0;
+
+            // Query events in chunks of 10,000 blocks
+            for (
+              let startBlock = fromBlock;
+              startBlock <= currentBlock;
+              startBlock += chunkSize
+            ) {
+              const endBlock = Math.min(
+                startBlock + chunkSize - 1,
+                currentBlock
+              );
+              try {
+                const filter = contractWithProvider.filters.TokenWhitelisted();
+                const chunkEvents = await contractWithProvider.queryFilter(
+                  filter,
+                  startBlock,
+                  endBlock
+                );
+                events.push(...chunkEvents);
+              } catch (chunkError: any) {
+                // If chunk fails, try smaller chunks or skip
+                console.warn(
+                  `Failed to query token events from block ${startBlock} to ${endBlock}:`,
+                  chunkError.message
+                );
+                // Try smaller chunk if "too large" error
+                if (
+                  chunkError.message?.includes("too large") ||
+                  chunkError.message?.includes("limit")
+                ) {
+                  // Try half the chunk size
+                  const halfChunk = Math.floor(chunkSize / 2);
+                  for (
+                    let smallStart = startBlock;
+                    smallStart <= endBlock;
+                    smallStart += halfChunk
+                  ) {
+                    const smallEnd = Math.min(
+                      smallStart + halfChunk - 1,
+                      endBlock
+                    );
+                    try {
+                      const filter =
+                        contractWithProvider.filters.TokenWhitelisted();
+                      const smallChunkEvents =
+                        await contractWithProvider.queryFilter(
+                          filter,
+                          smallStart,
+                          smallEnd
+                        );
+                      events.push(...smallChunkEvents);
+                    } catch (smallError) {
+                      console.warn(
+                        `Failed to query token events from block ${smallStart} to ${smallEnd}:`,
+                        smallError
+                      );
+                    }
+                  }
+                } else {
+                  continue; // Skip this chunk if other error
+                }
+              }
+            }
+            console.log(`✅ Successfully queried events using RPC: ${rpcUrl}`);
+            break; // Success, exit loop
+          } catch (rpcError: any) {
+            console.warn(`⚠️ RPC ${rpcUrl} failed:`, rpcError.message);
+            lastError = rpcError;
+            continue; // Try next RPC
+          }
+        }
+
+        // Don't throw error if events are empty - might just mean no events yet
+        // We'll fall back to direct verification
+        if (!provider) {
+          throw lastError || new Error("All RPC endpoints failed");
+        }
+
+        const contractWithProvider = new ethers.Contract(
+          CONTRACTS.SECUREFLOW_ESCROW,
+          SECUREFLOW_ABI,
+          provider!
+        );
+
+        // Extract unique token addresses from events
+        const tokenAddresses = new Set<string>();
+        events.forEach((event: any) => {
+          if (event.args && event.args.token) {
+            tokenAddresses.add(event.args.token.toLowerCase());
+          }
+        });
+
+        // Also check TokenBlacklisted events to remove blacklisted tokens
+        const currentBlock = await provider!.getBlockNumber();
+        const chunkSize = 10000;
+        let blacklistEvents: any[] = [];
+        const blacklistFromBlock = 0; // Query from block 0 to get all events
+
+        // Query in chunks from the same starting block
+        for (
+          let startBlock = blacklistFromBlock;
+          startBlock <= currentBlock;
+          startBlock += chunkSize
+        ) {
+          const endBlock = Math.min(startBlock + chunkSize - 1, currentBlock);
+          try {
+            const blacklistFilter =
+              contractWithProvider.filters.TokenBlacklisted();
+            const chunkEvents = await contractWithProvider.queryFilter(
+              blacklistFilter,
+              startBlock,
+              endBlock
+            );
+            blacklistEvents.push(...chunkEvents);
+          } catch (chunkError: any) {
+            // Silently handle RPC errors - they're expected when RPC is unhealthy
+            if (
+              !chunkError.message?.includes(
+                "no backend is currently healthy"
+              ) &&
+              !chunkError.message?.includes("-32011")
+            ) {
+              // Try smaller chunk if "too large" error
+              if (
+                chunkError.message?.includes("too large") ||
+                chunkError.message?.includes("limit")
+              ) {
+                const halfChunk = Math.floor(chunkSize / 2);
+                for (
+                  let smallStart = startBlock;
+                  smallStart <= endBlock;
+                  smallStart += halfChunk
+                ) {
+                  const smallEnd = Math.min(
+                    smallStart + halfChunk - 1,
+                    endBlock
+                  );
+                  try {
+                    const blacklistFilter =
+                      contractWithProvider.filters.TokenBlacklisted();
+                    const smallChunkEvents =
+                      await contractWithProvider.queryFilter(
+                        blacklistFilter,
+                        smallStart,
+                        smallEnd
+                      );
+                    blacklistEvents.push(...smallChunkEvents);
+                  } catch (smallError: any) {
+                    // Silently handle RPC errors
+                    if (
+                      !smallError.message?.includes(
+                        "no backend is currently healthy"
+                      ) &&
+                      !smallError.message?.includes("-32011")
+                    ) {
+                      // Only log non-RPC errors
+                    }
+                  }
+                }
+              }
+            }
+            // Skip this chunk if error
+            continue;
+          }
+        }
+        blacklistEvents.forEach((event: any) => {
+          if (event.args && event.args.token) {
+            tokenAddresses.delete(event.args.token.toLowerCase());
+          }
+        });
+
+        allWhitelistedTokensFromEvents = Array.from(tokenAddresses).map((t) =>
+          t.toLowerCase()
+        );
+        console.log(
+          "📋 Found whitelisted tokens from events:",
+          allWhitelistedTokensFromEvents.length,
+          allWhitelistedTokensFromEvents
+        );
+      } catch (eventError) {
+        console.warn(
+          "Error querying token events (will use direct checks):",
+          eventError
+        );
+        // Continue with direct checks below
+      }
+
+      // Verify ALL tokens from events directly with the contract
+      // Combine addresses from events and initial direct checks
+      const allTokensToVerify = [
+        ...new Set([
+          ...uniqueWhitelistedTokens, // From initial direct checks
+          ...allWhitelistedTokensFromEvents, // From event queries
+          CONTRACTS.CUSD_MAINNET?.toLowerCase(),
+          CONTRACTS.MOCK_ERC20?.toLowerCase(),
+          ...knownWhitelistedTokens.map((t) => t.toLowerCase()),
+        ]),
+      ].filter(
+        (token) =>
+          token && token !== "0x0000000000000000000000000000000000000000"
+      );
+
+      console.log(
+        "🔍 Verifying all tokens from events:",
+        allTokensToVerify.length,
+        allTokensToVerify
+      );
+
+      verifiedTokens = [];
+      for (const token of allTokensToVerify) {
+        if (!token) continue;
+        try {
+          const result = await contract.call("whitelistedTokens", token);
+          // Handle different response types
+          let isWhitelisted = false;
+          if (typeof result === "boolean") {
+            isWhitelisted = result;
+          } else if (typeof result === "string") {
+            isWhitelisted = result.toLowerCase() === "true" || result === "1";
+          } else if (typeof result === "number") {
+            isWhitelisted = result !== 0;
+          } else if (result && typeof result.toString === "function") {
+            const str = result.toString();
+            isWhitelisted = str !== "0" && str.toLowerCase() !== "false";
+          } else {
+            isWhitelisted = Boolean(result);
+          }
+          if (isWhitelisted && !verifiedTokens.includes(token.toLowerCase())) {
+            verifiedTokens.push(token.toLowerCase());
+            console.log(`✅ Verified whitelisted token: ${token}`);
+          }
+        } catch (error) {
+          console.warn(`❌ Error verifying token ${token}:`, error);
+        }
+      }
+
+      console.log(
+        "✅ Final verified whitelisted tokens:",
+        verifiedTokens.length,
+        verifiedTokens
+      );
+
+      // Update known list
+      if (verifiedTokens.length > 0) {
+        setKnownWhitelistedTokens(verifiedTokens);
+      }
+
+      // Query ArbiterAuthorized events to get all authorized arbiters
+
+      try {
+        const { ethers } = await import("ethers");
+
+        // Try multiple RPC endpoints with fallback
+        let provider: any = null;
+        let arbiterEvents: any[] = [];
+        let lastError: any = null;
+
+        for (const rpcUrl of BASE_MAINNET.rpcUrls) {
+          try {
+            provider = new ethers.JsonRpcProvider(rpcUrl);
+            const contractWithProvider = new ethers.Contract(
+              CONTRACTS.SECUREFLOW_ESCROW,
+              SECUREFLOW_ABI,
+              provider
+            );
+
+            // Query all ArbiterAuthorized events - query in chunks to avoid RPC limits
+            const currentBlock = await provider.getBlockNumber();
+            const chunkSize = 10000;
+            arbiterEvents = [];
+            // Start from block 0 to get all events
+            const arbiterFromBlock = 0;
+
+            // Query events in chunks of 10,000 blocks
+            for (
+              let startBlock = arbiterFromBlock;
+              startBlock <= currentBlock;
+              startBlock += chunkSize
+            ) {
+              const endBlock = Math.min(
+                startBlock + chunkSize - 1,
+                currentBlock
+              );
+              try {
+                const arbiterFilter =
+                  contractWithProvider.filters.ArbiterAuthorized();
+                const chunkEvents = await contractWithProvider.queryFilter(
+                  arbiterFilter,
+                  startBlock,
+                  endBlock
+                );
+                arbiterEvents.push(...chunkEvents);
+              } catch (chunkError: any) {
+                // Silently handle RPC errors - they're expected when RPC is unhealthy
+                if (
+                  !chunkError.message?.includes(
+                    "no backend is currently healthy"
+                  ) &&
+                  !chunkError.message?.includes("-32011")
+                ) {
+                  // Try smaller chunk if "too large" error
+                  if (
+                    chunkError.message?.includes("too large") ||
+                    chunkError.message?.includes("limit")
+                  ) {
+                    const halfChunk = Math.floor(chunkSize / 2);
+                    for (
+                      let smallStart = startBlock;
+                      smallStart <= endBlock;
+                      smallStart += halfChunk
+                    ) {
+                      const smallEnd = Math.min(
+                        smallStart + halfChunk - 1,
+                        endBlock
+                      );
+                      try {
+                        const arbiterFilter =
+                          contractWithProvider.filters.ArbiterAuthorized();
+                        const smallChunkEvents =
+                          await contractWithProvider.queryFilter(
+                            arbiterFilter,
+                            smallStart,
+                            smallEnd
+                          );
+                        arbiterEvents.push(...smallChunkEvents);
+                      } catch (smallError: any) {
+                        // Silently handle RPC errors
+                        if (
+                          !smallError.message?.includes(
+                            "no backend is currently healthy"
+                          ) &&
+                          !smallError.message?.includes("-32011")
+                        ) {
+                          // Only log non-RPC errors
+                        }
+                      }
+                    }
+                  }
+                }
+                // Skip this chunk if error
+                continue;
+              }
+            }
+            console.log(
+              `✅ Successfully queried arbiter events using RPC: ${rpcUrl}`
+            );
+            break; // Success, exit loop
+          } catch (rpcError: any) {
+            console.warn(
+              `⚠️ RPC ${rpcUrl} failed for arbiters:`,
+              rpcError.message
+            );
+            lastError = rpcError;
+            continue; // Try next RPC
+          }
+        }
+
+        // Don't throw error if events are empty - might just mean no events yet
+        // We'll fall back to direct verification
+        if (!provider) {
+          throw lastError || new Error("All RPC endpoints failed");
+        }
+
+        const contractWithProvider = new ethers.Contract(
+          CONTRACTS.SECUREFLOW_ESCROW,
+          SECUREFLOW_ABI,
+          provider!
+        );
+
+        // Extract unique arbiter addresses from events
+        const arbiterAddresses = new Set<string>();
+        arbiterEvents.forEach((event: any) => {
+          if (event.args && event.args.arbiter) {
+            arbiterAddresses.add(event.args.arbiter.toLowerCase());
+          }
+        });
+
+        // Also check ArbiterRevoked events to remove revoked arbiters
+        const currentBlock = await provider!.getBlockNumber();
+        const chunkSize = 10000;
+        let revokeEvents: any[] = [];
+        const revokeFromBlock = 0; // Query from block 0 to get all events
+
+        // Query in chunks from the same starting block
+        for (
+          let startBlock = revokeFromBlock;
+          startBlock <= currentBlock;
+          startBlock += chunkSize
+        ) {
+          const endBlock = Math.min(startBlock + chunkSize - 1, currentBlock);
+          try {
+            const revokeFilter = contractWithProvider.filters.ArbiterRevoked();
+            const chunkEvents = await contractWithProvider.queryFilter(
+              revokeFilter,
+              startBlock,
+              endBlock
+            );
+            revokeEvents.push(...chunkEvents);
+          } catch (chunkError: any) {
+            // Silently handle RPC errors - they're expected when RPC is unhealthy
+            if (
+              !chunkError.message?.includes(
+                "no backend is currently healthy"
+              ) &&
+              !chunkError.message?.includes("-32011")
+            ) {
+              // Try smaller chunk if "too large" error
+              if (
+                chunkError.message?.includes("too large") ||
+                chunkError.message?.includes("limit")
+              ) {
+                const halfChunk = Math.floor(chunkSize / 2);
+                for (
+                  let smallStart = startBlock;
+                  smallStart <= endBlock;
+                  smallStart += halfChunk
+                ) {
+                  const smallEnd = Math.min(
+                    smallStart + halfChunk - 1,
+                    endBlock
+                  );
+                  try {
+                    const revokeFilter =
+                      contractWithProvider.filters.ArbiterRevoked();
+                    const smallChunkEvents =
+                      await contractWithProvider.queryFilter(
+                        revokeFilter,
+                        smallStart,
+                        smallEnd
+                      );
+                    revokeEvents.push(...smallChunkEvents);
+                  } catch (smallError: any) {
+                    // Silently handle RPC errors
+                    if (
+                      !smallError.message?.includes(
+                        "no backend is currently healthy"
+                      ) &&
+                      !smallError.message?.includes("-32011")
+                    ) {
+                      // Only log non-RPC errors
+                    }
+                  }
+                }
+              }
+            }
+            // Skip this chunk if error
+            continue;
+          }
+        }
+        revokeEvents.forEach((event: any) => {
+          if (event.args && event.args.arbiter) {
+            arbiterAddresses.delete(event.args.arbiter.toLowerCase());
+          }
+        });
+
+        allAuthorizedArbitersFromEvents = Array.from(arbiterAddresses).map(
+          (a) => a.toLowerCase()
+        );
+        console.log(
+          "📋 Found authorized arbiters from events:",
+          allAuthorizedArbitersFromEvents.length,
+          allAuthorizedArbitersFromEvents
+        );
+      } catch (eventError) {
+        console.warn(
+          "Error querying arbiter events (will use direct checks):",
+          eventError
+        );
+        // Continue with direct checks below
+      }
+
+      // Verify ALL arbiters from events directly with the contract
+      // Combine addresses from events and initial direct checks
+      const allArbitersToVerify = [
+        ...new Set([
+          ...uniqueAuthorizedArbiters, // From initial direct checks
+          ...allAuthorizedArbitersFromEvents, // From event queries
+          contractOwnerLower, // Owner is always authorized
+          walletAddressLower,
+          ...knownAuthorizedArbiters.map((a) => a.toLowerCase()),
+        ]),
+      ].filter((a) => a && a !== "0x0000000000000000000000000000000000000000");
+
+      console.log(
+        "🔍 Verifying all arbiters from events:",
+        allArbitersToVerify.length,
+        allArbitersToVerify
+      );
+
+      verifiedArbiters = [];
+      for (const arbiter of allArbitersToVerify) {
+        if (!arbiter) continue;
+        try {
+          const result = await contract.call("authorizedArbiters", arbiter);
+          // Handle different response types
+          let isAuthorized = false;
+          if (typeof result === "boolean") {
+            isAuthorized = result;
+          } else if (typeof result === "string") {
+            isAuthorized = result.toLowerCase() === "true" || result === "1";
+          } else if (typeof result === "number") {
+            isAuthorized = result !== 0;
+          } else if (result && typeof result.toString === "function") {
+            const str = result.toString();
+            isAuthorized = str !== "0" && str.toLowerCase() !== "false";
+          } else {
+            isAuthorized = Boolean(result);
+          }
+
+          // Owner is always authorized
+          if (arbiter === contractOwnerLower) {
+            isAuthorized = true;
+          }
+
+          if (
+            isAuthorized &&
+            !verifiedArbiters.includes(arbiter.toLowerCase())
+          ) {
+            verifiedArbiters.push(arbiter.toLowerCase());
+            console.log(`✅ Verified authorized arbiter: ${arbiter}`);
+          }
+        } catch (error) {
+          console.warn(`❌ Error verifying arbiter ${arbiter}:`, error);
+        }
+      }
+
+      console.log(
+        "✅ Final verified authorized arbiters:",
+        verifiedArbiters.length,
+        verifiedArbiters
+      );
+
+      // Update known list
+      if (verifiedArbiters.length > 0) {
+        setKnownAuthorizedArbiters(verifiedArbiters);
+      }
+
+      // Use verified results from event queries + direct checks
+      // These are the actual verified counts from contract calls
+      const finalWhitelistedCount = verifiedTokens.length;
+      const finalArbiterCount = verifiedArbiters.length;
+
+      console.log("🔢 Final count calculation (using verified results):", {
+        whitelisted: {
+          verifiedTokens: verifiedTokens.length,
+          final: finalWhitelistedCount,
+          tokens: verifiedTokens,
+        },
+        arbiters: {
+          verifiedArbiters: verifiedArbiters.length,
+          final: finalArbiterCount,
+          arbiters: verifiedArbiters,
+        },
+      });
+
+      console.log("📊 FINAL STATS:", {
+        whitelistedTokens: {
+          count: verifiedTokens.length,
+          final: finalWhitelistedCount,
+          tokens: verifiedTokens,
+        },
+        authorizedArbiters: {
+          count: verifiedArbiters.length,
+          final: finalArbiterCount,
+          arbiters: verifiedArbiters,
+        },
+      });
+
+      // Convert BigInt values to numbers
+      const platformFeeBPNum =
+        typeof platformFeeBP === "bigint"
+          ? Number(platformFeeBP)
+          : Number(platformFeeBP || 0);
+      const totalEscrowsNum =
+        typeof totalEscrows === "bigint"
+          ? Number(totalEscrows)
+          : Number(totalEscrows || 0);
+
+      const statsToSet = {
+        platformFeeBP: platformFeeBPNum,
+        totalEscrows: totalEscrowsNum,
         totalVolume: "0", // Would need to be tracked in contract
-        authorizedArbiters: 2, // We authorized 2 arbiters during deployment
-        whitelistedTokens: 1, // We whitelisted 1 token (MockERC20)
+        authorizedArbiters: finalArbiterCount,
+        whitelistedTokens: finalWhitelistedCount,
+      };
+
+      console.log("💾 Setting contract stats:", statsToSet);
+      console.log("💾 Stats values breakdown:", {
+        platformFeeBP: { raw: platformFeeBP, converted: platformFeeBPNum },
+        totalEscrows: { raw: totalEscrows, converted: totalEscrowsNum },
+        authorizedArbiters: finalArbiterCount,
+        whitelistedTokens: finalWhitelistedCount,
+      });
+
+      // Use functional update to ensure we're setting the latest state
+      setContractStats((prev) => {
+        const newStats = {
+          platformFeeBP: platformFeeBPNum,
+          totalEscrows: totalEscrowsNum,
+          totalVolume: "0",
+          authorizedArbiters: finalArbiterCount,
+          whitelistedTokens: finalWhitelistedCount,
+        };
+        console.log(
+          "🔄 setContractStats callback - prev:",
+          prev,
+          "new:",
+          newStats
+        );
+        return newStats;
+      });
+
+      console.log("✅ Contract stats update called! Expected values:", {
+        platformFeeBP: platformFeeBPNum,
+        totalEscrows: totalEscrowsNum,
+        authorizedArbiters: finalArbiterCount,
+        whitelistedTokens: finalWhitelistedCount,
       });
     } catch (error) {
+      console.error("❌ Error fetching contract stats:", error);
+      console.error("Error details:", error);
       // Set empty stats if contract calls fail
       setContractStats({
         platformFeeBP: 0,
@@ -113,6 +960,204 @@ export default function AdminPage() {
         authorizedArbiters: 0,
         whitelistedTokens: 0,
       });
+    } finally {
+      setIsRefreshing(false);
+      console.log("🏁 fetchContractStats completed");
+    }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        fetchContractStats(),
+        fetchContractOwner(),
+        checkPausedStatus(),
+      ]);
+      toast({
+        title: "Stats refreshed",
+        description: "Contract statistics have been updated",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Refresh failed",
+        description: error.message || "Failed to refresh stats",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleWhitelistToken = async () => {
+    if (!wallet.isConnected || !isAdmin) {
+      toast({
+        title: "Access denied",
+        description: "Only the contract owner can whitelist tokens",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!tokenAddress || !/^0x[a-fA-F0-9]{40}$/i.test(tokenAddress)) {
+      toast({
+        title: "Invalid address",
+        description: "Please enter a valid token address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsWhitelisting(true);
+    try {
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+
+      // Check if already whitelisted
+      const isWhitelistedRaw = await contract.call(
+        "whitelistedTokens",
+        tokenAddress
+      );
+      // Handle different response types
+      let isWhitelisted = false;
+      if (typeof isWhitelistedRaw === "boolean") {
+        isWhitelisted = isWhitelistedRaw;
+      } else if (typeof isWhitelistedRaw === "string") {
+        isWhitelisted =
+          isWhitelistedRaw.toLowerCase() === "true" || isWhitelistedRaw === "1";
+      } else if (typeof isWhitelistedRaw === "number") {
+        isWhitelisted = isWhitelistedRaw !== 0;
+      } else if (
+        isWhitelistedRaw &&
+        typeof isWhitelistedRaw.toString === "function"
+      ) {
+        const str = isWhitelistedRaw.toString();
+        isWhitelisted = str !== "0" && str.toLowerCase() !== "false";
+      } else {
+        isWhitelisted = Boolean(isWhitelistedRaw);
+      }
+      if (isWhitelisted) {
+        toast({
+          title: "Already whitelisted",
+          description: "This token is already whitelisted",
+          variant: "default",
+        });
+        setIsWhitelisting(false);
+        return;
+      }
+
+      await contract.send("whitelistToken", "no-value", tokenAddress);
+
+      // Add to known whitelisted tokens
+      const normalizedTokenAddress = tokenAddress.toLowerCase();
+      setKnownWhitelistedTokens((prev) => {
+        const updated = [...prev, normalizedTokenAddress];
+        console.log("Updated known whitelisted tokens:", updated);
+        return updated;
+      });
+
+      toast({
+        title: "Token whitelisted",
+        description: "Token has been successfully whitelisted",
+      });
+
+      setTokenAddress("");
+      // Wait a moment for blockchain state to update
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      fetchContractStats();
+    } catch (error: any) {
+      toast({
+        title: "Whitelist failed",
+        description: error.message || "Failed to whitelist token",
+        variant: "destructive",
+      });
+    } finally {
+      setIsWhitelisting(false);
+    }
+  };
+
+  const handleAuthorizeArbiter = async () => {
+    if (!wallet.isConnected || !isAdmin) {
+      toast({
+        title: "Access denied",
+        description: "Only the contract owner can authorize arbiters",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!arbiterAddress || !/^0x[a-fA-F0-9]{40}$/i.test(arbiterAddress)) {
+      toast({
+        title: "Invalid address",
+        description: "Please enter a valid arbiter address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsAuthorizing(true);
+    try {
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+
+      // Check if already authorized
+      const isAuthorizedRaw = await contract.call(
+        "authorizedArbiters",
+        arbiterAddress
+      );
+      // Handle different response types
+      let isAuthorized = false;
+      if (typeof isAuthorizedRaw === "boolean") {
+        isAuthorized = isAuthorizedRaw;
+      } else if (typeof isAuthorizedRaw === "string") {
+        isAuthorized =
+          isAuthorizedRaw.toLowerCase() === "true" || isAuthorizedRaw === "1";
+      } else if (typeof isAuthorizedRaw === "number") {
+        isAuthorized = isAuthorizedRaw !== 0;
+      } else if (
+        isAuthorizedRaw &&
+        typeof isAuthorizedRaw.toString === "function"
+      ) {
+        const str = isAuthorizedRaw.toString();
+        isAuthorized = str !== "0" && str.toLowerCase() !== "false";
+      } else {
+        isAuthorized = Boolean(isAuthorizedRaw);
+      }
+      if (isAuthorized) {
+        toast({
+          title: "Already authorized",
+          description: "This arbiter is already authorized",
+          variant: "default",
+        });
+        setIsAuthorizing(false);
+        return;
+      }
+
+      await contract.send("authorizeArbiter", "no-value", arbiterAddress);
+
+      // Add to known authorized arbiters
+      const normalizedArbiterAddress = arbiterAddress.toLowerCase();
+      setKnownAuthorizedArbiters((prev) => {
+        const updated = [...prev, normalizedArbiterAddress];
+        console.log("Updated known authorized arbiters:", updated);
+        return updated;
+      });
+
+      toast({
+        title: "Arbiter authorized",
+        description: "Arbiter has been successfully authorized",
+      });
+
+      setArbiterAddress("");
+      // Wait a moment for blockchain state to update
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      fetchContractStats();
+    } catch (error: any) {
+      toast({
+        title: "Authorization failed",
+        description: error.message || "Failed to authorize arbiter",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAuthorizing(false);
     }
   };
 
@@ -187,171 +1232,98 @@ export default function AdminPage() {
 
       switch (actionType) {
         case "pause":
-          setIsPausing(true);
-          try {
-            // Check if contract is already paused
-            const currentPausedStatusForPause = await contract.call("paused");
+          // Check if contract is already paused
+          const currentPausedStatusForPause = await contract.call("paused");
 
-            // Handle different possible return types - including Proxy objects
-            let isPausedForPause = false;
+          // Handle different possible return types - including Proxy objects
+          let isPausedForPause = false;
 
-            if (
-              currentPausedStatusForPause === true ||
-              currentPausedStatusForPause === "true" ||
-              currentPausedStatusForPause === 1
-            ) {
-              isPausedForPause = true;
-            } else if (
-              currentPausedStatusForPause === false ||
-              currentPausedStatusForPause === "false" ||
-              currentPausedStatusForPause === 0
-            ) {
+          if (
+            currentPausedStatusForPause === true ||
+            currentPausedStatusForPause === "true" ||
+            currentPausedStatusForPause === 1
+          ) {
+            isPausedForPause = true;
+          } else if (
+            currentPausedStatusForPause === false ||
+            currentPausedStatusForPause === "false" ||
+            currentPausedStatusForPause === 0
+          ) {
+            isPausedForPause = false;
+          } else if (
+            currentPausedStatusForPause &&
+            typeof currentPausedStatusForPause === "object"
+          ) {
+            try {
+              const pausedValue = currentPausedStatusForPause.toString();
+              isPausedForPause = pausedValue === "true" || pausedValue === "1";
+            } catch (e) {
               isPausedForPause = false;
-            } else if (
-              currentPausedStatusForPause &&
-              typeof currentPausedStatusForPause === "object"
-            ) {
-              try {
-                const pausedValue = currentPausedStatusForPause.toString();
-                isPausedForPause =
-                  pausedValue === "true" || pausedValue === "1";
-              } catch (e) {
-                isPausedForPause = false;
-              }
             }
-
-            if (isPausedForPause) {
-              toast({
-                title: "Contract Already Paused",
-                description: "The contract is already in a paused state",
-                variant: "default",
-              });
-              setIsPausing(false);
-              return;
-            }
-
-            const pauseTxHash = await contract.send("pause", "no-value");
-
-            // Wait for transaction confirmation
-            toast({
-              title: "Transaction submitted",
-              description: "Waiting for blockchain confirmation...",
-            });
-
-            // Poll for transaction receipt
-            let receipt = null;
-            let attempts = 0;
-            const maxAttempts = 30;
-
-            while (attempts < maxAttempts && !receipt) {
-              try {
-                const provider = new ethers.JsonRpcProvider(
-                  BASE_MAINNET.rpcUrls[0]
-                );
-                receipt = await provider.getTransactionReceipt(pauseTxHash);
-                if (receipt) break;
-              } catch (error) {
-                // Continue polling
-              }
-              await new Promise((resolve) => setTimeout(resolve, 2000));
-              attempts++;
-            }
-
-            if (receipt && receipt.status === 1) {
-              setIsPaused(true);
-              toast({
-                title: "Contract paused",
-                description: "All escrow operations are now paused",
-              });
-            } else {
-              throw new Error("Transaction failed or timed out");
-            }
-          } finally {
-            setIsPausing(false);
           }
+
+          if (isPausedForPause) {
+            toast({
+              title: "Contract Already Paused",
+              description: "The contract is already in a paused state",
+              variant: "default",
+            });
+            return;
+          }
+
+          await contract.send("pause", "no-value");
+          setIsPaused(true);
+          toast({
+            title: "Contract paused",
+            description: "All escrow operations are now paused",
+          });
           break;
         case "unpause":
-          setIsUnpausing(true);
-          try {
-            // Check if contract is already unpaused
-            const currentPausedStatus = await contract.call("paused");
+          // Check if contract is already unpaused
+          const currentPausedStatus = await contract.call("paused");
 
-            // Handle different possible return types - including Proxy objects
-            let isPaused = false;
+          // Handle different possible return types - including Proxy objects
+          let isPaused = false;
 
-            if (
-              currentPausedStatus === true ||
-              currentPausedStatus === "true" ||
-              currentPausedStatus === 1
-            ) {
-              isPaused = true;
-            } else if (
-              currentPausedStatus === false ||
-              currentPausedStatus === "false" ||
-              currentPausedStatus === 0
-            ) {
+          if (
+            currentPausedStatus === true ||
+            currentPausedStatus === "true" ||
+            currentPausedStatus === 1
+          ) {
+            isPaused = true;
+          } else if (
+            currentPausedStatus === false ||
+            currentPausedStatus === "false" ||
+            currentPausedStatus === 0
+          ) {
+            isPaused = false;
+          } else if (
+            currentPausedStatus &&
+            typeof currentPausedStatus === "object"
+          ) {
+            try {
+              const pausedValue = currentPausedStatus.toString();
+              isPaused = pausedValue === "true" || pausedValue === "1";
+            } catch (e) {
               isPaused = false;
-            } else if (
-              currentPausedStatus &&
-              typeof currentPausedStatus === "object"
-            ) {
-              try {
-                const pausedValue = currentPausedStatus.toString();
-                isPaused = pausedValue === "true" || pausedValue === "1";
-              } catch (e) {
-                isPaused = false;
-              }
             }
-
-            if (!isPaused) {
-              toast({
-                title: "Contract Already Unpaused",
-                description: "The contract is already in an active state",
-                variant: "default",
-              });
-              setIsUnpausing(false);
-              return;
-            }
-
-            const unpauseTxHash = await contract.send("unpause", "no-value");
-
-            // Wait for transaction confirmation
-            toast({
-              title: "Transaction submitted",
-              description: "Waiting for blockchain confirmation...",
-            });
-
-            // Poll for transaction receipt
-            let receipt = null;
-            let attempts = 0;
-            const maxAttempts = 30;
-
-            while (attempts < maxAttempts && !receipt) {
-              try {
-                const provider = new ethers.JsonRpcProvider(
-                  BASE_MAINNET.rpcUrls[0]
-                );
-                receipt = await provider.getTransactionReceipt(unpauseTxHash);
-                if (receipt) break;
-              } catch (error) {
-                // Continue polling
-              }
-              await new Promise((resolve) => setTimeout(resolve, 2000));
-              attempts++;
-            }
-
-            if (receipt && receipt.status === 1) {
-              setIsPaused(false);
-              toast({
-                title: "Contract unpaused",
-                description: "Escrow operations have been resumed",
-              });
-            } else {
-              throw new Error("Transaction failed or timed out");
-            }
-          } finally {
-            setIsUnpausing(false);
           }
+
+          if (!isPaused) {
+            toast({
+              title: "Contract Already Unpaused",
+              description: "The contract is already in an active state",
+              variant: "default",
+            });
+            return;
+          }
+
+          await contract.send("unpause", "no-value");
+          setIsPaused(false);
+          toast({
+            title: "Contract unpaused",
+            description: "Escrow operations have been resumed",
+          });
           break;
         case "withdraw":
           await contract.send(
@@ -375,106 +1347,6 @@ export default function AdminPage() {
         description: error.message || "Failed to perform admin action",
         variant: "destructive",
       });
-    }
-  };
-
-  const handleWhitelistToken = async () => {
-    if (!tokenAddress || !tokenAddress.startsWith("0x")) {
-      toast({
-        title: "Invalid Address",
-        description: "Please enter a valid token address",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      setWhitelisting(true);
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-
-      // Check if already whitelisted
-      const isWhitelisted = await contract.call(
-        "whitelistedTokens",
-        tokenAddress
-      );
-      if (isWhitelisted) {
-        toast({
-          title: "Token Already Whitelisted",
-          description: "This token is already whitelisted",
-          variant: "default",
-        });
-        setTokenAddress("");
-        return;
-      }
-
-      await contract.send("whitelistToken", "no-value", tokenAddress);
-      toast({
-        title: "Token Whitelisted",
-        description: `Successfully whitelisted token at ${tokenAddress.slice(
-          0,
-          6
-        )}...${tokenAddress.slice(-4)}`,
-      });
-      setTokenAddress("");
-      fetchContractStats();
-    } catch (error: any) {
-      toast({
-        title: "Whitelist Failed",
-        description: error.message || "Failed to whitelist token",
-        variant: "destructive",
-      });
-    } finally {
-      setWhitelisting(false);
-    }
-  };
-
-  const handleAuthorizeArbiter = async () => {
-    if (!arbiterAddress || !arbiterAddress.startsWith("0x")) {
-      toast({
-        title: "Invalid Address",
-        description: "Please enter a valid arbiter address",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      setAuthorizing(true);
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-
-      // Check if already authorized
-      const isAuthorized = await contract.call(
-        "authorizedArbiters",
-        arbiterAddress
-      );
-      if (isAuthorized) {
-        toast({
-          title: "Arbiter Already Authorized",
-          description: "This arbiter is already authorized",
-          variant: "default",
-        });
-        setArbiterAddress("");
-        return;
-      }
-
-      await contract.send("authorizeArbiter", "no-value", arbiterAddress);
-      toast({
-        title: "Arbiter Authorized",
-        description: `Successfully authorized arbiter at ${arbiterAddress.slice(
-          0,
-          6
-        )}...${arbiterAddress.slice(-4)}`,
-      });
-      setArbiterAddress("");
-      fetchContractStats();
-    } catch (error: any) {
-      toast({
-        title: "Authorization Failed",
-        description: error.message || "Failed to authorize arbiter",
-        variant: "destructive",
-      });
-    } finally {
-      setAuthorizing(false);
     }
   };
 
@@ -538,6 +1410,20 @@ export default function AdminPage() {
     );
   }
 
+  // Show loading state while checking admin status
+  if (adminLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center gradient-mesh">
+        <Card className="glass border-primary/20 p-12 text-center max-w-md">
+          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent mb-4" />
+          <h2 className="text-2xl font-bold mb-2">Checking Access...</h2>
+          <p className="text-muted-foreground">Verifying admin permissions</p>
+        </Card>
+      </div>
+    );
+  }
+
+  // Only show access denied after loading is complete
   if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-mesh">
@@ -592,15 +1478,48 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen py-12">
       <div className="container mx-auto px-4 max-w-5xl">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+              {isOwner && (
+                <Badge variant="default" className="gap-1">
+                  <Shield className="h-3 w-3" />
+                  Owner
+                </Badge>
+              )}
+              {isArbiter && !isOwner && (
+                <Badge variant="secondary" className="gap-1">
+                  <Shield className="h-3 w-3" />
+                  Arbiter
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {isOwner
+                ? "Full admin access - All functions available"
+                : isArbiter
+                ? "Arbiter access - Token management and dispute resolution"
+                : ""}
+            </p>
+          </div>
+          <Button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            variant="outline"
+            className="gap-2"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
+            {isRefreshing ? "Refreshing..." : "Refresh Stats"}
+          </Button>
+        </div>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <div className="flex items-center gap-3 mb-2">
-            <Shield className="h-10 w-10 text-primary" />
-            <h1 className="text-4xl md:text-5xl font-bold">Admin Controls</h1>
-          </div>
           <p className="text-xl text-muted-foreground mb-8">
             Manage the SecureFlow escrow contract
           </p>
@@ -653,214 +1572,198 @@ export default function AdminPage() {
             </div>
           </Card>
 
-          {/* Token Management & Arbiter Management */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {/* Token Management */}
-            <Card className="glass border-primary/20 p-6">
-              <div className="flex items-start gap-4 mb-4">
-                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-                  <Coins className="h-6 w-6 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold mb-2">Token Management</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    Whitelist tokens that can be used in escrow transactions
-                  </p>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="token-address">Token Address</Label>
-                  <Input
-                    id="token-address"
-                    placeholder="0x..."
-                    value={tokenAddress}
-                    onChange={(e) => setTokenAddress(e.target.value)}
-                    className="font-mono"
-                    disabled={whitelisting}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Enter a token address to whitelist it. Only whitelisted
-                    tokens can be used in escrows.
-                  </p>
-                </div>
-                <Button
-                  onClick={handleWhitelistToken}
-                  disabled={whitelisting || !tokenAddress}
-                  className="w-full gap-2"
-                >
-                  {whitelisting ? (
-                    <>
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                      Whitelisting...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      Whitelist Token
-                    </>
-                  )}
-                </Button>
-                {CONTRACTS.MOCK_ERC20 && (
-                  <div className="pt-2 border-t border-border/50">
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Quick Actions:
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-xs"
-                      onClick={() => setTokenAddress(CONTRACTS.MOCK_ERC20)}
-                      disabled={whitelisting}
-                    >
-                      Use MockERC20 ({CONTRACTS.MOCK_ERC20.slice(0, 6)}...
-                      {CONTRACTS.MOCK_ERC20.slice(-4)})
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            {/* Arbiter Management */}
-            <Card className="glass border-primary/20 p-6">
-              <div className="flex items-start gap-4 mb-4">
-                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-accent/10">
-                  <UserCheck className="h-6 w-6 text-accent" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold mb-2">Arbiter Management</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    Authorize arbiters who can resolve disputes in escrows
-                  </p>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="arbiter-address">Arbiter Address</Label>
-                  <Input
-                    id="arbiter-address"
-                    placeholder="0x..."
-                    value={arbiterAddress}
-                    onChange={(e) => setArbiterAddress(e.target.value)}
-                    className="font-mono"
-                    disabled={authorizing}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Enter an arbiter address to authorize them. Only authorized
-                    arbiters can be used in escrows.
-                  </p>
-                </div>
-                <Button
-                  onClick={handleAuthorizeArbiter}
-                  disabled={authorizing || !arbiterAddress}
-                  className="w-full gap-2"
-                  variant="default"
-                >
-                  {authorizing ? (
-                    <>
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                      Authorizing...
-                    </>
-                  ) : (
-                    <>
-                      <UserCheck className="h-4 w-4" />
-                      Authorize Arbiter
-                    </>
-                  )}
-                </Button>
-                {wallet.address && (
-                  <div className="pt-2 border-t border-border/50">
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Quick Actions:
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-xs"
-                      onClick={() => setArbiterAddress(wallet.address!)}
-                      disabled={authorizing}
-                    >
-                      Use Your Wallet ({wallet.address.slice(0, 6)}...
-                      {wallet.address.slice(-4)})
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </Card>
-          </div>
-
           <DisputeResolution onDisputeResolved={fetchContractStats} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <Card className="glass border-primary/20 p-6">
-              <div className="flex items-start gap-4 mb-4">
-                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-                  {isPaused ? (
-                    <Play className="h-6 w-6 text-primary" />
-                  ) : (
-                    <Pause className="h-6 w-6 text-primary" />
-                  )}
+            {/* Pause/Unpause - Only for Owner */}
+            {isOwner && (
+              <Card className="glass border-primary/20 p-6">
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
+                    {isPaused ? (
+                      <Play className="h-6 w-6 text-primary" />
+                    ) : (
+                      <Pause className="h-6 w-6 text-primary" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold mb-2">
+                      {isPaused ? "Unpause Contract" : "Pause Contract"}
+                    </h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {isPaused
+                        ? "Resume all escrow operations and allow users to interact with the contract"
+                        : "Temporarily halt all escrow operations for maintenance or emergency situations"}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold mb-2">
-                    {isPaused ? "Unpause Contract" : "Pause Contract"}
-                  </h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {isPaused
-                      ? "Resume all escrow operations and allow users to interact with the contract"
-                      : "Temporarily halt all escrow operations for maintenance or emergency situations"}
-                  </p>
+                <Button
+                  onClick={() => openDialog(isPaused ? "unpause" : "pause")}
+                  variant={isPaused ? "default" : "destructive"}
+                  className="w-full gap-2"
+                >
+                  {isPaused ? (
+                    <>
+                      <Play className="h-4 w-4" />
+                      Unpause Contract
+                    </>
+                  ) : (
+                    <>
+                      <Pause className="h-4 w-4" />
+                      Pause Contract
+                    </>
+                  )}
+                </Button>
+              </Card>
+            )}
+
+            {/* Withdraw Stuck Tokens - Only for Owner */}
+            {isOwner && (
+              <Card className="glass border-primary/20 p-6">
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-destructive/10">
+                    <Download className="h-6 w-6 text-destructive" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold mb-2">
+                      Withdraw Stuck Tokens
+                    </h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      Emergency function to withdraw tokens that may be stuck in
+                      the contract
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={() => openDialog("withdraw")}
+                  variant="destructive"
+                  className="w-full gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Withdraw Tokens
+                </Button>
+              </Card>
+            )}
+          </div>
+
+          {/* Token Management & Arbiter Management - Side by Side */}
+          <div
+            className={`grid grid-cols-1 ${
+              isOwner ? "lg:grid-cols-2" : "lg:grid-cols-1"
+            } gap-6 mt-6`}
+          >
+            {/* Token Management Section - Available to Owner and Arbiters */}
+            <Card className="glass border-primary/20 p-6">
+              <h2 className="text-2xl font-bold mb-6">Token Management</h2>
+              <div className="space-y-4">
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="tokenAddress" className="mb-2 block">
+                      Token Address
+                    </Label>
+                    <Input
+                      id="tokenAddress"
+                      placeholder="0x..."
+                      value={tokenAddress}
+                      onChange={(e) => setTokenAddress(e.target.value)}
+                      className="font-mono"
+                      disabled={isWhitelisting}
+                    />
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Enter a token address to whitelist it. Only whitelisted
+                      tokens can be used in escrows.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleWhitelistToken}
+                    disabled={isWhitelisting || !tokenAddress}
+                    className="gap-2 w-full"
+                  >
+                    {isWhitelisting ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        Whitelisting...
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="h-4 w-4" />
+                        Whitelist Token
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <div className="pt-4 border-t border-muted/50">
+                  <p className="text-sm font-semibold mb-2">Quick Actions:</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTokenAddress(CONTRACTS.CUSD_MAINNET)}
+                    className="gap-2 w-full"
+                  >
+                    <Shield className="h-3 w-3" />
+                    Whitelist cUSD ({CONTRACTS.CUSD_MAINNET.slice(0, 10)}...)
+                  </Button>
                 </div>
               </div>
-              <Button
-                onClick={() => openDialog(isPaused ? "unpause" : "pause")}
-                variant={isPaused ? "default" : "destructive"}
-                className="w-full gap-2"
-                disabled={isPausing || isUnpausing}
-              >
-                {isPausing || isUnpausing ? (
-                  <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    {isPausing ? "Pausing..." : "Unpausing..."}
-                  </>
-                ) : isPaused ? (
-                  <>
-                    <Play className="h-4 w-4" />
-                    Unpause Contract
-                  </>
-                ) : (
-                  <>
-                    <Pause className="h-4 w-4" />
-                    Pause Contract
-                  </>
-                )}
-              </Button>
             </Card>
 
-            <Card className="glass border-primary/20 p-6">
-              <div className="flex items-start gap-4 mb-4">
-                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-destructive/10">
-                  <Download className="h-6 w-6 text-destructive" />
+            {/* Arbiter Management Section - Only for Owner */}
+            {isOwner && (
+              <Card className="glass border-primary/20 p-6">
+                <h2 className="text-2xl font-bold mb-6">Arbiter Management</h2>
+                <div className="space-y-4">
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="arbiterAddress" className="mb-2 block">
+                        Arbiter Address
+                      </Label>
+                      <Input
+                        id="arbiterAddress"
+                        placeholder="0x..."
+                        value={arbiterAddress}
+                        onChange={(e) => setArbiterAddress(e.target.value)}
+                        className="font-mono"
+                        disabled={isAuthorizing}
+                      />
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Authorize an arbiter address. Only authorized arbiters
+                        can be used in escrows.
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleAuthorizeArbiter}
+                      disabled={isAuthorizing || !arbiterAddress}
+                      className="gap-2 w-full"
+                    >
+                      {isAuthorizing ? (
+                        <>
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                          Authorizing...
+                        </>
+                      ) : (
+                        <>
+                          <Shield className="h-4 w-4" />
+                          Authorize Arbiter
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <div className="pt-4 border-t border-muted/50">
+                    <p className="text-sm font-semibold mb-2">Quick Actions:</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setArbiterAddress(wallet.address || "")}
+                      className="gap-2 w-full"
+                      disabled={!wallet.address}
+                    >
+                      <Shield className="h-3 w-3" />
+                      Authorize Default Arbiter (Your Wallet)
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold mb-2">
-                    Withdraw Stuck Tokens
-                  </h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    Emergency function to withdraw tokens that may be stuck in
-                    the contract
-                  </p>
-                </div>
-              </div>
-              <Button
-                onClick={() => openDialog("withdraw")}
-                variant="destructive"
-                className="w-full gap-2"
-              >
-                <Download className="h-4 w-4" />
-                Withdraw Tokens
-              </Button>
-            </Card>
+              </Card>
+            )}
           </div>
 
           <Card className="glass border-primary/20 p-6">
@@ -902,7 +1805,7 @@ export default function AdminPage() {
                 <Label className="text-muted-foreground mb-2 block">
                   Chain ID
                 </Label>
-                <p className="text-sm bg-muted/50 p-3 rounded-lg">8453</p>
+                <p className="text-sm bg-muted/50 p-3 rounded-lg">42220</p>
               </div>
               <div>
                 <Label className="text-muted-foreground mb-2 block">
@@ -1024,26 +1927,11 @@ export default function AdminPage() {
           </Alert>
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDialogOpen(false)}
-              disabled={isPausing || isUnpausing}
-            >
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={handleAction}
-              variant={dialogContent.variant}
-              disabled={isPausing || isUnpausing}
-            >
-              {isPausing || isUnpausing ? (
-                <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
-                  {isPausing ? "Pausing..." : "Unpausing..."}
-                </>
-              ) : (
-                dialogContent.confirmText
-              )}
+            <Button onClick={handleAction} variant={dialogContent.variant}>
+              {dialogContent.confirmText}
             </Button>
           </DialogFooter>
         </DialogContent>

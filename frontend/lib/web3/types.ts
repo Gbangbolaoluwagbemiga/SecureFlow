@@ -10,8 +10,13 @@ export interface Milestone {
     | "resolved";
   submittedAt?: number;
   approvedAt?: number;
+  disputedBy?: string; // For disputed: who disputed, for resolved: who won
   rejectionReason?: string;
-  disputeReason?: string;
+  disputeReason?: string; // For disputed: dispute reason, for resolved: resolution reason
+  winner?: string; // Winner address (for resolved disputes)
+  resolutionReason?: string; // Resolution reason (for resolved disputes)
+  freelancerAmount?: number; // Amount freelancer received (for resolved disputes)
+  clientAmount?: number; // Amount client received (for resolved disputes)
 }
 
 export interface Escrow {
@@ -25,6 +30,7 @@ export interface Escrow {
   createdAt: number;
   duration: number;
   milestones: Milestone[];
+  projectTitle?: string;
   projectDescription?: string;
   isOpenJob?: boolean; // true if no freelancer assigned yet
   applications?: Application[];
@@ -54,15 +60,4 @@ export interface Application {
   proposedTimeline: number;
   appliedAt: number;
   status: "pending" | "accepted" | "rejected";
-  reviewCount?: number; // Number of reviews for this freelancer
-  averageRating?: number; // Average rating for this freelancer
-}
-
-export interface Review {
-  escrowId: string;
-  reviewer: string;
-  freelancer: string;
-  rating: number; // 1-5
-  comment: string;
-  timestamp: number;
 }

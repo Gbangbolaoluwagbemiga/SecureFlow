@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "./EscrowCore.sol";
+import "../Errors.sol";
 
 abstract contract RefundSystem is EscrowCore {
     function refundEscrow(uint256 escrowId) 
@@ -12,12 +13,12 @@ abstract contract RefundSystem is EscrowCore {
         whenNotPaused 
     {
         EscrowData storage e = escrows[escrowId];
-        require(e.status == EscrowStatus.Pending, "Invalid status");
-        require(!e.workStarted, "Work started");
-        require(block.timestamp < e.deadline, "Deadline passed");
+        if (e.status != EscrowStatus.Pending) revert InvalidStatus();
+        if (e.workStarted) revert WorkAlreadyStarted();
+        if (block.timestamp >= e.deadline) revert DeadlineNotExpired();
 
         uint256 refundAmount = e.totalAmount - e.paidAmount;
-        require(refundAmount > 0, "Nothing to refund");
+        if (refundAmount == 0) revert InvalidAmount();
 
         e.status = EscrowStatus.Refunded;
 
@@ -36,17 +37,11 @@ abstract contract RefundSystem is EscrowCore {
         whenNotPaused 
     {
         EscrowData storage e = escrows[escrowId];
-        require(
-            block.timestamp > e.deadline + EMERGENCY_REFUND_DELAY, 
-            "Emergency period not reached"
-        );
-        require(
-            e.status != EscrowStatus.Released && e.status != EscrowStatus.Refunded, 
-            "Cannot refund"
-        );
+        if (block.timestamp <= e.deadline + EMERGENCY_REFUND_DELAY) revert DeadlineNotExpired();
+        if (e.status == EscrowStatus.Released || e.status == EscrowStatus.Refunded) revert InvalidStatus();
 
         uint256 refundAmount = e.totalAmount - e.paidAmount;
-        require(refundAmount > 0, "Nothing to refund");
+        if (refundAmount == 0) revert InvalidAmount();
 
         e.status = EscrowStatus.Expired;
 
@@ -61,12 +56,9 @@ abstract contract RefundSystem is EscrowCore {
         uint256 escrowId,
         uint256 extraSeconds
     ) external onlyDepositor(escrowId) validEscrow(escrowId) nonReentrant whenNotPaused {
-        require(extraSeconds > 0 && extraSeconds <= 30 days, "Invalid extension");
+        if (extraSeconds == 0 || extraSeconds > 30 days) revert InvalidDuration();
         EscrowData storage e = escrows[escrowId];
-        require(
-            e.status == EscrowStatus.InProgress || e.status == EscrowStatus.Pending, 
-            "Cannot extend"
-        );
+        if (e.status != EscrowStatus.InProgress && e.status != EscrowStatus.Pending) revert InvalidStatus();
         e.deadline += extraSeconds;
         emit DeadlineExtended(escrowId, e.deadline);
     }

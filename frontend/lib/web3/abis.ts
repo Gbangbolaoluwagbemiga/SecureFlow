@@ -1,8 +1,6 @@
 import secureFlowAbi from "./secureflow-abi.json";
-import reviewSystemAbi from "./review-system-abi.json";
 
 export const SECUREFLOW_ABI = secureFlowAbi;
-export const REVIEW_SYSTEM_ABI = reviewSystemAbi;
 
 export const ERC20_ABI = [
   {

@@ -6,7 +6,7 @@
 
 ## 🚀 Overview
 
-SecureFlow is a comprehensive decentralized platform combining escrow services with a freelance marketplace, built on blockchain. Features gasless transactions through MetaMask Smart Accounts, multi-arbiter dispute resolution, and reputation systems.
+SecureFlow is a comprehensive decentralized platform combining escrow services with a freelance marketplace, built on Celo blockchain. Features gasless transactions through MetaMask Smart Accounts, multi-arbiter dispute resolution, and reputation systems.
 
 ## ✨ Key Features
 
@@ -16,7 +16,7 @@ SecureFlow is a comprehensive decentralized platform combining escrow services w
 - **Gasless Transactions**: MetaMask Smart Account integration for zero-fee transactions
 - **Multi-Arbiter Consensus**: 1-5 arbiters with quorum-based voting
 - **Reputation System**: Anti-gaming reputation tracking
-- **Native & ERC20 Support**: MON and whitelisted ERC20 tokens
+- **Native & ERC20 Support**: CELO and whitelisted ERC20 tokens (cUSD on Celo)
 
 ### 🎯 Advanced Features
 
@@ -29,6 +29,7 @@ SecureFlow is a comprehensive decentralized platform combining escrow services w
 ### 🛡️ Security & Trust
 
 - **Smart Account Integration**: Delegated execution for gasless transactions
+- **Paymaster Contract**: Gas sponsorship for seamless UX
 - **Reentrancy Protection**: All external functions protected
 - **Input Validation**: Comprehensive parameter checking
 - **Emergency Controls**: Admin pause and refund mechanisms
@@ -38,12 +39,14 @@ SecureFlow is a comprehensive decentralized platform combining escrow services w
 ```
 ├── contracts/
 │   ├── SecureFlow.sol          # Main escrow & marketplace contract
+│   └── Paymaster.sol           # Gas sponsorship contract
 ├── frontend/                   # Next.js application
 │   ├── app/                    # App router pages
 │   ├── components/             # UI components
 │   └── contexts/               # React contexts
 ├── scripts/
 │   ├── deploy.js               # Contract deployment
+│   └── deploy-paymaster.js     # Paymaster deployment
 └── test/
     └── SecureFlow.test.js      # Test suite
 ```
@@ -54,6 +57,7 @@ SecureFlow is a comprehensive decentralized platform combining escrow services w
 
 - Node.js 18+
 - MetaMask wallet
+- Celo mainnet access
 
 ### Installation
 
@@ -80,8 +84,11 @@ cp frontend/.env.example frontend/.env.local
 3. **Deploy contracts**
 
 ```bash
-# Deploy to testnet
-npx hardhat run scripts/deploy.js --network
+# Deploy to Celo testnet
+npx hardhat run scripts/deploy.js --network celoTestnet
+
+# Deploy to Celo mainnet
+npx hardhat run scripts/deploy-minimal.js --network celo
 ```
 
 4. **Start frontend**
@@ -128,8 +135,11 @@ npm test
 ### Smart Contracts
 
 ```bash
-# Deploy to testnet
-npx hardhat run scripts/deploy.js --network
+# Deploy to Celo testnet
+npx hardhat run scripts/deploy.js --network celoTestnet
+
+# Deploy to Celo mainnet
+npx hardhat run scripts/deploy-minimal.js --network celo
 ```
 
 ### Frontend (Vercel)
@@ -142,6 +152,22 @@ npm run build
 # Deploy to Vercel
 vercel --prod
 ```
+
+## 📊 Current Deployment
+
+### Celo Mainnet (Active)
+
+- **SecureFlow Contract**: `0x1173Bcc9183f29aFbB6f4C7E3c0b25476D3daF0F`
+- **cUSD Token**: `0x765DE816845861e75A25fCA122bb6898B8B1282a`
+- **Network**: Celo Mainnet (Chain ID: 42220)
+- **Explorer**: https://celoscan.io/address/0x1173Bcc9183f29aFbB6f4C7E3c0b25476D3daF0F
+- **Status**: ✅ Production Ready
+
+### Celo Testnet (Alfajores)
+
+- **Network**: Celo Alfajores (Chain ID: 44787)
+- **Explorer**: https://alfajores.celoscan.io/
+- **Status**: Available for testing
 
 ## 🔧 Configuration
 
@@ -159,9 +185,11 @@ function revokeArbiter(address arbiter) external onlyOwner
 ### Frontend Configuration
 
 ```typescript
-// Contract addresses
+// Contract addresses (Celo Mainnet)
 export const CONTRACTS = {
-  SECUREFLOW_ESCROW: "0x540fDEc0D5675711f7Be40a648b3F8739Be3be5a",
+  SECUREFLOW_ESCROW: "0x1173Bcc9183f29aFbB6f4C7E3c0b25476D3daF0F",
+  CUSD_MAINNET: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
+  USDC_MAINNET: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
 };
 ```
 
@@ -169,7 +197,7 @@ export const CONTRACTS = {
 
 1. **User connects MetaMask** → Smart Account initializes
 2. **Transaction request** → Delegation system activates
-3. **Gasless execution** → Smart Account handles transaction
+3. **Gasless execution** → Paymaster sponsors gas fees
 4. **Blockchain confirmation** → Transaction completed
 
 ## 🛡️ Security Features

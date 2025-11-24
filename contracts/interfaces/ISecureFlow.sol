@@ -24,6 +24,8 @@ interface ISecureFlow {
         uint256 proposedTimeline;
         uint256 appliedAt;
         bool exists;
+        uint256 averageRating; // Average rating * 100 (for precision)
+        uint256 totalRatings; // Total number of ratings
     }
 
     struct EscrowData {
@@ -174,7 +176,7 @@ interface ISecureFlow {
         uint256 milestoneIndex,
         string calldata reason
     ) external;
-    function resolveDispute(uint256 escrowId, uint256 milestoneIndex, uint256 beneficiaryAmount) external;
+    function resolveDispute(uint256 escrowId, uint256 milestoneIndex, uint256 beneficiaryAmount, string calldata resolutionReason) external;
     function refundEscrow(uint256 escrowId) external;
     function emergencyRefundAfterDeadline(uint256 escrowId) external;
 

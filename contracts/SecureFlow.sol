@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "./modules/EscrowCore.sol";
 import "./modules/EscrowManagement.sol";
@@ -8,8 +8,7 @@ import "./modules/WorkLifecycle.sol";
 import "./modules/AdminFunctions.sol";
 import "./modules/RefundSystem.sol";
 import "./modules/ViewFunctions.sol";
-// Temporarily commented out to reduce contract size - can be added as separate contract
-// import "./modules/ReviewSystem.sol";
+import "./modules/RatingSystem.sol";
 
 /**
  * @title SecureFlow - Modular Hybrid Escrow + Marketplace Platform
@@ -23,9 +22,8 @@ contract SecureFlow is
     WorkLifecycle,
     AdminFunctions,
     RefundSystem,
-    ViewFunctions
-    // Temporarily commented out to reduce contract size
-    // ReviewSystem
+    ViewFunctions,
+    RatingSystem
 {
     constructor(
         address _monadToken, 

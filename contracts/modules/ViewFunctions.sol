@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "./EscrowCore.sol";
 
 abstract contract ViewFunctions is EscrowCore {
     // ===== View functions =====
+    // Optimized to reduce bytecode size while maintaining functionality
+    
     function getEscrowSummary(uint256 escrowId) external view validEscrow(escrowId) returns (
         address depositor,
         address beneficiary,
@@ -23,26 +25,27 @@ abstract contract ViewFunctions is EscrowCore {
         string memory projectDescription
     ) {
         EscrowData storage e = escrows[escrowId];
-        depositor = e.depositor;
-        beneficiary = e.beneficiary;
-        arbiters = e.arbiters;
-        status = e.status;
-        totalAmount = e.totalAmount;
-        paidAmount = e.paidAmount;
-        remaining = e.totalAmount - e.paidAmount;
-        token = e.token;
-        deadline = e.deadline;
-        workStarted = e.workStarted;
-        createdAt = e.createdAt;
-        milestoneCount = e.milestoneCount;
-        isOpenJob = e.isOpenJob;
-        projectTitle = e.projectTitle;
-        projectDescription = e.projectDescription;
+        return (
+            e.depositor,
+            e.beneficiary,
+            e.arbiters,
+            e.status,
+            e.totalAmount,
+            e.paidAmount,
+            e.totalAmount - e.paidAmount,
+            e.token,
+            e.deadline,
+            e.workStarted,
+            e.createdAt,
+            e.milestoneCount,
+            e.isOpenJob,
+            e.projectTitle,
+            e.projectDescription
+        );
     }
 
     function getMilestones(uint256 escrowId) external view validEscrow(escrowId) returns (Milestone[] memory) {
-        EscrowData storage e = escrows[escrowId];
-        uint256 count = e.milestoneCount;
+        uint256 count = escrows[escrowId].milestoneCount;
         Milestone[] memory list = new Milestone[](count);
         for (uint256 i = 0; i < count; ++i) {
             list[i] = milestones[escrowId][i];

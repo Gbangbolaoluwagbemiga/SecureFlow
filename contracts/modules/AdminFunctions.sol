@@ -1,38 +1,49 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./EscrowCore.sol";
+import "../Errors.sol";
 
 abstract contract AdminFunctions is EscrowCore {
     using SafeERC20 for IERC20;
+    
+    // ===== Modifiers =====
+    modifier onlyOwnerOrArbiter() {
+        require(
+            msg.sender == owner() || authorizedArbiters[msg.sender],
+            "Not owner or arbiter"
+        );
+        _;
+    }
+    
     // ===== Owner functions =====
     function setPlatformFeeBP(uint256 _bp) external onlyOwner {
-        require(_bp <= MAX_PLATFORM_FEE_BP, "Fee too high");
+        if (_bp > MAX_PLATFORM_FEE_BP) revert FeeTooHigh();
         platformFeeBP = _bp;
         emit PlatformFeeUpdated(_bp);
     }
 
     function setFeeCollector(address _collector) external onlyOwner {
-        require(_collector != address(0), "Invalid collector");
+        if (_collector == address(0)) revert InvalidCollector();
         feeCollector = _collector;
         emit FeeCollectorUpdated(_collector);
     }
 
-    function whitelistToken(address token) external onlyOwner {
-        require(token != address(0), "Invalid token");
+    function whitelistToken(address token) external onlyOwnerOrArbiter {
+        if (token == address(0)) revert InvalidToken();
         whitelistedTokens[token] = true;
         emit TokenWhitelisted(token);
     }
 
-    function blacklistToken(address token) external onlyOwner {
+    function blacklistToken(address token) external onlyOwnerOrArbiter {
         whitelistedTokens[token] = false;
         emit TokenBlacklisted(token);
     }
 
     function authorizeArbiter(address arbiter) external onlyOwner {
-        require(arbiter != address(0), "Invalid arbiter");
+        if (arbiter == address(0)) revert InvalidArbiter();
         authorizedArbiters[arbiter] = true;
         emit ArbiterAuthorized(arbiter);
     }
@@ -55,7 +66,7 @@ abstract contract AdminFunctions is EscrowCore {
     function withdrawFees(address token) external nonReentrant {
         require(msg.sender == feeCollector || msg.sender == owner(), "Not authorized");
         uint256 amount = totalFeesByToken[token];
-        require(amount > 0, "No fees");
+        if (amount == 0) revert NoFees();
 
         totalFeesByToken[token] = 0;
 
@@ -73,7 +84,7 @@ abstract contract AdminFunctions is EscrowCore {
     }
 
     function emergencyWithdraw(address token, uint256 amount) external onlyOwner nonReentrant {
-        require(amount > 0, "Invalid amount");
+        if (amount == 0) revert InvalidAmount();
         uint256 balance;
         if (token == address(0)) {
             balance = address(this).balance;
@@ -86,7 +97,7 @@ abstract contract AdminFunctions is EscrowCore {
         } else {
             balance = IERC20(token).balanceOf(address(this));
             uint256 reserved = escrowedAmount[token] + totalFeesByToken[token];
-            require(balance >= reserved + amount, "Insufficient non-escrow balance");
+            if (balance < reserved + amount) revert InsufficientBalance();
             IERC20(token).safeTransfer(owner(), amount);
         }
         emit EmergencyWithdrawn(token, amount, owner());

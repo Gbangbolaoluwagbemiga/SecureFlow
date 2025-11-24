@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -25,9 +25,6 @@ abstract contract EscrowCore is ReentrancyGuard, Ownable, Pausable, ISecureFlow 
     uint256 public constant REPUTATION_PER_MILESTONE = 10;
     uint256 public constant REPUTATION_PER_ESCROW = 25;
     uint256 public constant MIN_REP_ELIGIBLE_ESCROW_VALUE = 1e16; // 0.01 native or token base units
-
-    // version
-    string public constant CONTRACT_VERSION = "1.0.0";
 
     // ===== State (config) =====
     address public monadToken;

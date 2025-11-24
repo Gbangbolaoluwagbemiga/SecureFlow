@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useWeb3 } from "@/contexts/web3-context";
+import { useSmartAccount } from "@/contexts/smart-account-context";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CONTRACTS, ZERO_ADDRESS } from "@/lib/web3/config";
+import { CONTRACTS, ZERO_ADDRESS, BASE_MAINNET } from "@/lib/web3/config";
 import { SECUREFLOW_ABI, ERC20_ABI } from "@/lib/web3/abis";
 import { useRouter } from "next/navigation";
 import { ProjectDetailsStep } from "@/components/create/project-details-step";
@@ -20,7 +21,8 @@ interface Milestone {
 
 export default function CreateEscrowPage() {
   const router = useRouter();
-  const { wallet, getContract } = useWeb3();
+  const { wallet, getContract, switchToBase } = useWeb3();
+  const { executeTransaction, isSmartAccountReady } = useSmartAccount();
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -31,6 +33,10 @@ export default function CreateEscrowPage() {
   const [useNativeToken, setUseNativeToken] = useState(false);
   const [isOpenJob, setIsOpenJob] = useState(false);
   const [isContractPaused, setIsContractPaused] = useState(false);
+  const [isOnCorrectNetwork, setIsOnCorrectNetwork] = useState(true);
+  const [whitelistedTokens, setWhitelistedTokens] = useState<
+    { address: string; name?: string; symbol?: string }[]
+  >([]);
   const [errors, setErrors] = useState<{
     projectTitle?: string;
     projectDescription?: string;
@@ -44,7 +50,26 @@ export default function CreateEscrowPage() {
 
   useEffect(() => {
     checkContractPauseStatus();
-  }, []);
+    checkNetworkStatus();
+    fetchWhitelistedTokens();
+  }, [wallet.chainId]);
+
+  const checkNetworkStatus = async () => {
+    if (!wallet.isConnected) return;
+
+    try {
+      const currentChainId = await window.ethereum.request({
+        method: "eth_chainId",
+      });
+      const targetChainId = BASE_MAINNET.chainId; // Base Mainnet
+
+      setIsOnCorrectNetwork(
+        currentChainId.toLowerCase() === targetChainId.toLowerCase()
+      );
+    } catch (error) {
+      setIsOnCorrectNetwork(false);
+    }
+  };
 
   const checkContractPauseStatus = async () => {
     try {
@@ -73,13 +98,144 @@ export default function CreateEscrowPage() {
     }
   };
 
+  const fetchWhitelistedTokens = async () => {
+    try {
+      const { ethers } = await import("ethers");
+
+      // Known token mappings
+      const TOKEN_INFO: { [key: string]: { name: string; symbol: string } } = {
+        "0x765DE816845861e75A25fCA122bb6898B8B1282a": {
+          name: "Celo Dollar",
+          symbol: "cUSD",
+        },
+        "0xcebA9300f2b948710d2653dD7B07f33A8B32118C": {
+          name: "USD Coin",
+          symbol: "USDC",
+        },
+        "0x471EcE3750Da237f93B8E339c536989b8978a438": {
+          name: "Celo",
+          symbol: "CELO",
+        },
+      };
+
+      let allWhitelistedTokens: string[] = [];
+
+      // Try to query events from contract
+      for (const rpcUrl of BASE_MAINNET.rpcUrls) {
+        try {
+          const provider = new ethers.JsonRpcProvider(rpcUrl);
+          const contractWithProvider = new ethers.Contract(
+            CONTRACTS.SECUREFLOW_ESCROW,
+            SECUREFLOW_ABI,
+            provider
+          );
+
+          const currentBlock = await provider.getBlockNumber();
+          const fromBlock = Math.max(0, currentBlock - 100000); // Last ~100k blocks
+
+          // Query TokenWhitelisted events
+          const whitelistedEvents = await contractWithProvider.queryFilter(
+            contractWithProvider.filters.TokenWhitelisted(),
+            fromBlock,
+            currentBlock
+          );
+
+          // Query TokenBlacklisted events
+          const blacklistedEvents = await contractWithProvider.queryFilter(
+            contractWithProvider.filters.TokenBlacklisted(),
+            fromBlock,
+            currentBlock
+          );
+
+          const whitelisted = new Set(
+            whitelistedEvents.map((e: any) => e.args[0].toLowerCase())
+          );
+          const blacklisted = new Set(
+            blacklistedEvents.map((e: any) => e.args[0].toLowerCase())
+          );
+
+          // Remove blacklisted from whitelisted
+          blacklisted.forEach((token) => whitelisted.delete(token));
+
+          allWhitelistedTokens = Array.from(whitelisted);
+          break; // Success, exit loop
+        } catch (error) {
+          console.warn(`Failed to fetch from ${rpcUrl}:`, error);
+          continue; // Try next RPC
+        }
+      }
+
+      // Map addresses to names and symbols, fetch from blockchain if not in hardcoded list
+      const provider = new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
+      const ERC20_ABI = [
+        "function name() view returns (string)",
+        "function symbol() view returns (string)",
+      ];
+
+      const tokensWithInfo = await Promise.all(
+        allWhitelistedTokens.map(async (address) => {
+          // Check if we have hardcoded info
+          if (TOKEN_INFO[address]) {
+            return {
+              address,
+              name: TOKEN_INFO[address].name,
+              symbol: TOKEN_INFO[address].symbol,
+            };
+          }
+
+          // Fetch from blockchain
+          try {
+            const tokenContract = new ethers.Contract(
+              address,
+              ERC20_ABI,
+              provider
+            );
+            const [name, symbol] = await Promise.all([
+              tokenContract.name(),
+              tokenContract.symbol(),
+            ]);
+            return { address, name, symbol };
+          } catch (error) {
+            console.warn(`Failed to fetch metadata for ${address}:`, error);
+            return { address, name: undefined, symbol: undefined };
+          }
+        })
+      );
+
+      // Add cUSD as default if not in list
+      if (
+        !allWhitelistedTokens.some(
+          (addr) => addr.toLowerCase() === CONTRACTS.CUSD_MAINNET.toLowerCase()
+        )
+      ) {
+        tokensWithInfo.unshift({
+          address: CONTRACTS.CUSD_MAINNET,
+          name: "Celo Dollar",
+          symbol: "cUSD",
+        });
+      }
+
+      setWhitelistedTokens(tokensWithInfo);
+    } catch (error) {
+      console.error("Failed to fetch whitelisted tokens:", error);
+      // Fallback to default tokens
+      setWhitelistedTokens([
+        {
+          address: CONTRACTS.CUSD_MAINNET,
+          name: "Celo Dollar",
+          symbol: "cUSD",
+        },
+      ]);
+    }
+  };
+
   const [formData, setFormData] = useState({
     projectTitle: "",
     projectDescription: "",
     duration: "",
     totalBudget: "",
     beneficiary: "",
-    token: ZERO_ADDRESS,
+    token: CONTRACTS.MOCK_ERC20, // Default to deployed MockERC20
     useNativeToken: false,
     isOpenJob: false,
     milestones: [
@@ -89,7 +245,7 @@ export default function CreateEscrowPage() {
   });
 
   const commonTokens = [
-    { name: "Native MONAD", address: ZERO_ADDRESS, isNative: true },
+    { name: "Native CELO", address: ZERO_ADDRESS, isNative: true },
     { name: "Custom ERC20", address: "", isNative: false },
   ];
 
@@ -263,7 +419,7 @@ export default function CreateEscrowPage() {
       if (!formData.beneficiary) {
         errors.push("Beneficiary address is required for direct escrow");
       } else if (!/^0x[a-fA-F0-9]{40}$/.test(formData.beneficiary)) {
-        errors.push("Beneficiary address must be a valid Ethereum address");
+        errors.push("Beneficiary address must be a valid Base address");
       }
     }
 
@@ -330,66 +486,236 @@ export default function CreateEscrowPage() {
     setIsSubmitting(true);
 
     try {
-      if (formData.token !== ZERO_ADDRESS) {
-        const tokenContract = getContract(formData.token, ERC20_ABI);
-        const totalAmountInWei = BigInt(
-          Math.floor(Number.parseFloat(formData.totalBudget) * 10 ** 18)
-        ).toString();
+      // Native tokens (ZERO_ADDRESS) are always allowed - skip ERC20 checks
+      // Normalize addresses for comparison (case-insensitive)
+      const normalizedToken = formData.token?.toLowerCase() || "";
+      const normalizedZero = ZERO_ADDRESS.toLowerCase();
+      const isNativeToken =
+        normalizedToken === normalizedZero || formData.useNativeToken === true;
 
-        // Test if token contract is working
+      console.log("Token type check:", {
+        tokenAddress: formData.token,
+        normalizedToken: normalizedToken,
+        normalizedZero: normalizedZero,
+        useNativeToken: formData.useNativeToken,
+        isNativeToken: isNativeToken,
+        ZERO_ADDRESS: ZERO_ADDRESS,
+      });
+
+      if (!isNativeToken) {
+        const tokenContract = getContract(formData.token, ERC20_ABI);
+
+        // Test if token contract is working and get decimals
+        let tokenDecimals = 18; // Default to 18
         try {
           const tokenName = await tokenContract.call("name");
           const tokenSymbol = await tokenContract.call("symbol");
-          const tokenDecimals = await tokenContract.call("decimals");
-        } catch (tokenError) {
+          const decimals = await tokenContract.call("decimals");
+          tokenDecimals = Number(decimals) || 18;
+
+          console.log("Token info:", {
+            tokenName,
+            tokenSymbol,
+            decimals: tokenDecimals,
+            tokenAddress: formData.token,
+          });
+
+          // Verify token is whitelisted (required check for ERC20 tokens only)
+          // Native tokens (ZERO_ADDRESS) are always allowed by the contract
+          try {
+            const escrowContract = getContract(
+              CONTRACTS.SECUREFLOW_ESCROW,
+              SECUREFLOW_ABI
+            );
+            const isWhitelisted = await escrowContract.call(
+              "whitelistedTokens",
+              formData.token
+            );
+            console.log("Token whitelist status:", isWhitelisted);
+            if (!isWhitelisted) {
+              throw new Error(
+                `Token ${formData.token.slice(0, 10)}...${formData.token.slice(
+                  -8
+                )} is not whitelisted. Please whitelist this token in the Admin page before creating an escrow.`
+              );
+            }
+          } catch (whitelistError: any) {
+            if (whitelistError.message?.includes("not whitelisted")) {
+              throw whitelistError;
+            }
+            console.warn("Could not check whitelist status:", whitelistError);
+            // If we can't check, show warning but allow to proceed
+            toast({
+              title: "Warning",
+              description:
+                "Could not verify token whitelist status. Please ensure the token is whitelisted.",
+              variant: "default",
+            });
+          }
+        } catch (tokenError: any) {
+          console.error("Token contract error:", tokenError);
           throw new Error(
-            "Token contract is not working properly. Please check the token address."
+            `Token contract error: ${
+              tokenError.message ||
+              "Please check the token address and ensure you're on Base Mainnet"
+            }`
           );
         }
+
+        // Calculate total amount using actual token decimals
+        const totalAmountInWei = BigInt(
+          Math.floor(
+            Number.parseFloat(formData.totalBudget) * 10 ** tokenDecimals
+          )
+        ).toString();
 
         // Check token balance first
         try {
-          const balance = await tokenContract.call("balanceOf", wallet.address);
+          // Ensure wallet address is checksummed
+          const { ethers } = await import("ethers");
+          const checksummedAddress = ethers.getAddress(wallet.address);
+          const checksummedTokenAddress = ethers.getAddress(formData.token);
 
-          if (Number(balance) < Number(totalAmountInWei)) {
-            throw new Error(
-              `Insufficient token balance. You have ${(
-                Number(balance) /
-                10 ** 18
-              ).toFixed(2)} tokens but need ${formData.totalBudget} tokens.`
+          console.log("Checking balance for:", {
+            originalAddress: wallet.address,
+            checksummedAddress: checksummedAddress,
+            tokenAddress: formData.token,
+            checksummedTokenAddress: checksummedTokenAddress,
+          });
+
+          // Try multiple methods to get balance - wallet provider is most reliable
+          let balance: any = null;
+          let balanceSource = "";
+
+          // Method 1: Direct wallet provider call (most reliable)
+          try {
+            if (typeof window !== "undefined" && window.ethereum) {
+              const walletProvider = new ethers.BrowserProvider(
+                window.ethereum
+              );
+              const tokenContractDirect = new ethers.Contract(
+                checksummedTokenAddress,
+                ERC20_ABI,
+                walletProvider
+              );
+              balance = await tokenContractDirect.balanceOf(checksummedAddress);
+              balanceSource = "walletProvider";
+              console.log(
+                "✅ Balance from wallet provider:",
+                balance.toString()
+              );
+            }
+          } catch (walletError: any) {
+            console.warn(
+              "⚠️ Wallet provider balance check failed:",
+              walletError.message
             );
           }
-        } catch (balanceError) {
+
+          // Method 2: Try getContract call (fallback)
+          if (balance === null) {
+            try {
+              const fallbackBalance = await tokenContract.call(
+                "balanceOf",
+                checksummedAddress
+              );
+              if (fallbackBalance !== null && fallbackBalance !== undefined) {
+                balance = fallbackBalance;
+                balanceSource = "getContract";
+                console.log(
+                  "✅ Balance from getContract:",
+                  balance?.toString()
+                );
+              }
+            } catch (contractError: any) {
+              console.warn(
+                "⚠️ getContract balance check failed:",
+                contractError.message
+              );
+            }
+          }
+
+          // Method 3: Try direct RPC call as last resort
+          if (balance === null) {
+            try {
+              const rpcProvider = new ethers.JsonRpcProvider(
+                BASE_MAINNET.rpcUrls[0]
+              );
+              const tokenContractRPC = new ethers.Contract(
+                checksummedTokenAddress,
+                ERC20_ABI,
+                rpcProvider
+              );
+              const rpcBalance = await tokenContractRPC.balanceOf(
+                checksummedAddress
+              );
+              if (rpcBalance !== null && rpcBalance !== undefined) {
+                balance = rpcBalance;
+                balanceSource = "directRPC";
+                console.log("✅ Balance from direct RPC:", balance.toString());
+              }
+            } catch (rpcError: any) {
+              console.warn(
+                "⚠️ Direct RPC balance check failed:",
+                rpcError.message
+              );
+            }
+          }
+
+          if (balance === null || balance === undefined) {
+            throw new Error(
+              `Failed to retrieve ${tokenSymbol} token balance. Please check your wallet connection and network.`
+            );
+          }
+
+          // Convert balance to BigInt if it's a string or number
+          const balanceBigInt =
+            typeof balance === "bigint" ? balance : BigInt(balance.toString());
+          const totalAmountBigInt = BigInt(totalAmountInWei);
+          const divisor = BigInt(10 ** tokenDecimals);
+
+          console.log("Balance check result:", {
+            balanceSource: balanceSource,
+            walletAddress: checksummedAddress,
+            tokenAddress: checksummedTokenAddress,
+            rawBalance: balance.toString(),
+            balance: balanceBigInt.toString(),
+            totalAmount: totalAmountBigInt.toString(),
+            balanceFormatted: (Number(balanceBigInt) / Number(divisor)).toFixed(
+              4
+            ),
+            totalAmountFormatted: (
+              Number(totalAmountBigInt) / Number(divisor)
+            ).toFixed(4),
+            decimals: tokenDecimals,
+          });
+
+          if (balanceBigInt < totalAmountBigInt) {
+            const balanceFormatted = Number(balanceBigInt) / Number(divisor);
+            const totalAmountFormatted =
+              Number(totalAmountBigInt) / Number(divisor);
+            throw new Error(
+              `Insufficient ${tokenSymbol} balance! You have ${balanceFormatted.toFixed(
+                4
+              )} ${tokenSymbol} but need ${totalAmountFormatted.toFixed(
+                4
+              )} ${tokenSymbol}. Please add more ${tokenSymbol} tokens to your wallet.`
+            );
+          }
+        } catch (balanceError: any) {
+          console.error("Balance check error:", balanceError);
+          if (balanceError.message?.includes("Insufficient token balance")) {
+            throw balanceError;
+          }
           throw new Error(
-            "Failed to check token balance. Please ensure you have enough tokens or try using native MON tokens instead."
+            `Failed to check token balance: ${
+              balanceError.message ||
+              "Please ensure you have enough tokens and are on Base Mainnet"
+            }`
           );
         }
 
-        // Check if token is whitelisted
-        const secureFlowContract = getContract(
-          CONTRACTS.SECUREFLOW_ESCROW,
-          SECUREFLOW_ABI
-        );
-        const isWhitelisted = await secureFlowContract.call(
-          "whitelistedTokens",
-          formData.token
-        );
-
-        if (!isWhitelisted) {
-          throw new Error(
-            "This token is not whitelisted. Please use a whitelisted token or contact an admin to whitelist this token."
-          );
-        }
-
-        // Check current allowance
-        const currentAllowance = await tokenContract.call(
-          "allowance",
-          wallet.address,
-          CONTRACTS.SECUREFLOW_ESCROW
-        );
-
-        // Only approve if allowance is insufficient
-        if (BigInt(currentAllowance) < BigInt(totalAmountInWei)) {
+        try {
           const approvalTx = await tokenContract.send(
             "approve",
             "no-value", // No native value for ERC20 approval
@@ -402,37 +728,44 @@ export default function CreateEscrowPage() {
             description: "Waiting for token approval confirmation...",
           });
 
-          // Wait for approval transaction to be confirmed
-          let approvalReceipt = null;
+          // Wait for approval transaction to be mined
+          let approvalReceipt;
           let approvalAttempts = 0;
           const maxApprovalAttempts = 30;
 
-          while (approvalAttempts < maxApprovalAttempts && !approvalReceipt) {
+          while (approvalAttempts < maxApprovalAttempts) {
             try {
-              const provider = new ethers.JsonRpcProvider(
-                "https://mainnet.base.org"
-              );
-              approvalReceipt = await provider.getTransactionReceipt(
-                approvalTx
-              );
-              if (approvalReceipt) break;
-            } catch (error) {
-              // Continue polling
-            }
+              approvalReceipt = await window.ethereum.request({
+                method: "eth_getTransactionReceipt",
+                params: [approvalTx],
+              });
+
+              if (approvalReceipt) {
+                break;
+              }
+            } catch (error) {}
+
             await new Promise((resolve) => setTimeout(resolve, 2000));
             approvalAttempts++;
           }
 
-          if (!approvalReceipt || approvalReceipt.status !== 1) {
+          if (!approvalReceipt || approvalReceipt.status !== "0x1") {
             throw new Error(
-              "Token approval failed or timed out. Please try again."
+              "Token approval transaction failed or was rejected"
             );
           }
 
           toast({
-            title: "Approval confirmed",
-            description: "Token approval successful. Creating escrow...",
+            title: "Token approved",
+            description: "Token approval confirmed. Creating escrow...",
           });
+        } catch (approvalError: any) {
+          console.error("Approval error:", approvalError);
+          throw new Error(
+            `Token approval failed: ${
+              approvalError.message || "Please try again"
+            }`
+          );
         }
       }
 
@@ -444,39 +777,109 @@ export default function CreateEscrowPage() {
         (m) => m.description
       );
 
-      const beneficiaryAddress = formData.isOpenJob
+      const beneficiaryAddress = isOpenJob
         ? "0x0000000000000000000000000000000000000000" // Zero address for open jobs
         : formData.beneficiary || "0x0000000000000000000000000000000000000000";
 
       let txHash;
 
-      if (formData.token === ZERO_ADDRESS) {
-        // Use createEscrowNative for native MON tokens
+      // Native tokens (ZERO_ADDRESS) are always whitelisted by default in the contract
+      if (isNativeToken) {
+        // Use createEscrowNative for native CELO tokens
+        console.log("Creating native CELO escrow (no whitelist check needed)");
         const totalAmountInWei = BigInt(
           Math.floor(Number.parseFloat(formData.totalBudget) * 10 ** 18)
         ).toString();
 
-        // Check native token balance
-        try {
-          const balance = await window.ethereum.request({
-            method: "eth_getBalance",
-            params: [wallet.address],
-          });
+        // Check native token balance with multiple methods
+        let balanceInWei: bigint | null = null;
+        let balanceSource = "unknown";
 
-          const balanceInWei = BigInt(balance);
-          const requiredAmount = BigInt(totalAmountInWei);
-
-          if (balanceInWei < requiredAmount) {
-            throw new Error(
-              `Insufficient MON balance. You have ${(
-                Number(balanceInWei) /
-                10 ** 18
-              ).toFixed(4)} MON but need ${formData.totalBudget} MON.`
+        // Method 1: Try wallet provider (most reliable)
+        if (typeof window !== "undefined" && window.ethereum) {
+          try {
+            const { ethers } = await import("ethers");
+            const checksummedAddress = ethers.getAddress(wallet.address);
+            const walletProvider = new ethers.BrowserProvider(window.ethereum);
+            balanceInWei = await walletProvider.getBalance(checksummedAddress);
+            balanceSource = "walletProvider";
+            console.log(
+              "✅ CELO balance from wallet provider:",
+              balanceInWei.toString()
+            );
+          } catch (walletError: any) {
+            console.warn(
+              "⚠️ Wallet provider balance check failed:",
+              walletError.message
             );
           }
-        } catch (balanceError) {
+        }
+
+        // Method 2: Try direct RPC call
+        if (!balanceInWei) {
+          try {
+            const { ethers } = await import("ethers");
+            const checksummedAddress = ethers.getAddress(wallet.address);
+            const balance = await window.ethereum.request({
+              method: "eth_getBalance",
+              params: [checksummedAddress, "latest"],
+            });
+            balanceInWei = BigInt(balance);
+            balanceSource = "eth_getBalance";
+            console.log(
+              "✅ CELO balance from eth_getBalance:",
+              balanceInWei.toString()
+            );
+          } catch (rpcError: any) {
+            console.warn("⚠️ eth_getBalance failed:", rpcError.message);
+          }
+        }
+
+        // Method 3: Try direct RPC provider
+        if (!balanceInWei) {
+          try {
+            const { ethers } = await import("ethers");
+            const checksummedAddress = ethers.getAddress(wallet.address);
+            const provider = new ethers.JsonRpcProvider(
+              BASE_MAINNET.rpcUrls[0]
+            );
+            balanceInWei = await provider.getBalance(checksummedAddress);
+            balanceSource = "directRPC";
+            console.log(
+              "✅ CELO balance from direct RPC:",
+              balanceInWei.toString()
+            );
+          } catch (directRpcError: any) {
+            console.warn(
+              "⚠️ Direct RPC balance check failed:",
+              directRpcError.message
+            );
+          }
+        }
+
+        if (!balanceInWei) {
           throw new Error(
-            "Failed to check MON balance. Please ensure you have enough MON tokens."
+            "Failed to retrieve CELO balance from all methods. Please check your wallet connection and network."
+          );
+        }
+
+        const requiredAmount = BigInt(totalAmountInWei);
+        const balanceFormatted = Number(balanceInWei) / 10 ** 18;
+        const requiredFormatted = Number(requiredAmount) / 10 ** 18;
+
+        console.log("CELO Balance check:", {
+          balanceSource,
+          rawBalance: balanceInWei.toString(),
+          balanceFormatted: balanceFormatted.toFixed(4),
+          requiredAmount: requiredAmount.toString(),
+          requiredFormatted: requiredFormatted.toFixed(4),
+        });
+
+        if (balanceInWei < requiredAmount) {
+          throw new Error(
+            `Insufficient CELO balance. You have ${balanceFormatted.toFixed(
+              4
+            )} CELO but need ${requiredFormatted.toFixed(4)} CELO.`
           );
         }
 
@@ -530,24 +933,54 @@ export default function CreateEscrowPage() {
 
         while (txAttempts < maxTxAttempts) {
           try {
-            // Use regular transaction
-            txHash = await escrowContract.send(
-              "createEscrowNative",
-              `0x${BigInt(totalAmountInWei).toString(16)}`, // Convert wei to hex for msg.value
-              beneficiaryAddress, // beneficiary parameter
-              arbiters, // arbiters parameter
-              requiredConfirmations, // requiredConfirmations parameter
-              milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
-              milestoneDescriptions, // milestoneDescriptions parameter
-              durationInSeconds, // duration parameter (in seconds)
-              formData.projectTitle, // projectTitle parameter
-              formData.projectDescription // projectDescription parameter
-            );
+            // Check if we should use Smart Account for gasless transaction
+            if (isSmartAccountReady) {
+              // Use Smart Account for gasless escrow creation
+              const { ethers } = await import("ethers");
+              const iface = new ethers.Interface(SECUREFLOW_ABI);
+              const data = iface.encodeFunctionData("createEscrowNative", [
+                beneficiaryAddress, // beneficiary parameter
+                arbiters, // arbiters parameter
+                requiredConfirmations, // requiredConfirmations parameter
+                milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
+                milestoneDescriptions, // milestoneDescriptions parameter
+                durationInSeconds, // duration parameter (in seconds)
+                formData.projectTitle, // projectTitle parameter
+                formData.projectDescription, // projectDescription parameter
+              ]);
 
-            toast({
-              title: "Escrow Created!",
-              description: "Your escrow has been created successfully",
-            });
+              txHash = await executeTransaction(
+                CONTRACTS.SECUREFLOW_ESCROW,
+                data,
+                (Number(totalAmountInWei) / 1e18).toString() // Convert wei to CELO for value
+              );
+
+              toast({
+                title: "Transaction Submitted",
+                description:
+                  "Your transaction has been submitted. Waiting for confirmation...",
+              });
+            } else {
+              // Use regular transaction
+              txHash = await escrowContract.send(
+                "createEscrowNative",
+                `0x${BigInt(totalAmountInWei).toString(16)}`, // Convert wei to hex for msg.value
+                beneficiaryAddress, // beneficiary parameter
+                arbiters, // arbiters parameter
+                requiredConfirmations, // requiredConfirmations parameter
+                milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
+                milestoneDescriptions, // milestoneDescriptions parameter
+                durationInSeconds, // duration parameter (in seconds)
+                formData.projectTitle, // projectTitle parameter
+                formData.projectDescription // projectDescription parameter
+              );
+
+              toast({
+                title: "Transaction Submitted",
+                description:
+                  "Your transaction has been submitted. Waiting for confirmation...",
+              });
+            }
             break;
           } catch (txError) {
             txAttempts++;
@@ -563,6 +996,8 @@ export default function CreateEscrowPage() {
         }
       } else {
         // Use createEscrow for ERC20 tokens
+        // Note: ERC20 tokens must be whitelisted (already checked above)
+        console.log("Creating ERC20 escrow with token:", formData.token);
         const arbiters = ["0x3be7fbbdbc73fc4731d60ef09c4ba1a94dc58e41"]; // Default arbiter
         const requiredConfirmations = 1;
 
@@ -574,101 +1009,164 @@ export default function CreateEscrowPage() {
         // Convert duration from days to seconds
         const durationInSeconds = Number(formData.duration) * 24 * 60 * 60;
 
-        // Verify token is still whitelisted before creating escrow
-        const isWhitelistedCheck = await escrowContract.call(
-          "whitelistedTokens",
-          formData.token
-        );
+        // Check if we should use Smart Account for gasless transaction
+        if (isSmartAccountReady) {
+          // Use Smart Account for gasless ERC20 escrow creation
+          const { ethers } = await import("ethers");
+          const iface = new ethers.Interface(SECUREFLOW_ABI);
+          const data = iface.encodeFunctionData("createEscrow", [
+            beneficiaryAddress, // beneficiary parameter
+            arbiters, // arbiters parameter
+            requiredConfirmations, // requiredConfirmations parameter
+            milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
+            milestoneDescriptions, // milestoneDescriptions parameter
+            formData.token, // token parameter
+            durationInSeconds, // duration parameter (in seconds)
+            formData.projectTitle, // projectTitle parameter
+            formData.projectDescription, // projectDescription parameter
+          ]);
 
-        if (!isWhitelistedCheck) {
-          throw new Error(
-            "Token is not whitelisted. Please use a whitelisted token or contact an admin."
+          txHash = await executeTransaction(
+            CONTRACTS.SECUREFLOW_ESCROW,
+            data,
+            "0" // No CELO value for ERC20
           );
+
+          toast({
+            title: "Transaction Submitted",
+            description:
+              "Your ERC20 escrow transaction has been submitted. Waiting for confirmation...",
+          });
+        } else {
+          // Use regular transaction
+          txHash = await escrowContract.send(
+            "createEscrow",
+            "no-value", // No msg.value for ERC20
+            beneficiaryAddress, // beneficiary parameter
+            arbiters, // arbiters parameter
+            requiredConfirmations, // requiredConfirmations parameter
+            milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
+            milestoneDescriptions, // milestoneDescriptions parameter
+            formData.token, // token parameter
+            durationInSeconds, // duration parameter (in seconds)
+            formData.projectTitle, // projectTitle parameter
+            formData.projectDescription // projectDescription parameter
+          );
+
+          toast({
+            title: "Transaction Submitted",
+            description:
+              "Your ERC20 escrow transaction has been submitted. Waiting for confirmation...",
+          });
         }
-
-        // Use regular transaction
-        txHash = await escrowContract.send(
-          "createEscrow",
-          "no-value", // No msg.value for ERC20
-          beneficiaryAddress, // beneficiary parameter
-          arbiters, // arbiters parameter
-          requiredConfirmations, // requiredConfirmations parameter
-          milestoneAmountsInWei, // milestoneAmounts parameter (in wei)
-          milestoneDescriptions, // milestoneDescriptions parameter
-          formData.token, // token parameter
-          durationInSeconds, // duration parameter (in seconds)
-          formData.projectTitle, // projectTitle parameter
-          formData.projectDescription // projectDescription parameter
-        );
-
-        toast({
-          title: "ERC20 Escrow Created!",
-          description: "Your ERC20 escrow has been created successfully",
-        });
       }
 
       // Wait for transaction confirmation
-      let receipt;
-      let attempts = 0;
-      const maxAttempts = 30; // 30 attempts * 2 seconds = 1 minute timeout
+      // Note: Success toast is already shown in Smart Account/regular transaction logic above
 
-      while (attempts < maxAttempts) {
-        try {
-          receipt = await window.ethereum.request({
-            method: "eth_getTransactionReceipt",
-            params: [txHash],
+      // For Smart Account transactions, we still need to wait for confirmation
+      // but the Smart Account pays the gas fees
+      if (isSmartAccountReady) {
+        // Smart Account transactions are real but gasless for the user
+
+        // Wait for real blockchain confirmation
+        let receipt;
+        let attempts = 0;
+        const maxAttempts = 30; // 30 attempts * 2 seconds = 1 minute timeout
+
+        while (attempts < maxAttempts) {
+          try {
+            receipt = await window.ethereum.request({
+              method: "eth_getTransactionReceipt",
+              params: [txHash],
+            });
+
+            if (receipt) {
+              break;
+            }
+          } catch (error) {}
+
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+          attempts++;
+        }
+
+        if (!receipt) {
+          throw new Error(
+            "Transaction timeout - please check the blockchain explorer"
+          );
+        }
+
+        if (receipt.status === "0x1") {
+          // Transaction successful
+          toast({
+            title: isOpenJob
+              ? "✅ Job Posted Successfully!"
+              : "✅ Escrow Created Successfully!",
+            description: isOpenJob
+              ? "Your job is now live with no gas fees! Freelancers can apply on the Browse Jobs page. Redirecting..."
+              : "Your escrow has been created successfully with no gas fees! The freelancer can now start working. Redirecting...",
           });
 
-          if (receipt) {
-            break;
-          }
-        } catch (error) {}
-
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
-        attempts++;
-      }
-
-      if (!receipt) {
-        throw new Error(
-          "Transaction timeout - please check the blockchain explorer"
-        );
-      }
-
-      if (receipt.status === "0x1") {
-        // Transaction successful
-        setIsSubmitting(false);
-        toast({
-          title: formData.isOpenJob ? "Job posted!" : "Escrow created!",
-          description: formData.isOpenJob
-            ? "Your job is now live. Freelancers can apply on the Browse Jobs page."
-            : "Your escrow has been successfully created",
-        });
-
-        // Redirect immediately after success
-        router.push(formData.isOpenJob ? "/jobs" : "/dashboard");
+          setTimeout(() => {
+            router.push(isOpenJob ? "/jobs" : "/dashboard");
+          }, 3000);
+        } else {
+          throw new Error("Transaction failed on blockchain");
+        }
       } else {
-        // Transaction failed
-        setIsSubmitting(false);
-        throw new Error("Transaction failed on blockchain");
+        // For regular transactions, wait for blockchain confirmation
+        let receipt;
+        let attempts = 0;
+        const maxAttempts = 30; // 30 attempts * 2 seconds = 1 minute timeout
+
+        while (attempts < maxAttempts) {
+          try {
+            receipt = await window.ethereum.request({
+              method: "eth_getTransactionReceipt",
+              params: [txHash],
+            });
+
+            if (receipt) {
+              break;
+            }
+          } catch (error) {}
+
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+          attempts++;
+        }
+
+        if (!receipt) {
+          throw new Error(
+            "Transaction timeout - please check the blockchain explorer"
+          );
+        }
+
+        if (receipt.status === "0x1") {
+          // Transaction successful
+          toast({
+            title: isOpenJob
+              ? "✅ Job Posted Successfully!"
+              : "✅ Escrow Created Successfully!",
+            description: isOpenJob
+              ? "Your job is now live. Freelancers can apply on the Browse Jobs page. Redirecting..."
+              : "Your escrow has been successfully created. Redirecting...",
+          });
+
+          setTimeout(() => {
+            router.push(isOpenJob ? "/jobs" : "/dashboard");
+          }, 3000);
+        } else {
+          // Transaction failed
+          throw new Error("Transaction failed on blockchain");
+        }
       }
     } catch (error: any) {
-      setIsSubmitting(false);
-      console.error("Escrow creation error:", error);
       let errorMessage = "Failed to create escrow";
 
       if (error.message?.includes("insufficient funds")) {
         errorMessage = "Insufficient funds. Please check your balance.";
-      } else if (
-        error.message?.includes("gas") ||
-        error.message?.includes("Gas")
-      ) {
-        errorMessage =
-          "Gas estimation failed. This usually means the transaction would fail. Please check: 1) Token is whitelisted, 2) You have sufficient balance, 3) Token approval was successful.";
-      } else if (
-        error.message?.includes("whitelist") ||
-        error.message?.includes("Whitelist")
-      ) {
-        errorMessage = error.message;
+      } else if (error.message?.includes("gas")) {
+        errorMessage = "Gas estimation failed. Please try again.";
       } else if (error.message?.includes("revert")) {
         errorMessage = "Transaction reverted. Please check your parameters.";
       } else if (error.message?.includes("user rejected")) {
@@ -712,6 +1210,30 @@ export default function CreateEscrowPage() {
 
   return (
     <div className="min-h-screen py-12 gradient-mesh">
+      {/* Network Switch Banner */}
+      {!isOnCorrectNetwork && wallet.isConnected && (
+        <div className="container mx-auto px-4 max-w-4xl mb-6">
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+                <div>
+                  <h3 className="font-semibold text-destructive">
+                    Wrong Network
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Please switch to Base Mainnet to create escrows
+                  </p>
+                </div>
+              </div>
+              <Button onClick={switchToBase} variant="destructive" size="sm">
+                Switch to Base Mainnet
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="container mx-auto px-4 max-w-4xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -764,10 +1286,44 @@ export default function CreateEscrowPage() {
                 <ProjectDetailsStep
                   formData={formData}
                   onUpdate={(data) => {
-                    setFormData({ ...formData, ...data });
+                    console.log(
+                      "ProjectDetailsStep onUpdate called with:",
+                      data
+                    );
+                    // If useNativeToken is being set to true, automatically set token to ZERO_ADDRESS
+                    if (data.useNativeToken === true) {
+                      console.log(
+                        "Setting token to ZERO_ADDRESS for native token"
+                      );
+                      setFormData({
+                        ...formData,
+                        ...data,
+                        token: ZERO_ADDRESS,
+                      });
+                    } else if (
+                      data.useNativeToken === false &&
+                      (formData.token === ZERO_ADDRESS ||
+                        formData.token?.toLowerCase() ===
+                          ZERO_ADDRESS.toLowerCase())
+                    ) {
+                      // If unchecking native token and token is currently ZERO_ADDRESS, set to default
+                      console.log("Unchecking native token, setting to cUSD");
+                      setFormData({
+                        ...formData,
+                        ...data,
+                        token: CONTRACTS.CUSD_MAINNET,
+                      });
+                    } else {
+                      console.log(
+                        "Regular update, token:",
+                        data.token || formData.token
+                      );
+                      setFormData({ ...formData, ...data });
+                    }
                     clearErrors();
                   }}
                   isContractPaused={isContractPaused}
+                  whitelistedTokens={whitelistedTokens}
                   errors={{
                     projectTitle: errors.projectTitle,
                     projectDescription: errors.projectDescription,
@@ -820,6 +1376,7 @@ export default function CreateEscrowPage() {
                   onConfirm={handleSubmit}
                   isSubmitting={isSubmitting}
                   isContractPaused={isContractPaused}
+                  isOnCorrectNetwork={isOnCorrectNetwork}
                 />
               </motion.div>
             )}

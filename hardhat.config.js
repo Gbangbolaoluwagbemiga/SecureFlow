@@ -6,13 +6,16 @@ module.exports = {
   solidity: {
     compilers: [
       {
-        version: "0.8.19",
+        version: "0.8.20",
         settings: {
           optimizer: {
             enabled: true,
-            runs: 1, // Low runs optimizes for contract size
+            runs: 1, // Optimize for size (minimum runs = maximum size reduction)
           },
           viaIR: true,
+          metadata: {
+            bytecodeHash: "none", // Reduce metadata size
+          },
         },
       },
       {
@@ -20,9 +23,12 @@ module.exports = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 1, // Low runs optimizes for contract size
+            runs: 1, // Optimize for size (minimum runs = maximum size reduction)
           },
           viaIR: true,
+          metadata: {
+            bytecodeHash: "none", // Reduce metadata size
+          },
         },
       },
     ],
@@ -34,6 +40,40 @@ module.exports = {
     localhost: {
       url: "http://127.0.0.1:8545",
     },
+    celo: {
+      url: process.env.CELO_RPC_URL || "https://forno.celo.org",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+      chainId: 42220, // Celo mainnet chain ID
+      gas: 8000000,
+      // Let ethers automatically determine gas price for Celo
+    },
+    celoTestnet: {
+      url:
+        process.env.CELO_TESTNET_RPC_URL ||
+        "https://alfajores-forno.celo-testnet.org",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+      chainId: 44787, // Celo Alfajores testnet chain ID
+      gas: 8000000,
+      // Let ethers automatically determine gas price for Celo
+    },
+    base: {
+      url: "https://mainnet.base.org",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+      chainId: 8453, // Base mainnet chain ID
+      gas: 2000000, // Further reduced gas limit
+      gasPrice: 1000000, // 0.001 gwei (minimum gas price)
+    },
+    baseTestnet: {
+      url: process.env.BASE_TESTNET_RPC_URL || "https://sepolia.base.org",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+      chainId: 84532, // Base testnet chain ID
+      gas: 8000000, // Higher gas limit
+      gasPrice: 1000000000, // 1 gwei
+    },
     monad: {
       url: process.env.MONAD_RPC_URL || "https://testnet-rpc.monad.xyz",
       accounts:
@@ -43,30 +83,32 @@ module.exports = {
       maxFeePerGas: 10000000000, // 10 gwei
       maxPriorityFeePerGas: 1000000000, // 1 gwei
     },
-    base: {
-      url: process.env.BASE_RPC_URL || "https://mainnet.base.org",
-      accounts:
-        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
-      chainId: 8453, // Base mainnet chain ID
-    },
-  },
-  etherscan: {
-    apiKey: process.env.BASESCAN_API_KEY || process.env.ETHERSCAN_API_KEY || "",
-    customChains: [
-      {
-        network: "base",
-        chainId: 8453,
-        urls: {
-          apiURL: "https://api.basescan.org/api",
-          browserURL: "https://basescan.org",
-        },
-      },
-    ],
   },
   paths: {
     sources: "./contracts",
     tests: "./test",
     cache: "./cache",
     artifacts: "./artifacts",
+  },
+  etherscan: {
+    apiKey: process.env.BASESCAN_API_KEY || "",
+    customChains: [
+      {
+        network: "base",
+        chainId: 8453,
+        urls: {
+          apiURL: "https://api.basescan.org/v2/api",
+          browserURL: "https://basescan.org",
+        },
+      },
+      {
+        network: "baseSepolia",
+        chainId: 84532,
+        urls: {
+          apiURL: "https://api-sepolia.basescan.org/v2/api",
+          browserURL: "https://sepolia.basescan.org",
+        },
+      },
+    ],
   },
 };

@@ -17,6 +17,11 @@ import { JobsStats } from "@/components/jobs/jobs-stats";
 import { JobCard } from "@/components/jobs/job-card";
 import { ApplicationDialog } from "@/components/jobs/application-dialog";
 import { JobsLoading } from "@/components/jobs/jobs-loading";
+import {
+  FilterSortControls,
+  type FilterStatus,
+  type SortOption,
+} from "@/components/dashboard/filter-sort-controls";
 
 export default function JobsPage() {
   const { wallet, getContract } = useWeb3();
@@ -25,6 +30,8 @@ export default function JobsPage() {
   const [jobs, setJobs] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
+  const [sortOption, setSortOption] = useState<SortOption>("newest");
   const [selectedJob, setSelectedJob] = useState<Escrow | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
   const [proposedTimeline, setProposedTimeline] = useState("");
@@ -204,8 +211,6 @@ export default function JobsPage() {
       const totalEscrows = await contract.call("nextEscrowId");
       const escrowCount = Number(totalEscrows);
 
-      console.log("Total escrows:", escrowCount);
-
       const openJobs: Escrow[] = [];
 
       // Fetch open jobs from the contract
@@ -215,53 +220,12 @@ export default function JobsPage() {
           try {
             const escrowSummary = await contract.call("getEscrowSummary", i);
 
-            // Debug: log the escrow summary structure
-            console.log(`Escrow ${i} summary:`, {
-              depositor: escrowSummary[0],
-              beneficiary: escrowSummary[1],
-              status: escrowSummary[3],
-              isOpenJob: escrowSummary[12],
-              projectDescription: escrowSummary[14],
-            });
-
-            // Check if this is an open job using the isOpenJob field from contract
+            // Check if this is an open job (beneficiary is zero address)
             // getEscrowSummary returns indexed properties: [depositor, beneficiary, arbiters, status, totalAmount, paidAmount, remaining, token, deadline, workStarted, createdAt, milestoneCount, isOpenJob, projectTitle, projectDescription]
-            const beneficiary = escrowSummary[1]; // beneficiary at index 1
-            const isOpenJobValue = escrowSummary[12]; // isOpenJob is at index 12
+            const isOpenJob =
+              escrowSummary[1] === "0x0000000000000000000000000000000000000000";
 
-            // Handle boolean conversion - contract may return 0/1, true/false, or "true"/"false"
-            let isOpenJob = false;
-            if (typeof isOpenJobValue === "boolean") {
-              isOpenJob = isOpenJobValue;
-            } else if (typeof isOpenJobValue === "number") {
-              isOpenJob = isOpenJobValue === 1;
-            } else if (typeof isOpenJobValue === "string") {
-              isOpenJob = isOpenJobValue === "true" || isOpenJobValue === "1";
-            } else if (isOpenJobValue) {
-              // Try to convert object/other types
-              try {
-                const value = isOpenJobValue.toString();
-                isOpenJob = value === "true" || value === "1";
-              } catch {
-                isOpenJob = false;
-              }
-            }
-
-            // Also check if beneficiary is zero address as fallback (contract sets isOpenJob = beneficiary == address(0))
-            const isZeroAddress =
-              beneficiary === "0x0000000000000000000000000000000000000000" ||
-              beneficiary?.toLowerCase() ===
-                "0x0000000000000000000000000000000000000000";
-
-            console.log(
-              `Escrow ${i}: isOpenJob=${isOpenJob} (raw: ${JSON.stringify(
-                isOpenJobValue
-              )}, type: ${typeof isOpenJobValue}), beneficiary=${beneficiary}, isZeroAddress=${isZeroAddress}`
-            );
-
-            // Use isOpenJob from contract OR check if beneficiary is zero address
-            if (isOpenJob || isZeroAddress) {
-              console.log(`✓ Escrow ${i} is an open job - adding to list`);
+            if (isOpenJob) {
               // Check if current user is the job creator (should not be able to apply to own job)
               const isJobCreator =
                 escrowSummary[0].toLowerCase() ===
@@ -367,7 +331,7 @@ export default function JobsPage() {
                   "getApplicationsPage",
                   i, // escrowId
                   0, // offset
-                  100 // limit
+                  50 // limit (MAX_APPLICATIONS = 50)
                 );
                 applicationCount = applications ? applications.length : 0;
               } catch (error) {
@@ -393,45 +357,37 @@ export default function JobsPage() {
                   )
                 ), // Convert seconds to days, ensure non-negative and round to nearest day
                 milestones: [], // Would need to fetch milestones separately
+                projectTitle: escrowSummary[13] || "", // projectTitle
                 projectDescription: escrowSummary[14] || "", // projectDescription
-                isOpenJob: Boolean(escrowSummary[12]), // isOpenJob at index 12
+                isOpenJob: true,
                 applications: [], // Would need to fetch applications separately
                 applicationCount: applicationCount, // Add real application count
                 isJobCreator: isJobCreator, // Add flag to track if current user is the job creator
               };
 
               openJobs.push(job);
-              console.log(`✓ Added escrow ${i} to open jobs list`);
 
               // Store application status
               setHasApplied((prev) => ({
                 ...prev,
                 [job.id]: userHasApplied,
               }));
-            } else {
-              console.log(`✗ Escrow ${i} is NOT an open job - skipping`);
             }
           } catch (error) {
-            console.error(`Error fetching escrow ${i}:`, error);
             // Skip escrows that don't exist or user doesn't have access to
             continue;
           }
         }
       }
 
-      console.log(`Total open jobs found: ${openJobs.length}`);
       // Set the actual jobs from the contract
       setJobs(openJobs);
-    } catch (error: any) {
-      console.error("Error fetching open jobs:", error);
+    } catch (error) {
       toast({
         title: "Failed to load jobs",
-        description:
-          error?.message ||
-          "Could not fetch available jobs from the blockchain. Please check your connection and try again.",
+        description: "Could not fetch available jobs from the blockchain",
         variant: "destructive",
       });
-      setJobs([]);
     } finally {
       setLoading(false);
     }
@@ -512,7 +468,7 @@ export default function JobsPage() {
             "getApplicationsPage",
             job.id,
             0, // offset
-            100 // limit
+            50 // limit (MAX_APPLICATIONS = 50)
           );
 
           if (applications && Array.isArray(applications)) {
@@ -596,15 +552,74 @@ export default function JobsPage() {
     }
   };
 
-  const filteredJobs = jobs.filter(
-    (job) =>
-      job.projectDescription
-        ?.toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
-      job.milestones.some((m) =>
-        m.description.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-  );
+  // Filter and sort jobs
+  const getFilteredAndSortedJobs = () => {
+    let filtered = [...jobs];
+
+    // Apply search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (job) =>
+          job.projectTitle?.toLowerCase().includes(query) ||
+          job.projectDescription?.toLowerCase().includes(query) ||
+          job.milestones.some((m) =>
+            m.description.toLowerCase().includes(query)
+          )
+      );
+    }
+
+    // Apply status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((job) => {
+        const status = job.status.toLowerCase();
+        return status === statusFilter.toLowerCase();
+      });
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (sortOption) {
+        case "newest":
+          return b.createdAt - a.createdAt;
+        case "oldest":
+          return a.createdAt - b.createdAt;
+        case "amount-high":
+          return (
+            Number.parseFloat(b.totalAmount) - Number.parseFloat(a.totalAmount)
+          );
+        case "amount-low":
+          return (
+            Number.parseFloat(a.totalAmount) - Number.parseFloat(b.totalAmount)
+          );
+        case "status":
+          const statusOrder: Record<string, number> = {
+            pending: 0,
+            active: 1,
+            completed: 2,
+            disputed: 3,
+          };
+          return (
+            (statusOrder[a.status.toLowerCase()] ?? 99) -
+            (statusOrder[b.status.toLowerCase()] ?? 99)
+          );
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  };
+
+  const filteredJobs = getFilteredAndSortedJobs();
+  const activeFiltersCount =
+    (statusFilter !== "all" ? 1 : 0) + (searchQuery.trim() ? 1 : 0);
+
+  const handleClearFilters = () => {
+    setStatusFilter("all");
+    setSearchQuery("");
+    setSortOption("newest");
+  };
 
   if (!wallet.isConnected || loading) {
     return <JobsLoading isConnected={wallet.isConnected} />;
@@ -613,13 +628,20 @@ export default function JobsPage() {
   return (
     <div className="min-h-screen py-12">
       <div className="container mx-auto px-4">
-        <JobsHeader
+        <JobsHeader onRefresh={handleRefresh} refreshing={refreshing} />
+        <JobsStats jobs={jobs} ongoingProjectsCount={ongoingProjectsCount} />
+
+        {/* Filter and Sort Controls */}
+        <FilterSortControls
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          sortOption={sortOption}
+          onSortChange={setSortOption}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          onRefresh={handleRefresh}
-          refreshing={refreshing}
+          onClearFilters={handleClearFilters}
+          activeFiltersCount={activeFiltersCount}
         />
-        <JobsStats jobs={jobs} ongoingProjectsCount={ongoingProjectsCount} />
 
         {/* Jobs List */}
         <div className="space-y-6">

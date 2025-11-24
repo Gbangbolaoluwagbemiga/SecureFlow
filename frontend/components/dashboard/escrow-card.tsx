@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { motion } from "framer-motion";
 import { Clock, DollarSign, ChevronDown, ChevronUp, Star } from "lucide-react";
 import { MilestoneActions } from "@/components/milestone-actions";
+import { RateFreelancer } from "@/components/rating-freelancer";
 import type { Escrow, Milestone } from "@/lib/web3/types";
 
 interface EscrowCardProps {
@@ -20,14 +21,14 @@ interface EscrowCardProps {
   onDisputeMilestone: (escrowId: string, milestoneIndex: number) => void;
   onStartWork: (escrowId: string) => void;
   onDispute: (escrowId: string) => void;
-  onLeaveReview?: (escrowId: string, freelancerAddress: string) => void;
-  hasReview?: boolean; // Whether a review already exists for this escrow
   calculateDaysLeft: (createdAt: number, duration: number) => number;
   getDaysLeftMessage: (daysLeft: number) => {
     text: string;
     color: string;
     bgColor: string;
   };
+  rating?: { rating: number; exists: boolean };
+  onRatingSubmitted?: () => void;
 }
 
 export function EscrowCard({
@@ -41,10 +42,10 @@ export function EscrowCard({
   onDisputeMilestone,
   onStartWork,
   onDispute,
-  onLeaveReview,
-  hasReview = false,
   calculateDaysLeft,
   getDaysLeftMessage,
+  rating,
+  onRatingSubmitted,
 }: EscrowCardProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -56,6 +57,8 @@ export function EscrowCard({
         return "bg-green-100 text-green-800";
       case "disputed":
         return "bg-red-100 text-red-800";
+      case "resolved":
+        return "bg-purple-100 text-purple-800";
       case "terminated":
         return "bg-gray-100 text-gray-800";
       default:
@@ -66,8 +69,16 @@ export function EscrowCard({
   // Check if this escrow should be marked as terminated
   const isTerminated = escrow.milestones.some(
     (milestone) =>
-      milestone.status === "disputed" || milestone.status === "rejected"
+      milestone.status === "disputed" ||
+      milestone.status === "rejected" ||
+      milestone.status === "resolved"
   );
+
+  // Check if there are any resolved disputes
+  const resolvedMilestones = escrow.milestones.filter(
+    (m) => m.status === "resolved"
+  );
+  const hasResolvedDispute = resolvedMilestones.length > 0;
 
   const getMilestoneStatusColor = (status: string) => {
     switch (status) {
@@ -79,6 +90,10 @@ export function EscrowCard({
         return "bg-green-100 text-green-800";
       case "disputed":
         return "bg-red-100 text-red-800";
+      case "resolved":
+        return "bg-purple-100 text-purple-800";
+      case "rejected":
+        return "bg-orange-100 text-orange-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -128,10 +143,18 @@ export function EscrowCard({
             <div className="flex items-center gap-2">
               <Badge
                 className={getStatusColor(
-                  isTerminated ? "terminated" : escrow.status
+                  hasResolvedDispute
+                    ? "resolved"
+                    : isTerminated
+                    ? "terminated"
+                    : escrow.status
                 )}
               >
-                {isTerminated ? "terminated" : escrow.status}
+                {hasResolvedDispute
+                  ? "Dispute Resolved"
+                  : isTerminated
+                  ? "terminated"
+                  : escrow.status}
               </Badge>
               <Button
                 variant="ghost"
@@ -151,6 +174,42 @@ export function EscrowCard({
 
         <CardContent>
           <div className="space-y-4">
+            {/* Show resolved dispute info before progress bar */}
+            {hasResolvedDispute && resolvedMilestones.length > 0 && (
+              <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                <p className="text-sm font-semibold text-purple-900 dark:text-purple-100 mb-2">
+                  ✅ Dispute Resolved
+                </p>
+                {resolvedMilestones.map((milestone, idx) => (
+                  <div
+                    key={idx}
+                    className="text-xs text-purple-700 dark:text-purple-300 space-y-1"
+                  >
+                    {milestone.resolutionReason && (
+                      <p>
+                        <span className="font-medium">Reason:</span>{" "}
+                        {milestone.resolutionReason}
+                      </p>
+                    )}
+                    {/* Show exact fund split if available */}
+                    {milestone.freelancerAmount !== undefined &&
+                    milestone.clientAmount !== undefined ? (
+                      <div className="text-xs text-purple-600 dark:text-purple-400 space-y-0.5 mt-1">
+                        <p>
+                          <span className="font-medium">Freelancer:</span>{" "}
+                          {milestone.freelancerAmount.toFixed(2)} tokens
+                        </p>
+                        <p>
+                          <span className="font-medium">Client:</span>{" "}
+                          {milestone.clientAmount.toFixed(2)} tokens
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div>
               <div className="flex items-center justify-between text-sm mb-2">
                 <span>Progress</span>
@@ -196,34 +255,21 @@ export function EscrowCard({
 
             {expandedEscrow === escrow.id && (
               <div className="space-y-4 pt-4 border-t">
-                {/* Review Button for Completed Escrows */}
-                {escrow.status === "completed" &&
-                  escrow.isClient &&
-                  onLeaveReview &&
-                  !hasReview && (
-                    <div className="flex justify-end">
-                      <Button
-                        onClick={() =>
-                          onLeaveReview(escrow.id, escrow.beneficiary)
-                        }
-                        variant="outline"
-                        className="gap-2"
-                      >
-                        <Star className="h-4 w-4" />
-                        Leave a Review
-                      </Button>
+                {/* Rating Section for Completed Escrows */}
+                {escrow.status === "completed" && escrow.isClient && (
+                  <div className="p-4 bg-muted/20 rounded-lg border">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium">Rate Freelancer</h4>
                     </div>
-                  )}
-                {escrow.status === "completed" &&
-                  escrow.isClient &&
-                  hasReview && (
-                    <div className="flex justify-end">
-                      <Badge variant="secondary" className="gap-2">
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        Review Submitted
-                      </Badge>
-                    </div>
-                  )}
+                    <RateFreelancer
+                      escrowId={escrow.id}
+                      freelancerAddress={escrow.beneficiary}
+                      onRated={onRatingSubmitted}
+                      existingRating={rating}
+                    />
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <h4 className="font-medium">Milestones:</h4>
                   {escrow.milestones.map((milestone, idx) => (
@@ -241,6 +287,8 @@ export function EscrowCard({
                           )}{" "}
                           tokens
                         </p>
+
+                        {/* Resolution details are shown in the summary section above, not in each milestone */}
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge

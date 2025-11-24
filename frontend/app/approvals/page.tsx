@@ -5,8 +5,10 @@ import { Card } from "@/components/ui/card";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { useJobCreatorStatus } from "@/hooks/use-job-creator-status";
+import { usePendingApprovals } from "@/hooks/use-pending-approvals";
+import { useRouter } from "next/navigation";
 import { CONTRACTS } from "@/lib/web3/config";
-import { SECUREFLOW_ABI, REVIEW_SYSTEM_ABI } from "@/lib/web3/abis";
+import { SECUREFLOW_ABI } from "@/lib/web3/abis";
 import {
   useNotifications,
   createApplicationNotification,
@@ -30,7 +32,9 @@ export default function ApprovalsPage() {
   const { wallet, getContract } = useWeb3();
   const { toast } = useToast();
   const { isJobCreator } = useJobCreatorStatus();
+  const { hasPendingApprovals, refreshApprovals } = usePendingApprovals();
   const { addNotification } = useNotifications();
+  const router = useRouter();
   const [jobs, setJobs] = useState<JobWithApplications[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<JobWithApplications | null>(
@@ -321,12 +325,40 @@ export default function ApprovalsPage() {
                             continue; // Skip this duplicate application
                           }
 
+                          // Fetch freelancer rating
+                          let averageRating = 0;
+                          let totalRatings = 0;
+                          try {
+                            const ratingData = await contract.call(
+                              "getFreelancerRating",
+                              freelancerAddress
+                            );
+                            if (
+                              ratingData &&
+                              Array.isArray(ratingData) &&
+                              ratingData.length >= 2
+                            ) {
+                              // ratingData: [averageRating, totalRatings]
+                              // averageRating is stored as percentage (0-500), keep as is for display
+                              averageRating = Number(ratingData[0]) || 0;
+                              totalRatings = Number(ratingData[1]) || 0;
+                            }
+                          } catch (ratingError) {
+                            // Rating doesn't exist yet or error fetching - use defaults
+                            console.log(
+                              `Rating check for ${freelancerAddress}:`,
+                              ratingError
+                            );
+                          }
+
                           const application: Application = {
                             freelancerAddress,
                             coverLetter,
                             proposedTimeline,
                             appliedAt: appliedAt * 1000, // Convert to milliseconds
                             status: "pending" as const,
+                            averageRating,
+                            totalRatings,
                           };
 
                           applications.push(application);
@@ -342,6 +374,8 @@ export default function ApprovalsPage() {
                             proposedTimeline: 30,
                             appliedAt: Date.now() - appIndex * 86400000,
                             status: "pending" as const,
+                            averageRating: 0,
+                            totalRatings: 0,
                           };
 
                           // Check for duplicate fallback applications too
@@ -397,7 +431,8 @@ export default function ApprovalsPage() {
                   (Number(escrowSummary[8]) - Number(escrowSummary[10])) /
                   (24 * 60 * 60), // Convert seconds to days
                 milestones: [],
-                projectDescription: escrowSummary[13] || "No description",
+                projectTitle: escrowSummary[13] || "",
+                projectDescription: escrowSummary[14] || "No description",
                 isOpenJob: true,
                 applications,
                 applicationCount: Number(applicationCount),
@@ -411,50 +446,7 @@ export default function ApprovalsPage() {
         }
       }
 
-      // Fetch review counts for all freelancers
-      const jobsWithReviews = await Promise.all(
-        myJobs.map(async (job) => {
-          const applicationsWithReviews = await Promise.all(
-            job.applications.map(async (app) => {
-              try {
-                const reviewContract = getContract(
-                  CONTRACTS.REVIEW_SYSTEM,
-                  REVIEW_SYSTEM_ABI
-                );
-                if (!reviewContract) return { ...app, reviewCount: 0 };
-
-                const reviewCount = await reviewContract.call(
-                  "getReviewCount",
-                  app.freelancerAddress
-                );
-                const averageRating = await reviewContract.call(
-                  "getAverageRating",
-                  app.freelancerAddress
-                );
-
-                return {
-                  ...app,
-                  reviewCount: Number(reviewCount) || 0,
-                  averageRating:
-                    Number(averageRating) > 0
-                      ? Number(averageRating)
-                      : undefined,
-                };
-              } catch (error) {
-                // Review contract might not be available
-                return { ...app, reviewCount: 0 };
-              }
-            })
-          );
-
-          return {
-            ...job,
-            applications: applicationsWithReviews,
-          };
-        })
-      );
-
-      setJobs(jobsWithReviews);
+      setJobs(myJobs);
     } catch (error) {
       toast({
         title: "Failed to load jobs",
@@ -522,6 +514,9 @@ export default function ApprovalsPage() {
       // Refresh the jobs list
       await fetchMyJobs();
 
+      // Refresh pending approvals status to update navigation
+      await refreshApprovals();
+
       // Force a re-render by updating a dummy state
       setLoading(true);
       setTimeout(() => setLoading(false), 100);
@@ -544,6 +539,18 @@ export default function ApprovalsPage() {
       fetchMyJobs();
     }
   }, [wallet.isConnected, isJobCreator]);
+
+  // Redirect if no pending approvals
+  useEffect(() => {
+    if (
+      wallet.isConnected &&
+      isJobCreator &&
+      !loading &&
+      !hasPendingApprovals
+    ) {
+      router.push("/dashboard");
+    }
+  }, [wallet.isConnected, isJobCreator, loading, hasPendingApprovals, router]);
 
   if (!wallet.isConnected) {
     return (

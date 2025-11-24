@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
-import { SECUREFLOW_ABI, REVIEW_SYSTEM_ABI } from "@/lib/web3/abis";
+import { SECUREFLOW_ABI } from "@/lib/web3/abis";
 import {
   useNotifications,
   createEscrowNotification,
@@ -27,7 +27,12 @@ import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { DashboardStats } from "@/components/dashboard/dashboard-stats";
 import { EscrowCard } from "@/components/dashboard/escrow-card";
 import { DashboardLoading } from "@/components/dashboard/dashboard-loading";
-import { ReviewDialog } from "@/components/review-dialog";
+import { RateFreelancer } from "@/components/rating-freelancer";
+import {
+  FilterSortControls,
+  type FilterStatus,
+  type SortOption,
+} from "@/components/dashboard/filter-sort-controls";
 
 export default function DashboardPage() {
   const { wallet, getContract } = useWeb3();
@@ -39,14 +44,13 @@ export default function DashboardPage() {
   const [submittingMilestone, setSubmittingMilestone] = useState<string | null>(
     null
   );
-  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
-  const [selectedEscrowForReview, setSelectedEscrowForReview] = useState<{
-    escrowId: string;
-    freelancerAddress: string;
-  } | null>(null);
-  const [escrowReviews, setEscrowReviews] = useState<Record<string, boolean>>(
-    {}
-  );
+  const [escrowRatings, setEscrowRatings] = useState<
+    Record<string, { rating: number; exists: boolean }>
+  >({});
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
+  const [sortOption, setSortOption] = useState<SortOption>("newest");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const getStatusFromNumber = (status: number): string => {
     switch (status) {
@@ -65,11 +69,24 @@ export default function DashboardPage() {
     }
   };
 
-  // Check if an escrow should be marked as terminated (has disputed milestones)
+  // Check if an escrow should be marked as terminated (has disputed or resolved milestones)
   const isEscrowTerminated = (escrow: Escrow): boolean => {
     return escrow.milestones.some(
       (milestone) =>
-        milestone.status === "disputed" || milestone.status === "rejected"
+        milestone.status === "disputed" ||
+        milestone.status === "rejected" ||
+        milestone.status === "resolved"
+    );
+  };
+
+  // Check if all disputes have been resolved
+  const hasAllDisputesResolved = (escrow: Escrow): boolean => {
+    const disputedMilestones = escrow.milestones.filter(
+      (milestone) => milestone.status === "disputed"
+    );
+    return (
+      disputedMilestones.length === 0 &&
+      escrow.milestones.some((milestone) => milestone.status === "resolved")
     );
   };
 
@@ -83,11 +100,6 @@ export default function DashboardPage() {
       "rejected", // 5 - Rejected
     ];
     const mappedStatus = statuses[status] || "pending";
-
-    // Special debugging for rejected status
-    if (status === 5) {
-      console.log("Milestone status 5 (Rejected) detected");
-    }
 
     return mappedStatus;
   };
@@ -122,6 +134,223 @@ export default function DashboardPage() {
         bgColor: "bg-red-100 dark:bg-red-900/30",
       };
     }
+  };
+
+  // Query DisputeResolved event to get exact fund split amounts
+  const getDisputeResolutionAmounts = async (
+    contract: any,
+    escrowId: number,
+    milestoneIndex: number
+  ): Promise<{ freelancerAmount: number; clientAmount: number } | null> => {
+    try {
+      const { ethers } = await import("ethers");
+      const { CONTRACTS, BASE_MAINNET } = await import("@/lib/web3/config");
+      const { SECUREFLOW_ABI } = await import("@/lib/web3/abis");
+
+      // Try to get provider from wallet context or use RPC
+      let provider: any = null;
+      let lastError: any = null;
+
+      for (const rpcUrl of BASE_MAINNET.rpcUrls) {
+        try {
+          provider = new ethers.JsonRpcProvider(rpcUrl);
+          // Test connection
+          await provider.getBlockNumber();
+          break;
+        } catch (e) {
+          lastError = e;
+          provider = null;
+          continue;
+        }
+      }
+
+      if (!provider) return null;
+
+      const contractWithProvider = new ethers.Contract(
+        CONTRACTS.SECUREFLOW_ESCROW,
+        SECUREFLOW_ABI,
+        provider
+      );
+
+      // Query DisputeResolved events for this escrow and milestone
+      // Try querying from block 0 first, then fallback to recent blocks if too large
+      let events: any[] = [];
+      const currentBlock = await provider.getBlockNumber();
+
+      // Try querying from deployment block or last 500k blocks (larger range)
+      const deploymentBlock = 0; // Start from block 0
+      const maxRange = 500000; // 500k blocks
+      const fromBlock = Math.max(deploymentBlock, currentBlock - maxRange);
+
+      // Create filter - try with specific escrowId and milestoneIndex
+      const filter = contractWithProvider.filters.DisputeResolved(
+        escrowId,
+        milestoneIndex
+      );
+
+      // Also try without milestoneIndex filter in case the filter doesn't work
+      const filterWithoutMilestone =
+        contractWithProvider.filters.DisputeResolved(escrowId);
+
+      try {
+        // Try querying the entire range first with specific filter
+        events = await contractWithProvider.queryFilter(
+          filter,
+          fromBlock,
+          currentBlock
+        );
+
+        // If no events found with specific filter, try without milestoneIndex filter
+        if (events.length === 0) {
+          try {
+            const allEvents = await contractWithProvider.queryFilter(
+              filterWithoutMilestone,
+              fromBlock,
+              currentBlock
+            );
+            // Filter manually by milestoneIndex
+            events = allEvents.filter((e: any) => {
+              const eventMilestoneIndex = Number(
+                e.args[1] || e.args.milestoneIndex || 0
+              );
+              return eventMilestoneIndex === milestoneIndex;
+            });
+          } catch (e) {
+            // Continue with empty events
+          }
+        }
+      } catch (eventError: any) {
+        // If range is too large, try querying from block 0
+        if (
+          eventError.message?.includes("too large") ||
+          eventError.message?.includes("limit") ||
+          eventError.message?.includes("query returned more")
+        ) {
+          try {
+            // Try from block 0
+            events = await contractWithProvider.queryFilter(
+              filter,
+              0,
+              currentBlock
+            );
+          } catch (e2: any) {
+            // If still failing, try in chunks
+            try {
+              const chunkSize = 100000; // 100k blocks per chunk
+              for (let start = 0; start <= currentBlock; start += chunkSize) {
+                const end = Math.min(start + chunkSize - 1, currentBlock);
+                try {
+                  const chunkEvents = await contractWithProvider.queryFilter(
+                    filter,
+                    start,
+                    end
+                  );
+                  events.push(...chunkEvents);
+                } catch (chunkError: any) {
+                  // Skip this chunk if it fails
+                  continue;
+                }
+              }
+            } catch (e3) {
+              // Give up if all queries fail
+              return null;
+            }
+          }
+        } else if (
+          !eventError.message?.includes("no backend is currently healthy") &&
+          !eventError.message?.includes("-32011")
+        ) {
+          // Log unexpected errors (not RPC health issues)
+        }
+      }
+
+      if (events.length > 0) {
+        // Get the latest event (most recent resolution)
+        const latestEvent = events[events.length - 1];
+
+        // Parse event args - ethers.js v6 structures event args
+        // DisputeResolved(escrowId indexed, milestoneIndex indexed, arbiter indexed, beneficiaryAmount, refundAmount, resolvedAt)
+        // All args are in the args array: [escrowId, milestoneIndex, arbiter, beneficiaryAmount, refundAmount, resolvedAt]
+        if (latestEvent.args) {
+          try {
+            let beneficiaryAmountRaw: any = null;
+            let refundAmountRaw: any = null;
+
+            // Try multiple ways to access event args
+            // Method 1: Array access (ethers.js v6)
+            if (Array.isArray(latestEvent.args)) {
+              if (latestEvent.args.length >= 5) {
+                beneficiaryAmountRaw = latestEvent.args[3];
+                refundAmountRaw = latestEvent.args[4];
+              }
+            }
+            // Method 2: Indexed access
+            else if (
+              latestEvent.args[3] !== undefined &&
+              latestEvent.args[4] !== undefined
+            ) {
+              beneficiaryAmountRaw = latestEvent.args[3];
+              refundAmountRaw = latestEvent.args[4];
+            }
+            // Method 3: Named property access
+            else if (
+              latestEvent.args.beneficiaryAmount !== undefined &&
+              latestEvent.args.refundAmount !== undefined
+            ) {
+              beneficiaryAmountRaw = latestEvent.args.beneficiaryAmount;
+              refundAmountRaw = latestEvent.args.refundAmount;
+            }
+            // Method 4: Try accessing via get() method if it's a Result object
+            else if (typeof latestEvent.args.get === "function") {
+              try {
+                beneficiaryAmountRaw = latestEvent.args.get(3);
+                refundAmountRaw = latestEvent.args.get(4);
+              } catch (e) {
+                // Try named access
+                try {
+                  beneficiaryAmountRaw =
+                    latestEvent.args.get("beneficiaryAmount");
+                  refundAmountRaw = latestEvent.args.get("refundAmount");
+                } catch (e2) {
+                  // Give up
+                }
+              }
+            }
+
+            if (beneficiaryAmountRaw !== null && refundAmountRaw !== null) {
+              // Convert to numbers (handle BigInt, string, or number)
+              const freelancerAmount = Number(beneficiaryAmountRaw) / 1e18;
+              const clientAmount = Number(refundAmountRaw) / 1e18;
+
+              // Return amounts if valid
+              if (
+                !isNaN(freelancerAmount) &&
+                !isNaN(clientAmount) &&
+                freelancerAmount >= 0 &&
+                clientAmount >= 0
+              ) {
+                return {
+                  freelancerAmount,
+                  clientAmount,
+                };
+              }
+            }
+          } catch (parseError) {
+            // Log error for debugging (only in development)
+            if (process.env.NODE_ENV === "development") {
+              console.warn(
+                "Failed to parse DisputeResolved event args:",
+                parseError,
+                latestEvent
+              );
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // Silently fail - we'll show generic split info
+    }
+    return null;
   };
 
   const fetchMilestones = async (
@@ -167,6 +396,7 @@ export default function DashboardPage() {
             let status = 0;
             let submittedAt = undefined;
             let approvedAt = undefined;
+            let disputedBy = "";
             let disputeReason = "";
             let rejectionReason = "";
 
@@ -209,6 +439,8 @@ export default function DashboardPage() {
                       status = 0;
                     }
 
+                    // Removed excessive debug logging
+
                     if (
                       m.submittedAt !== undefined &&
                       Number(m.submittedAt) > 0
@@ -227,7 +459,15 @@ export default function DashboardPage() {
                       approvedAt = Number(m[4]) * 1000;
                     }
 
-                    // Parse dispute reason (index 7 in contract)
+                    // Parse disputedBy (index 6 in contract) - for disputed: who disputed, for resolved: winner
+                    let disputedBy = "";
+                    if (m.disputedBy !== undefined) {
+                      disputedBy = String(m.disputedBy);
+                    } else if (m[6] !== undefined) {
+                      disputedBy = String(m[6]);
+                    }
+
+                    // Parse dispute reason (index 7 in contract) - for disputed: dispute reason, for resolved: resolution reason
                     if (m.disputeReason !== undefined) {
                       disputeReason = String(m.disputeReason);
                     } else if (m[7] !== undefined) {
@@ -263,13 +503,22 @@ export default function DashboardPage() {
             }
 
             // Determine the actual status based on timestamps and status
+            // IMPORTANT: Check status FIRST before any other logic
+            // CRITICAL: If status is 4 (Resolved), NEVER override it
             let finalStatus = getMilestoneStatusFromNumber(status);
+
+            // Removed excessive debug logging
 
             // Check if this is a placeholder milestone
             const isPlaceholder =
               description && description.includes("To be defined");
 
-            if (isPlaceholder) {
+            // CRITICAL: Never override resolved status (status 4)
+            if (status === 4) {
+              // Status is already "resolved" from getMilestoneStatusFromNumber
+              // Don't let any other logic override it
+              finalStatus = "resolved";
+            } else if (isPlaceholder) {
               // For placeholder milestones, determine status based on previous milestones
               if (index === 0) {
                 finalStatus = "pending";
@@ -301,27 +550,55 @@ export default function DashboardPage() {
                 }
               }
               // Special case: If this is the first milestone and funds have been released, it should be approved
+              // BUT: Don't override if status is already "resolved" (status 4) or "disputed" (status 3)
               else if (
+                status !== 4 &&
+                status !== 3 &&
                 index === 0 &&
                 escrowSummary[5] &&
                 Number(escrowSummary[5]) > 0
               ) {
                 finalStatus = "approved";
               }
-              // Otherwise use the parsed status
+              // Otherwise use the parsed status (which should already be set correctly from getMilestoneStatusFromNumber)
               else {
+                // Status is already correctly set from getMilestoneStatusFromNumber
+                // Don't override resolved or disputed statuses
               }
             }
 
-            return {
+            // Final safety check: If status was 4, ensure finalStatus is "resolved"
+            if (status === 4 && finalStatus !== "resolved") {
+              finalStatus = "resolved";
+            }
+
+            // For resolved milestones, disputedBy contains the winner and disputeReason contains the resolution reason
+            const winner = finalStatus === "resolved" ? disputedBy : undefined;
+            const resolutionReason =
+              finalStatus === "resolved" ? disputeReason : undefined;
+
+            // Removed excessive debug logging
+
+            const milestoneResult = {
               description,
               amount,
               status: finalStatus,
               submittedAt,
               approvedAt,
-              disputeReason,
+              disputedBy: finalStatus === "disputed" ? disputedBy : undefined,
+              disputeReason:
+                finalStatus === "disputed" ? disputeReason : undefined,
+              winner,
+              resolutionReason,
               rejectionReason,
+              // Fund split amounts will be fetched separately for resolved milestones
+              freelancerAmount: undefined,
+              clientAmount: undefined,
             };
+
+            // Removed excessive debug logging
+
+            return milestoneResult;
           } catch (error) {
             return {
               description: `Milestone ${index + 1}`,
@@ -344,7 +621,9 @@ export default function DashboardPage() {
   }, [wallet.isConnected]);
 
   const fetchUserEscrows = async () => {
-    setLoading(true);
+    if (!isRefreshing) {
+      setLoading(true);
+    }
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
 
@@ -370,6 +649,73 @@ export default function DashboardPage() {
 
             // Show escrows for both clients and freelancers, but with different functionality
             if (isPayer || isBeneficiary) {
+              // Fetch milestones first to check for resolved disputes
+              let milestones = (await fetchMilestones(
+                contract,
+                i,
+                escrowSummary
+              )) as Milestone[];
+
+              // For resolved milestones, fetch exact fund split amounts from events
+              for (let j = 0; j < milestones.length; j++) {
+                if (milestones[j].status === "resolved") {
+                  try {
+                    const amounts = await getDisputeResolutionAmounts(
+                      contract,
+                      i,
+                      j
+                    );
+                    if (
+                      amounts &&
+                      amounts.freelancerAmount !== undefined &&
+                      amounts.clientAmount !== undefined &&
+                      !isNaN(amounts.freelancerAmount) &&
+                      !isNaN(amounts.clientAmount)
+                    ) {
+                      milestones[j] = {
+                        ...milestones[j],
+                        freelancerAmount: amounts.freelancerAmount,
+                        clientAmount: amounts.clientAmount,
+                      };
+                    } else if (process.env.NODE_ENV === "development") {
+                      console.log(
+                        `Escrow ${i}, Milestone ${j}: Could not fetch amounts`,
+                        amounts
+                      );
+                    }
+                  } catch (amountsError) {
+                    // Log error in development
+                    if (process.env.NODE_ENV === "development") {
+                      console.warn(
+                        `Failed to fetch amounts for Escrow ${i}, Milestone ${j}:`,
+                        amountsError
+                      );
+                    }
+                  }
+                }
+              }
+
+              // Check if there are resolved disputes
+              const resolvedMilestones = milestones.filter(
+                (milestone) => milestone.status === "resolved"
+              );
+              const hasResolvedDispute = resolvedMilestones.length > 0;
+
+              // Get base status from contract
+              const baseStatus = getStatusFromNumber(Number(escrowSummary[3]));
+
+              // If there are resolved disputes, override status to "disputed"
+              // (which will be displayed as "Dispute Resolved" in the badge)
+              const finalStatus = hasResolvedDispute
+                ? "disputed" // We'll show this as "Dispute Resolved" in the badge
+                : (baseStatus as
+                    | "pending"
+                    | "active"
+                    | "completed"
+                    | "disputed");
+
+              // Removed excessive debug logging
+
               // Convert contract data to our Escrow type
               const escrow: Escrow = {
                 id: i.toString(),
@@ -380,19 +726,12 @@ export default function DashboardPage() {
                 token: escrowSummary[7], // token
                 totalAmount: escrowSummary[4].toString(), // totalAmount
                 releasedAmount: escrowSummary[5].toString(), // paidAmount
-                status: getStatusFromNumber(Number(escrowSummary[3])) as
-                  | "pending"
-                  | "active"
-                  | "completed"
-                  | "disputed", // status
+                status: finalStatus,
                 createdAt: Number(escrowSummary[10]) * 1000, // createdAt (convert to milliseconds)
                 duration: Number(escrowSummary[8]) - Number(escrowSummary[10]), // deadline - createdAt (in seconds)
-                milestones: (await fetchMilestones(
-                  contract,
-                  i,
-                  escrowSummary
-                )) as Milestone[], // Fetch milestones from contract and assert correct type
-                projectDescription: escrowSummary[13] || "", // projectTitle
+                milestones: milestones,
+                projectTitle: escrowSummary[13] || "", // projectTitle
+                projectDescription: escrowSummary[14] || "", // projectDescription
               };
 
               userEscrows.push(escrow);
@@ -407,8 +746,37 @@ export default function DashboardPage() {
       // Set the actual escrows from the contract
       setEscrows(userEscrows);
 
-      // Check reviews for completed escrows
-      await checkEscrowReviews(userEscrows);
+      // Fetch ratings for completed escrows
+      const ratings: Record<string, { rating: number; exists: boolean }> = {};
+      for (const escrow of userEscrows) {
+        if (escrow.status === "completed" && escrow.isClient) {
+          try {
+            const ratingData = await contract.call(
+              "getEscrowRating",
+              escrow.id
+            );
+            if (
+              ratingData &&
+              Array.isArray(ratingData) &&
+              ratingData.length >= 5 &&
+              ratingData[4]
+            ) {
+              // ratingData: [rater, freelancer, rating, ratedAt, exists]
+              ratings[escrow.id] = {
+                rating: Number(ratingData[2]) || 0,
+                exists: Boolean(ratingData[4]),
+              };
+            } else {
+              ratings[escrow.id] = { rating: 0, exists: false };
+            }
+          } catch (error) {
+            // Rating doesn't exist yet or error fetching
+            console.log(`Rating check for escrow ${escrow.id}:`, error);
+            ratings[escrow.id] = { rating: 0, exists: false };
+          }
+        }
+      }
+      setEscrowRatings(ratings);
     } catch (error) {
       toast({
         title: "Failed to load escrows",
@@ -417,13 +785,30 @@ export default function DashboardPage() {
       });
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    fetchUserEscrows();
+  };
+
   const getStatusBadge = (status: string, escrow?: Escrow) => {
+    // Check if there are resolved disputes first
+    const hasResolvedDispute = escrow?.milestones.some(
+      (milestone) => milestone.status === "resolved"
+    );
+
     // Check if this escrow should be terminated
     const isTerminated = escrow ? isEscrowTerminated(escrow) : false;
-    const finalStatus = isTerminated ? "terminated" : status;
+
+    // If there are resolved disputes, show as "Dispute Resolved" instead of "active"
+    const finalStatus = hasResolvedDispute
+      ? "resolved"
+      : isTerminated
+      ? "terminated"
+      : status;
 
     const variants: Record<string, { variant: any; icon: any; label: string }> =
       {
@@ -438,6 +823,11 @@ export default function DashboardPage() {
           variant: "destructive",
           icon: AlertCircle,
           label: "Disputed",
+        },
+        resolved: {
+          variant: "secondary",
+          icon: CheckCircle2,
+          label: "Dispute Resolved",
         },
         terminated: {
           variant: "secondary",
@@ -527,9 +917,70 @@ export default function DashboardPage() {
     }
   };
 
-  const filterEscrows = (filter: string) => {
-    if (filter === "all") return escrows;
-    return escrows.filter((e) => e.status === filter);
+  // Filter and sort escrows
+  const getFilteredAndSortedEscrows = () => {
+    let filtered = [...escrows];
+
+    // Apply status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((e) => {
+        const status = e.status.toLowerCase();
+        return status === statusFilter.toLowerCase();
+      });
+    }
+
+    // Apply search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((e) => {
+        const title = (e.projectTitle || "").toLowerCase();
+        const description = (e.projectDescription || "").toLowerCase();
+        return title.includes(query) || description.includes(query);
+      });
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (sortOption) {
+        case "newest":
+          return b.createdAt - a.createdAt;
+        case "oldest":
+          return a.createdAt - b.createdAt;
+        case "amount-high":
+          return (
+            Number.parseFloat(b.totalAmount) - Number.parseFloat(a.totalAmount)
+          );
+        case "amount-low":
+          return (
+            Number.parseFloat(a.totalAmount) - Number.parseFloat(b.totalAmount)
+          );
+        case "status":
+          const statusOrder: Record<string, number> = {
+            pending: 0,
+            active: 1,
+            completed: 2,
+            disputed: 3,
+          };
+          return (
+            (statusOrder[a.status.toLowerCase()] ?? 99) -
+            (statusOrder[b.status.toLowerCase()] ?? 99)
+          );
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  };
+
+  const filteredEscrows = getFilteredAndSortedEscrows();
+  const activeFiltersCount =
+    (statusFilter !== "all" ? 1 : 0) + (searchQuery.trim() ? 1 : 0);
+
+  const handleClearFilters = () => {
+    setStatusFilter("all");
+    setSearchQuery("");
+    setSortOption("newest");
   };
 
   const disputeMilestone = async (escrowId: string, milestoneIndex: number) => {
@@ -644,77 +1095,6 @@ export default function DashboardPage() {
       });
     } finally {
       setSubmittingMilestone(null);
-    }
-  };
-
-  // Check if reviews exist for completed escrows
-  const checkEscrowReviews = async (escrowsToCheck: Escrow[]) => {
-    if (!wallet.isConnected) return;
-
-    try {
-      const reviewContract = getContract(
-        CONTRACTS.REVIEW_SYSTEM,
-        REVIEW_SYSTEM_ABI
-      );
-      if (!reviewContract) return;
-
-      const reviews: Record<string, boolean> = {};
-      const completedEscrowsList = escrowsToCheck.filter(
-        (e) => e.status === "completed" && e.isClient
-      );
-
-      for (const escrow of completedEscrowsList) {
-        try {
-          const hasReview = await reviewContract.call("hasReview", escrow.id);
-          reviews[escrow.id] = hasReview === true || hasReview === "true";
-        } catch (error) {
-          // Review might not exist
-          reviews[escrow.id] = false;
-        }
-      }
-
-      setEscrowReviews(reviews);
-    } catch (error) {
-      // Silently fail - reviews might not be available
-      console.error("Error checking reviews:", error);
-    }
-  };
-
-  const handleLeaveReview = (escrowId: string, freelancerAddress: string) => {
-    setSelectedEscrowForReview({ escrowId, freelancerAddress });
-    setReviewDialogOpen(true);
-  };
-
-  const handleSubmitReview = async (rating: number, comment: string) => {
-    if (!selectedEscrowForReview) return;
-
-    try {
-      const reviewContract = getContract(
-        CONTRACTS.REVIEW_SYSTEM,
-        REVIEW_SYSTEM_ABI
-      );
-      if (!reviewContract) return;
-
-      await reviewContract.send(
-        "submitReview",
-        "no-value",
-        selectedEscrowForReview.escrowId,
-        rating,
-        comment
-      );
-
-      // Update local state
-      setEscrowReviews((prev) => ({
-        ...prev,
-        [selectedEscrowForReview.escrowId]: true,
-      }));
-
-      toast({
-        title: "Review Submitted",
-        description: "Thank you for your feedback!",
-      });
-    } catch (error: any) {
-      throw error;
     }
   };
 
@@ -969,7 +1349,10 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen py-12">
       <div className="container mx-auto px-4">
-        <DashboardHeader />
+        <DashboardHeader
+          onRefresh={handleRefresh}
+          isRefreshing={isRefreshing}
+        />
         <DashboardStats escrows={escrows} />
 
         {escrows.length === 0 ? (
@@ -981,56 +1364,71 @@ export default function DashboardPage() {
             </p>
           </Card>
         ) : (
-          <div className="space-y-6">
-            {escrows.map((escrow, index) => (
-              <EscrowCard
-                key={escrow.id}
-                escrow={escrow}
-                index={index}
-                expandedEscrow={expandedEscrow}
-                submittingMilestone={
-                  submittingMilestone === escrow.id ? "true" : "false"
-                }
-                onToggleExpanded={() =>
-                  setExpandedEscrow(
-                    expandedEscrow === escrow.id ? null : escrow.id
-                  )
-                }
-                onApproveMilestone={approveMilestone}
-                onRejectMilestone={(
-                  escrowId: string,
-                  milestoneIndex: number
-                ) => {
-                  // For now, use empty reason - this should be handled by the component
-                  rejectMilestone(
-                    escrowId,
-                    milestoneIndex,
-                    "No reason provided"
+          <>
+            <FilterSortControls
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+              sortOption={sortOption}
+              onSortChange={setSortOption}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onClearFilters={handleClearFilters}
+              activeFiltersCount={activeFiltersCount}
+            />
+
+            {filteredEscrows.length === 0 ? (
+              <Card className="glass border-muted p-12 text-center">
+                <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+                <h3 className="text-xl font-bold mb-2">No Results Found</h3>
+                <p className="text-muted-foreground">
+                  Try adjusting your filters or search query.
+                </p>
+              </Card>
+            ) : (
+              <div className="space-y-6">
+                {filteredEscrows.map((escrow, index) => {
+                  const rating = escrowRatings[escrow.id];
+                  return (
+                    <EscrowCard
+                      key={escrow.id}
+                      escrow={escrow}
+                      index={index}
+                      expandedEscrow={expandedEscrow}
+                      submittingMilestone={
+                        submittingMilestone === escrow.id ? "true" : "false"
+                      }
+                      onToggleExpanded={() =>
+                        setExpandedEscrow(
+                          expandedEscrow === escrow.id ? null : escrow.id
+                        )
+                      }
+                      onApproveMilestone={approveMilestone}
+                      onRejectMilestone={(
+                        escrowId: string,
+                        milestoneIndex: number
+                      ) => {
+                        // For now, use empty reason - this should be handled by the component
+                        rejectMilestone(
+                          escrowId,
+                          milestoneIndex,
+                          "No reason provided"
+                        );
+                      }}
+                      onDisputeMilestone={disputeMilestone}
+                      onStartWork={startWork}
+                      onDispute={openDispute}
+                      calculateDaysLeft={calculateDaysLeft}
+                      getDaysLeftMessage={getDaysLeftMessage}
+                      rating={rating}
+                      onRatingSubmitted={() => fetchUserEscrows()}
+                    />
                   );
-                }}
-                onDisputeMilestone={disputeMilestone}
-                onStartWork={startWork}
-                onDispute={openDispute}
-                onLeaveReview={handleLeaveReview}
-                hasReview={escrowReviews[escrow.id] || false}
-                calculateDaysLeft={calculateDaysLeft}
-                getDaysLeftMessage={getDaysLeftMessage}
-              />
-            ))}
-          </div>
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
-
-      {/* Review Dialog */}
-      {selectedEscrowForReview && (
-        <ReviewDialog
-          open={reviewDialogOpen}
-          onOpenChange={setReviewDialogOpen}
-          escrowId={selectedEscrowForReview.escrowId}
-          freelancerAddress={selectedEscrowForReview.freelancerAddress}
-          onSubmitReview={handleSubmitReview}
-        />
-      )}
     </div>
   );
 }

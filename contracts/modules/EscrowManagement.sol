@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./EscrowCore.sol";
+import "../Errors.sol";
 
 abstract contract EscrowManagement is EscrowCore {
     using SafeERC20 for IERC20;
@@ -26,15 +27,6 @@ abstract contract EscrowManagement is EscrowCore {
         onlyWhitelistedToken(token) 
         returns (uint256) 
     {
-        require(arbiters.length > 0, "Need at least 1 arbiter");
-        require(arbiters.length <= MAX_ARBITERS, "Too many arbiters");
-        require(
-            requiredConfirmations >= 1 && requiredConfirmations <= arbiters.length, 
-            "Invalid quorum"
-        );
-        for (uint256 i = 0; i < arbiters.length; ++i) {
-            require(authorizedArbiters[arbiters[i]], "Arbiter not authorized");
-        }
         return _createEscrowInternal(
             msg.sender, 
             beneficiary, 
@@ -67,15 +59,6 @@ abstract contract EscrowManagement is EscrowCore {
         whenJobCreationNotPaused 
         returns (uint256) 
     {
-        require(arbiters.length > 0, "Need at least 1 arbiter");
-        require(arbiters.length <= MAX_ARBITERS, "Too many arbiters");
-        require(
-            requiredConfirmations >= 1 && requiredConfirmations <= arbiters.length, 
-            "Invalid quorum"
-        );
-        for (uint256 i = 0; i < arbiters.length; ++i) {
-            require(authorizedArbiters[arbiters[i]], "Arbiter not authorized");
-        }
         return _createEscrowInternal(
             msg.sender, 
             beneficiary, 
@@ -104,28 +87,19 @@ abstract contract EscrowManagement is EscrowCore {
         string calldata projectDescription,
         bool isNative
     ) internal returns (uint256) {
-        require(arbiters.length > 0, "No arbiters");
-        require(
-            requiredConfirmationsParam >= 1 && requiredConfirmationsParam <= arbiters.length, 
-            "Invalid quorum"
-        );
-        require(beneficiary != depositor, "Cannot escrow to self");
-        require(
-            duration >= MIN_DURATION && duration <= MAX_DURATION, 
-            "Invalid duration"
-        );
-        require(milestoneAmounts.length > 0, "No milestones");
-        require(milestoneAmounts.length <= MAX_MILESTONES, "Too many milestones");
-        require(
-            milestoneAmounts.length == milestoneDescriptions.length, 
-            "Mismatched arrays"
-        );
-        require(bytes(projectTitle).length > 0, "Project title required");
+        if (arbiters.length == 0) revert NoArbiters();
+        if (requiredConfirmationsParam < 1 || requiredConfirmationsParam > arbiters.length) revert InvalidQuorum();
+        if (beneficiary == depositor) revert CannotEscrowToSelf();
+        if (duration < MIN_DURATION || duration > MAX_DURATION) revert InvalidDurationRange();
+        if (milestoneAmounts.length == 0) revert NoMilestones();
+        if (milestoneAmounts.length > MAX_MILESTONES) revert TooManyMilestones();
+        if (milestoneAmounts.length != milestoneDescriptions.length) revert MismatchedArrays();
+        if (bytes(projectTitle).length == 0) revert ProjectTitleRequired();
 
         bool isOpenJob = (beneficiary == address(0));
         uint256 totalAmount = 0;
         for (uint256 i = 0; i < milestoneAmounts.length; ++i) {
-            require(milestoneAmounts[i] > 0, "Invalid milestone amount");
+            if (milestoneAmounts[i] == 0) revert InvalidMilestoneAmount();
             totalAmount += milestoneAmounts[i];
         }
 
@@ -133,7 +107,7 @@ abstract contract EscrowManagement is EscrowCore {
         uint256 totalWithFee = totalAmount + platformFee;
 
         if (isNative) {
-            require(msg.value == totalWithFee, "Incorrect native amount");
+            if (msg.value != totalWithFee) revert IncorrectNativeAmount();
             escrowedAmount[address(0)] += totalAmount;
         } else {
             IERC20(token).safeTransferFrom(
@@ -145,25 +119,20 @@ abstract contract EscrowManagement is EscrowCore {
         }
 
         uint256 escrowId = nextEscrowId++;
-        uint256 deadline = block.timestamp + duration;
-
+        EscrowData storage e = escrows[escrowId];
+        e.depositor = depositor;
+        e.beneficiary = beneficiary;
         address[] memory arbArr = new address[](arbiters.length);
         for (uint256 i = 0; i < arbiters.length; ++i) {
             arbArr[i] = arbiters[i];
         }
-
-        EscrowData storage e = escrows[escrowId];
-        e.depositor = depositor;
-        e.beneficiary = beneficiary;
         e.arbiters = arbArr;
         e.requiredConfirmations = requiredConfirmationsParam;
         e.token = token;
         e.totalAmount = totalAmount;
-        e.paidAmount = 0;
         e.platformFee = platformFee;
-        e.deadline = deadline;
+        e.deadline = block.timestamp + duration;
         e.status = EscrowStatus.Pending;
-        e.workStarted = false;
         e.createdAt = block.timestamp;
         e.milestoneCount = milestoneAmounts.length;
         e.isOpenJob = isOpenJob;
@@ -194,7 +163,7 @@ abstract contract EscrowManagement is EscrowCore {
             totalAmount,
             platformFee, 
             token,
-            deadline, 
+            e.deadline, 
             isOpenJob
         );
         emit EscrowUpdated(escrowId, EscrowStatus.Pending, block.timestamp);

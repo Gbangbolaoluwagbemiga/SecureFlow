@@ -6,28 +6,55 @@ async function main() {
   // Get the deployer account
   const [deployer] = await hre.ethers.getSigners();
 
-  // Deploy MockERC20 token for testing
-  const MockERC20 = await hre.ethers.getContractFactory("MockERC20");
-  const mockToken = await MockERC20.deploy(
-    "Mock Token",
-    "MTK",
-    hre.ethers.parseEther("1000000")
-  );
-  await mockToken.waitForDeployment();
+  console.log("🚀 Deploying contracts to", hre.network.name);
+  console.log("📝 Deployer address:", deployer.address);
+
+  // Use native tokens on mainnets or deploy MockERC20 for testing
+  let tokenAddress;
+  let tokenName;
+  let tokenAbi;
+  let mockTokenAddress = null;
+
+  if (hre.network.name === "base") {
+    // USDC on Base mainnet: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+    tokenAddress = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+    tokenName = "USDC";
+    console.log("✅ Using USDC on Base mainnet:", tokenAddress);
+  } else {
+    // Deploy MockERC20 token for testing on other networks
+    console.log("\n📦 Deploying MockERC20 token...");
+    const MockERC20 = await hre.ethers.getContractFactory("MockERC20");
+    const mockToken = await MockERC20.deploy(
+      "Mock Token",
+      "MTK",
+      hre.ethers.parseEther("1000000")
+    );
+    await mockToken.waitForDeployment();
+    tokenAddress = await mockToken.getAddress();
+    mockTokenAddress = tokenAddress;
+    tokenName = "MockERC20";
+    tokenAbi = mockToken.interface.format("json");
+    console.log("✅ MockERC20 deployed to:", tokenAddress);
+  }
 
   // Deploy SecureFlow
+  console.log("\n🔒 Deploying SecureFlow...");
   const SecureFlow = await hre.ethers.getContractFactory("SecureFlow");
 
-  // Constructor parameters: monadToken, feeCollector, platformFeeBP
+  // Constructor parameters: tokenAddress, feeCollector, platformFeeBP
   const feeCollector = deployer.address; // Use deployer as fee collector for now
   const platformFeeBP = 0; // 0% fees for hackathon demo
 
   const secureFlow = await SecureFlow.deploy(
-    await mockToken.getAddress(), // monadToken
+    tokenAddress, // token address (USDC on Base or MockERC20 on testnets)
     feeCollector, // feeCollector
     platformFeeBP // platformFeeBP
   );
   await secureFlow.waitForDeployment();
+
+  // Wait for deployment confirmation
+  console.log("⏳ Waiting for deployment confirmation...");
+  await new Promise((resolve) => setTimeout(resolve, 15000)); // Wait 15 seconds
 
   // Authorize some arbiters for testing
   const arbiters = [
@@ -35,56 +62,31 @@ async function main() {
     "0xF1E430aa48c3110B2f223f278863A4c8E2548d8C", // Another arbiter address
   ];
 
+  console.log("🔐 Authorizing arbiters...");
   for (const arbiterAddress of arbiters) {
-    await secureFlow.authorizeArbiter(arbiterAddress);
+    try {
+      const tx = await secureFlow.authorizeArbiter(arbiterAddress);
+      await tx.wait();
+      console.log(`✅ Authorized arbiter: ${arbiterAddress}`);
+    } catch (error) {
+      console.log(
+        `⚠️ Failed to authorize arbiter ${arbiterAddress}:`,
+        error.message
+      );
+    }
   }
 
-  // Whitelist the mock token
-  await secureFlow.whitelistToken(await mockToken.getAddress());
+  // Whitelist the token
+  console.log("📝 Whitelisting token...");
+  try {
+    const tx = await secureFlow.whitelistToken(tokenAddress);
+    await tx.wait();
+    console.log("✅ Token whitelisted");
+  } catch (error) {
+    console.log("⚠️ Failed to whitelist token:", error.message);
+  }
 
   const secureFlowAddress = await secureFlow.getAddress();
-  const mockTokenAddress = await mockToken.getAddress();
-
-  console.log("\n=== Deployment Summary ===");
-  console.log("Network:", hre.network.name);
-  console.log("Deployer:", deployer.address);
-  console.log("SecureFlow Address:", secureFlowAddress);
-  console.log("MockERC20 Address:", mockTokenAddress);
-
-  // Verify contracts on BaseScan if deploying to Base
-  if (hre.network.name === "base") {
-    console.log("\n=== Verifying Contracts ===");
-
-    try {
-      console.log("Verifying MockERC20...");
-      await hre.run("verify:verify", {
-        address: mockTokenAddress,
-        constructorArguments: [
-          "Mock Token",
-          "MTK",
-          hre.ethers.parseEther("1000000"),
-        ],
-      });
-      console.log("✅ MockERC20 verified successfully!");
-    } catch (error) {
-      console.log("⚠️ MockERC20 verification failed:", error.message);
-    }
-
-    try {
-      console.log("Verifying SecureFlow...");
-      await hre.run("verify:verify", {
-        address: secureFlowAddress,
-        constructorArguments: [
-          mockTokenAddress,
-          deployer.address,
-          platformFeeBP,
-        ],
-      });
-      console.log("✅ SecureFlow verified successfully!");
-    } catch (error) {
-      console.log("⚠️ SecureFlow verification failed:", error.message);
-    }
-  }
 
   // Get contract info
   const contractInfo = {
@@ -93,7 +95,7 @@ async function main() {
     deployer: deployer.address,
     contracts: {
       SecureFlow: secureFlowAddress,
-      MockERC20: mockTokenAddress,
+      Token: tokenAddress,
     },
     features: [
       "🚀 MODULAR ARCHITECTURE - Clean separation of concerns",
@@ -105,7 +107,6 @@ async function main() {
       "⏰ AUTO-APPROVAL - Dispute window management",
       "🛡️ ANTI-GAMING - Minimum value thresholds",
       "📈 SCALABLE - Gas optimized modular design",
-      "⭐ REVIEW SYSTEM - Client reviews for freelancers",
     ],
     deploymentTime: new Date().toISOString(),
   };
@@ -114,7 +115,7 @@ async function main() {
   const deploymentInfo = {
     ...contractInfo,
     abi: secureFlow.interface.format("json"),
-    mockTokenAbi: mockToken.interface.format("json"),
+    tokenAbi: tokenAbi || null, // Only for MockERC20 deployments
   };
 
   fs.writeFileSync(
@@ -125,10 +126,80 @@ async function main() {
       2
     )
   );
+
+  console.log("\n🎉 Deployment completed successfully!");
+  console.log("📄 SecureFlow deployed to:", secureFlowAddress);
+  console.log("💰 Token address:", tokenAddress, `(${tokenName})`);
+  console.log("📊 Network:", hre.network.name);
+  console.log("🔗 Chain ID:", (await hre.ethers.provider.getNetwork()).chainId);
+  console.log("📝 Deployment info saved to deployed.json");
+
+  // Wait for block confirmations before verification
+  console.log("\n⏳ Waiting for block confirmations before verification...");
+  await new Promise((resolve) => setTimeout(resolve, 30000)); // Wait 30 seconds
+
+  // Verify SecureFlow contract
+  console.log("\n🔍 Verifying SecureFlow contract...");
+  try {
+    await hre.run("verify:verify", {
+      address: secureFlowAddress,
+      constructorArguments: [tokenAddress, feeCollector, platformFeeBP],
+    });
+    console.log("✅ SecureFlow contract verified!");
+  } catch (error) {
+    console.log("⚠️ SecureFlow verification failed:", error.message);
+    if (error.message.includes("Already Verified")) {
+      console.log("ℹ️ Contract is already verified");
+    }
+  }
+
+  // Verify MockERC20 if deployed
+  if (mockTokenAddress) {
+    console.log("\n🔍 Verifying MockERC20 contract...");
+    try {
+      await hre.run("verify:verify", {
+        address: mockTokenAddress,
+        constructorArguments: [
+          "Mock Token",
+          "MTK",
+          hre.ethers.parseEther("1000000").toString(),
+        ],
+      });
+      console.log("✅ MockERC20 contract verified!");
+    } catch (error) {
+      console.log("⚠️ MockERC20 verification failed:", error.message);
+      if (error.message.includes("Already Verified")) {
+        console.log("ℹ️ Contract is already verified");
+      }
+    }
+  }
+
+  // Display explorer links
+  const chainId = Number((await hre.ethers.provider.getNetwork()).chainId);
+  let explorerUrl = "";
+  if (chainId === 8453) {
+    explorerUrl = "https://basescan.org/address/";
+  } else if (chainId === 84532) {
+    explorerUrl = "https://sepolia.basescan.org/address/";
+  }
+
+  if (explorerUrl) {
+    console.log("\n🔗 Explorer Links:");
+    console.log(`   SecureFlow: ${explorerUrl}${secureFlowAddress}`);
+    if (mockTokenAddress) {
+      console.log(`   MockERC20: ${explorerUrl}${mockTokenAddress}`);
+    }
+  }
 }
 
 main()
-  .then(() => process.exit(0))
+  .then(() => {
+    console.log("✅ Deployment completed successfully!");
+    process.exit(0);
+  })
   .catch((error) => {
+    console.error("❌ Deployment failed:", error);
+    console.error("Error details:", error.message);
+    console.error("Stack trace:", error.stack);
     process.exit(1);
   });

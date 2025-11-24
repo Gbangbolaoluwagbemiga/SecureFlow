@@ -1,0 +1,56 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+// Custom errors for better gas efficiency and smaller bytecode
+error InvalidStatus();
+error WorkNotStarted();
+error WorkAlreadyStarted();
+error FreelancerNotApplied();
+error DeadlineNotExpired();
+error InvalidAmount();
+error InvalidDuration();
+error InvalidArbiter();
+error InvalidQuorum();
+error InvalidToken();
+error InvalidCollector();
+error InvalidBeneficiary();
+error InvalidMilestone();
+error JobClosed();
+error NotOpenJob();
+error AlreadyApplied();
+error TooManyApplications();
+error CoverLetterRequired();
+error CannotApplyToOwnJob();
+error EscrowNotFound();
+error NotAuthorized();
+error OnlyDepositor();
+error OnlyBeneficiary();
+error TokenNotWhitelisted();
+error ArbiterNotAuthorized();
+error JobCreationPaused();
+error NotSubmitted();
+error DisputePeriodExpired();
+error NotInDispute();
+error InvalidAllocation();
+error NoFees();
+error NothingWithdrawable();
+error InsufficientBalance();
+error FeeTooHigh();
+error InvalidDurationRange();
+error NoMilestones();
+error TooManyMilestones();
+error MismatchedArrays();
+error ProjectTitleRequired();
+error InvalidMilestoneAmount();
+error IncorrectNativeAmount();
+error CannotEscrowToSelf();
+error NoArbiters();
+error TooManyArbiters();
+error NeedAtLeastOneArbiter();
+error EscrowNotActive();
+error AlreadySubmitted();
+error AlreadyProcessed();
+error NotRejected();
+error InvalidOffset();
+error InvalidLimit();
+

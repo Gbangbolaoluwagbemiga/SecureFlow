@@ -12,14 +12,17 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useFreelancerStatus } from "@/hooks/use-freelancer-status";
 import { useAdminStatus } from "@/hooks/use-admin-status";
 import { useJobCreatorStatus } from "@/hooks/use-job-creator-status";
+import { usePendingApprovals } from "@/hooks/use-pending-approvals";
 
 export function Navbar() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+
   const { isFreelancer } = useFreelancerStatus();
   const { isAdmin } = useAdminStatus();
   const { isJobCreator } = useJobCreatorStatus();
+  const { hasPendingApprovals } = usePendingApprovals();
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -50,9 +53,19 @@ export function Navbar() {
       }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && mobileMenuOpen) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    // Temporarily disabled to test button functionality
+    // document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscapeKey);
+
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      // document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscapeKey);
     };
   }, [mobileMenuOpen]);
 
@@ -110,7 +123,7 @@ export function Navbar() {
               Dashboard
             </Link>
 
-            {isJobCreator && (
+            {isJobCreator && hasPendingApprovals && (
               <Link
                 href="/approvals"
                 className={`text-sm font-medium transition-colors ${
@@ -153,10 +166,10 @@ export function Navbar() {
             <div className="hidden md:block">
               <ThemeToggle />
             </div>
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <NotificationCenter />
             </div>
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <WalletButton />
             </div>
 
@@ -164,8 +177,14 @@ export function Navbar() {
               aria-label="Toggle menu"
               variant="ghost"
               size="icon"
-              className="md:hidden ml-1"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden ml-1 relative z-50"
+              onClick={() => {
+                if (mobileMenuOpen) {
+                  setMobileMenuOpen(false);
+                } else {
+                  setMobileMenuOpen(true);
+                }
+              }}
             >
               {mobileMenuOpen ? (
                 <X className="h-5 w-5" />
@@ -231,7 +250,7 @@ export function Navbar() {
                 >
                   Dashboard
                 </Link>
-                {isJobCreator && (
+                {isJobCreator && hasPendingApprovals && (
                   <Link
                     href="/approvals"
                     className={`text-sm font-medium transition-colors py-2 ${
@@ -283,8 +302,12 @@ export function Navbar() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/50 z-40 md:hidden"
-            onClick={() => setMobileMenuOpen(false)}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setMobileMenuOpen(false);
+            }}
           />
         )}
       </AnimatePresence>
