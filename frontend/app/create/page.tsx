@@ -114,6 +114,7 @@ export default function CreateEscrowPage() {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
       
       // Query TokenWhitelisted events in 10k block chunks (RPC limit)
+      // Use a smaller range for speed - last 50k blocks should be enough
       let allWhitelistedTokens: string[] = [];
       
       try {
@@ -125,35 +126,45 @@ export default function CreateEscrowPage() {
         );
 
         const currentBlock = await provider.getBlockNumber();
-        const fromBlock = Math.max(0, currentBlock - 200000); // Last 200k blocks
+        const fromBlock = Math.max(0, currentBlock - 50000); // Last 50k blocks only (5 chunks max)
 
         // Query in 10k block chunks to respect RPC limits
         const chunkSize = 10000;
         let whitelistedEvents: any[] = [];
         let blacklistedEvents: any[] = [];
 
+        // Query chunks in parallel (but limit to 5 at a time)
+        const chunks: Promise<any>[] = [];
         for (let startBlock = fromBlock; startBlock <= currentBlock; startBlock += chunkSize) {
           const endBlock = Math.min(startBlock + chunkSize - 1, currentBlock);
-          try {
-            const [whitelistedChunk, blacklistedChunk] = await Promise.all([
+          chunks.push(
+            Promise.all([
               contractWithProvider.queryFilter(
                 contractWithProvider.filters.TokenWhitelisted(),
                 startBlock,
                 endBlock
-              ),
+              ).catch(() => []),
               contractWithProvider.queryFilter(
                 contractWithProvider.filters.TokenBlacklisted(),
                 startBlock,
                 endBlock
-              ),
-            ]);
-            whitelistedEvents.push(...whitelistedChunk);
-            blacklistedEvents.push(...blacklistedChunk);
-          } catch (chunkError) {
-            console.warn(`Failed to query blocks ${startBlock}-${endBlock}:`, chunkError);
-            // Continue with next chunk
-          }
+              ).catch(() => []),
+            ]).then(([whitelisted, blacklisted]) => ({ whitelisted, blacklisted }))
+          );
         }
+
+        // Wait for all chunks with timeout
+        const results = await Promise.race([
+          Promise.all(chunks),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Query timeout")), 8000)
+          ) as Promise<any>
+        ]) as Array<{ whitelisted: any[]; blacklisted: any[] }>;
+
+        results.forEach(({ whitelisted, blacklisted }) => {
+          whitelistedEvents.push(...whitelisted);
+          blacklistedEvents.push(...blacklisted);
+        });
 
         const whitelisted = new Set<string>();
         whitelistedEvents.forEach((e: any) => {
