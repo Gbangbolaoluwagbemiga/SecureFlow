@@ -1033,13 +1033,22 @@ export default function DashboardPage() {
 
       // Wait a moment for blockchain state to update
       await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Set refreshing state to show spinner
+      setIsRefreshing(true);
+
+      // Refresh escrow data
       await fetchUserEscrows();
+
+      // Stop refreshing after data is loaded
+      setIsRefreshing(false);
     } catch (error) {
       toast({
         title: "Dispute Failed",
         description: "Could not open dispute. Please try again.",
         variant: "destructive",
       });
+      setIsRefreshing(false);
     } finally {
       setSubmittingMilestone(null);
     }
@@ -1076,13 +1085,22 @@ export default function DashboardPage() {
 
       // Wait a moment for blockchain state to update
       await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Set refreshing state to show spinner
+      setIsRefreshing(true);
+
+      // Refresh escrow data
       await fetchUserEscrows();
+
+      // Stop refreshing after data is loaded
+      setIsRefreshing(false);
     } catch (error) {
       toast({
         title: "Start Work Failed",
         description: "Could not start work. Please try again.",
         variant: "destructive",
       });
+      setIsRefreshing(false);
     } finally {
       setSubmittingMilestone(null);
     }
@@ -1102,13 +1120,22 @@ export default function DashboardPage() {
 
       // Wait a moment for blockchain state to update
       await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Set refreshing state to show spinner
+      setIsRefreshing(true);
+
+      // Refresh escrow data
       await fetchUserEscrows();
+
+      // Stop refreshing after data is loaded
+      setIsRefreshing(false);
     } catch (error) {
       toast({
         title: "Dispute Failed",
         description: "Could not open dispute. Please try again.",
         variant: "destructive",
       });
+      setIsRefreshing(false);
     } finally {
       setSubmittingMilestone(null);
     }

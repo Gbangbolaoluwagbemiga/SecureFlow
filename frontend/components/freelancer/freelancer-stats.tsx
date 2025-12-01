@@ -175,7 +175,7 @@ export function FreelancerStats({
           <div className="text-2xl font-bold">
             {freelancerRating && freelancerRating.totalRatings > 0
               ? freelancerRating.averageRating.toFixed(1)
-              : "N/A"}
+              : "0"}
           </div>
           <p className="text-xs text-muted-foreground">
             {freelancerRating && freelancerRating.totalRatings > 0
