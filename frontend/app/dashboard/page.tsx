@@ -1174,24 +1174,19 @@ export default function DashboardPage() {
         );
 
         // Wait a moment for blockchain state to update
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        // Add debugging for payment tracking
-        const milestone = escrow.milestones[milestoneIndex];
+        // Set refreshing state to show spinner
+        setIsRefreshing(true);
 
-        // Check if milestone amount is being parsed correctly
-        const milestoneAmountInTokens =
-          Number.parseFloat(milestone.amount) / 1e18;
-
+        // Refresh escrow data
         await fetchUserEscrows();
 
         // Dispatch event to notify other components
         window.dispatchEvent(new CustomEvent("milestoneApproved"));
 
-        // Reload the page to ensure UI is fully updated
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
+        // Stop refreshing after data is loaded
+        setIsRefreshing(false);
       } else {
         throw new Error("Transaction failed on blockchain");
       }
@@ -1201,6 +1196,7 @@ export default function DashboardPage() {
         description: error.message || "Failed to approve milestone",
         variant: "destructive",
       });
+      setIsRefreshing(false);
     } finally {
       setSubmittingMilestone(null);
     }
@@ -1271,12 +1267,15 @@ export default function DashboardPage() {
           title: "Milestone Rejected",
           description: "The freelancer has been notified and can resubmit",
         });
+
+        // Set refreshing state to show spinner
+        setIsRefreshing(true);
+
+        // Refresh escrow data
         await fetchUserEscrows();
 
-        // Reload the page to ensure UI is fully updated
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
+        // Stop refreshing after data is loaded
+        setIsRefreshing(false);
       } else {
         throw new Error("Transaction failed on blockchain");
       }
@@ -1286,6 +1285,7 @@ export default function DashboardPage() {
         description: error.message || "Failed to reject milestone",
         variant: "destructive",
       });
+      setIsRefreshing(false);
     } finally {
       setSubmittingMilestone(null);
     }
@@ -1353,6 +1353,12 @@ export default function DashboardPage() {
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
         />
+        {isRefreshing && (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <span className="ml-3 text-muted-foreground">Refreshing...</span>
+          </div>
+        )}
         <DashboardStats escrows={escrows} />
 
         {escrows.length === 0 ? (
