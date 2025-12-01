@@ -620,6 +620,22 @@ export default function DashboardPage() {
     }
   }, [wallet.isConnected]);
 
+  // Listen for escrow update events from milestone actions
+  useEffect(() => {
+    const handleEscrowUpdated = async () => {
+      setIsRefreshing(true);
+      // Wait a moment for blockchain state to update
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await fetchUserEscrows();
+      setIsRefreshing(false);
+    };
+
+    window.addEventListener("escrowUpdated", handleEscrowUpdated);
+    return () => {
+      window.removeEventListener("escrowUpdated", handleEscrowUpdated);
+    };
+  }, [wallet.isConnected]);
+
   const fetchUserEscrows = async () => {
     if (!isRefreshing) {
       setLoading(true);
