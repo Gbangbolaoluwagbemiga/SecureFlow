@@ -177,10 +177,16 @@ export default function DashboardPage() {
       let events: any[] = [];
       const currentBlock = await provider.getBlockNumber();
 
-      // Try querying from deployment block or last 500k blocks (larger range)
+      // Try querying from block 0 first to ensure we find the event
+      // The event might have been emitted at any block, so we need to search from the beginning
       const deploymentBlock = 0; // Start from block 0
       const maxRange = 500000; // 500k blocks
-      const fromBlock = Math.max(deploymentBlock, currentBlock - maxRange);
+      // Try from block 0 first, but if that fails, try recent blocks
+      let fromBlock = deploymentBlock;
+
+      console.log(
+        `🔍 Querying DisputeResolved events for escrow ${escrowId}, milestone ${milestoneIndex} from block ${fromBlock} to ${currentBlock}`
+      );
 
       // Create filter - try with specific escrowId and milestoneIndex
       const filter = contractWithProvider.filters.DisputeResolved(
@@ -193,10 +199,10 @@ export default function DashboardPage() {
         contractWithProvider.filters.DisputeResolved(escrowId);
 
       try {
-        // Try querying the entire range first with specific filter
+        // Try querying from block 0 first with specific filter
         events = await contractWithProvider.queryFilter(
           filter,
-          fromBlock,
+          0, // Always start from block 0
           currentBlock
         );
 
@@ -205,7 +211,7 @@ export default function DashboardPage() {
           try {
             const allEvents = await contractWithProvider.queryFilter(
               filterWithoutMilestone,
-              fromBlock,
+              0, // Always start from block 0
               currentBlock
             );
             // Filter manually by milestoneIndex
@@ -215,7 +221,14 @@ export default function DashboardPage() {
               );
               return eventMilestoneIndex === milestoneIndex;
             });
+            console.log(
+              `🔍 Found ${allEvents.length} total DisputeResolved events for escrow ${escrowId}, filtered to ${events.length} for milestone ${milestoneIndex}`
+            );
           } catch (e) {
+            console.error(
+              `❌ Error querying events without milestone filter:`,
+              e
+            );
             // Continue with empty events
           }
         }
@@ -264,9 +277,21 @@ export default function DashboardPage() {
         }
       }
 
+      console.log(
+        `📊 Found ${events.length} DisputeResolved event(s) for escrow ${escrowId}, milestone ${milestoneIndex}`
+      );
+
       if (events.length > 0) {
         // Get the latest event (most recent resolution)
         const latestEvent = events[events.length - 1];
+        console.log(
+          `📋 Latest event args:`,
+          latestEvent.args,
+          `Type:`,
+          typeof latestEvent.args,
+          `IsArray:`,
+          Array.isArray(latestEvent.args)
+        );
 
         // Parse event args - ethers.js v6 structures event args
         // DisputeResolved(escrowId indexed, milestoneIndex indexed, arbiter indexed, beneficiaryAmount, refundAmount, resolvedAt)
@@ -694,9 +719,14 @@ export default function DashboardPage() {
                         clientAmount: amounts.clientAmount,
                       };
                     } else if (process.env.NODE_ENV === "development") {
-                      console.log(
-                        `Escrow ${i}, Milestone ${j}: Could not fetch amounts`,
+                      console.error(
+                        `❌ Escrow ${i}, Milestone ${j}: Could not fetch amounts`,
                         amounts
+                      );
+                      console.error(
+                        `   Milestone status: ${
+                          milestones[j]?.status
+                        }, isResolved: ${milestones[j]?.status === "resolved"}`
                       );
                     }
                   } catch (amountsError) {

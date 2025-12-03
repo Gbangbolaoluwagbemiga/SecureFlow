@@ -85,6 +85,8 @@ interface Milestone {
   winner?: string;
   resolutionReason?: string;
   disputedBy?: string;
+  freelancerAmount?: number;
+  clientAmount?: number;
 }
 
 export default function FreelancerPage() {
@@ -138,6 +140,205 @@ export default function FreelancerPage() {
   const [collapsedEscrows, setCollapsedEscrows] = useState<Set<string>>(
     new Set()
   );
+
+  // Query DisputeResolved event to get exact fund split amounts
+  const getDisputeResolutionAmounts = async (
+    contract: any,
+    escrowId: number,
+    milestoneIndex: number
+  ): Promise<{ freelancerAmount: number; clientAmount: number } | null> => {
+    try {
+      const { ethers } = await import("ethers");
+      const { CONTRACTS, BASE_MAINNET } = await import("@/lib/web3/config");
+      const { SECUREFLOW_ABI } = await import("@/lib/web3/abis");
+
+      // Try to get provider from wallet context or use RPC
+      let provider: any = null;
+      let lastError: any = null;
+
+      for (const rpcUrl of BASE_MAINNET.rpcUrls) {
+        try {
+          provider = new ethers.JsonRpcProvider(rpcUrl);
+          // Test connection
+          await provider.getBlockNumber();
+          break;
+        } catch (e) {
+          lastError = e;
+          provider = null;
+          continue;
+        }
+      }
+
+      if (!provider) return null;
+
+      const contractWithProvider = new ethers.Contract(
+        CONTRACTS.SECUREFLOW_ESCROW,
+        SECUREFLOW_ABI,
+        provider
+      );
+
+      // Query DisputeResolved events for this escrow and milestone
+      // Always query from block 0 to ensure we find the event
+      let events: any[] = [];
+      const currentBlock = await provider.getBlockNumber();
+
+      console.log(
+        `🔍 [Freelancer] Querying DisputeResolved events for escrow ${escrowId}, milestone ${milestoneIndex} from block 0 to ${currentBlock}`
+      );
+
+      const filter = contractWithProvider.filters.DisputeResolved(
+        escrowId,
+        milestoneIndex
+      );
+
+      const filterWithoutMilestone =
+        contractWithProvider.filters.DisputeResolved(escrowId);
+
+      try {
+        // Try querying from block 0 first with specific filter
+        events = await contractWithProvider.queryFilter(
+          filter,
+          0, // Always start from block 0
+          currentBlock
+        );
+
+        // If no events found with specific filter, try without milestoneIndex filter
+        if (events.length === 0) {
+          try {
+            const allEvents = await contractWithProvider.queryFilter(
+              filterWithoutMilestone,
+              0, // Always start from block 0
+              currentBlock
+            );
+            // Filter manually by milestoneIndex
+            events = allEvents.filter((e: any) => {
+              const eventMilestoneIndex = Number(
+                e.args[1] || e.args.milestoneIndex || 0
+              );
+              return eventMilestoneIndex === milestoneIndex;
+            });
+            console.log(
+              `🔍 [Freelancer] Found ${allEvents.length} total DisputeResolved events for escrow ${escrowId}, filtered to ${events.length} for milestone ${milestoneIndex}`
+            );
+          } catch (e) {
+            console.error(
+              `❌ [Freelancer] Error querying events without milestone filter:`,
+              e
+            );
+            // Continue with empty events
+          }
+        }
+      } catch (eventError: any) {
+        // If range is too large, try querying in chunks
+        if (
+          eventError.message?.includes("too large") ||
+          eventError.message?.includes("limit") ||
+          eventError.message?.includes("query returned more")
+        ) {
+          try {
+            // Try in chunks
+            const chunkSize = 100000; // 100k blocks per chunk
+            for (let start = 0; start <= currentBlock; start += chunkSize) {
+              const end = Math.min(start + chunkSize - 1, currentBlock);
+              try {
+                const chunkEvents = await contractWithProvider.queryFilter(
+                  filter,
+                  start,
+                  end
+                );
+                events.push(...chunkEvents);
+              } catch (chunkError: any) {
+                // Skip this chunk if it fails
+                console.warn(
+                  `⚠️ [Freelancer] Failed to query chunk ${start}-${end}:`,
+                  chunkError.message
+                );
+                continue;
+              }
+            }
+          } catch (e3) {
+            console.error(
+              `❌ [Freelancer] All chunk queries failed for escrow ${escrowId}, milestone ${milestoneIndex}`
+            );
+            // Give up if all queries fail
+            return null;
+          }
+        } else if (
+          !eventError.message?.includes("no backend is currently healthy") &&
+          !eventError.message?.includes("-32011")
+        ) {
+          console.error(
+            `❌ [Freelancer] Unexpected error querying events:`,
+            eventError
+          );
+        }
+      }
+
+      console.log(
+        `📊 [Freelancer] Found ${events.length} DisputeResolved event(s) for escrow ${escrowId}, milestone ${milestoneIndex}`
+      );
+
+      if (events.length > 0) {
+        const latestEvent = events[events.length - 1];
+        console.log(
+          `📋 [Freelancer] Latest event args:`,
+          latestEvent.args,
+          `Type:`,
+          typeof latestEvent.args,
+          `IsArray:`,
+          Array.isArray(latestEvent.args)
+        );
+
+        if (latestEvent.args) {
+          try {
+            let beneficiaryAmountRaw: any = null;
+            let refundAmountRaw: any = null;
+
+            if (Array.isArray(latestEvent.args)) {
+              if (latestEvent.args.length >= 5) {
+                beneficiaryAmountRaw = latestEvent.args[3];
+                refundAmountRaw = latestEvent.args[4];
+              }
+            } else if (
+              latestEvent.args[3] !== undefined &&
+              latestEvent.args[4] !== undefined
+            ) {
+              beneficiaryAmountRaw = latestEvent.args[3];
+              refundAmountRaw = latestEvent.args[4];
+            } else if (
+              latestEvent.args.beneficiaryAmount !== undefined &&
+              latestEvent.args.refundAmount !== undefined
+            ) {
+              beneficiaryAmountRaw = latestEvent.args.beneficiaryAmount;
+              refundAmountRaw = latestEvent.args.refundAmount;
+            }
+
+            if (beneficiaryAmountRaw !== null && refundAmountRaw !== null) {
+              const freelancerAmount = Number(beneficiaryAmountRaw) / 1e18;
+              const clientAmount = Number(refundAmountRaw) / 1e18;
+
+              if (
+                !isNaN(freelancerAmount) &&
+                !isNaN(clientAmount) &&
+                freelancerAmount >= 0 &&
+                clientAmount >= 0
+              ) {
+                return {
+                  freelancerAmount,
+                  clientAmount,
+                };
+              }
+            }
+          } catch (parseError) {
+            // Silently fail
+          }
+        }
+      }
+    } catch (error) {
+      // Silently fail
+    }
+    return null;
+  };
 
   useEffect(() => {
     if (wallet.isConnected) {
@@ -280,6 +481,9 @@ export default function FreelancerPage() {
                 normalizedStatus = "active";
               }
 
+              // Check if there are resolved milestones - if so, mark as terminated
+              // We'll check this after milestones are parsed
+
               const escrow: Escrow = {
                 id: i.toString(),
                 payer: escrowSummary[0], // depositor
@@ -347,6 +551,13 @@ export default function FreelancerPage() {
                               status = 0;
                             }
 
+                            // Debug log for status parsing
+                            if (status === 4) {
+                              console.log(
+                                `🔍 [Escrow ${i}, Milestone ${index}] Parsed status from contract: ${status} (RESOLVED)`
+                              );
+                            }
+
                             if (
                               m.submittedAt !== undefined &&
                               Number(m.submittedAt) > 0
@@ -365,7 +576,15 @@ export default function FreelancerPage() {
                               approvedAt = Number(m[4]) * 1000;
                             }
 
-                            // Parse dispute reason (index 7 in contract)
+                            // Parse disputedBy (index 6 in contract) - for disputed: who disputed, for resolved: winner
+                            let disputedBy = "";
+                            if (m.disputedBy !== undefined) {
+                              disputedBy = String(m.disputedBy);
+                            } else if (m[6] !== undefined) {
+                              disputedBy = String(m[6]);
+                            }
+
+                            // Parse dispute reason (index 7 in contract) - for disputed: dispute reason, for resolved: resolution reason
                             if (m.disputeReason !== undefined) {
                               disputeReason = String(m.disputeReason);
                             } else if (m[7] !== undefined) {
@@ -401,37 +620,45 @@ export default function FreelancerPage() {
                     }
 
                     // Determine the actual status based on timestamps and status
-                    let finalStatus = getMilestoneStatusFromNumber(status);
+                    // IMPORTANT: Check status === 4 FIRST before any other logic to preserve resolved status
+                    let finalStatus: string;
 
-                    // Check if this is a placeholder milestone
-                    const isPlaceholder =
-                      description && description.includes("To be defined");
-
-                    if (isPlaceholder) {
-                      // For placeholder milestones, determine status based on previous milestones
-                      if (index === 0) {
-                        // First milestone - should be pending
-                        finalStatus = "pending";
-                      } else {
-                        // Check if previous milestone is approved
-                        // This will be handled by the UI logic
-                        finalStatus = "pending";
-                      }
+                    // Priority 1: Use contract status as the primary source of truth
+                    // CRITICAL: Check status === 4 FIRST and NEVER overwrite it
+                    if (status === 4) {
+                      finalStatus = "resolved";
+                      console.log(
+                        `✅ Milestone ${index} for escrow ${i} is RESOLVED (status=4) - Setting finalStatus to "resolved"`
+                      );
+                    } else if (status === 1) {
+                      finalStatus = "submitted";
+                    } else if (status === 2) {
+                      finalStatus = "approved";
+                    } else if (status === 3) {
+                      finalStatus = "disputed";
+                    } else if (status === 5) {
+                      finalStatus = "rejected";
                     } else {
-                      // Priority 1: Use contract status as the primary source of truth
-                      if (status === 1) {
-                        finalStatus = "submitted";
-                      } else if (status === 2) {
-                        finalStatus = "approved";
-                      } else if (status === 3) {
-                        finalStatus = "disputed";
-                      } else if (status === 4) {
-                        finalStatus = "resolved";
-                      } else if (status === 5) {
-                        finalStatus = "rejected";
-                      }
-                      // Priority 2: Fallback to timestamp-based logic if status is 0
-                      else if (status === 0) {
+                      // For status 0 or unknown, use getMilestoneStatusFromNumber as fallback
+                      // BUT: Never overwrite if status was already 4 (resolved)
+                      finalStatus = getMilestoneStatusFromNumber(status);
+
+                      // Check if this is a placeholder milestone
+                      const isPlaceholder =
+                        description && description.includes("To be defined");
+
+                      if (isPlaceholder) {
+                        // For placeholder milestones, determine status based on previous milestones
+                        if (index === 0) {
+                          // First milestone - should be pending
+                          finalStatus = "pending";
+                        } else {
+                          // Check if previous milestone is approved
+                          // This will be handled by the UI logic
+                          finalStatus = "pending";
+                        }
+                      } else if (status === 0) {
+                        // Priority 2: Fallback to timestamp-based logic if status is 0
                         if (approvedAt && approvedAt > 0) {
                           finalStatus = "approved";
                         } else if (submittedAt && submittedAt > 0) {
@@ -439,18 +666,22 @@ export default function FreelancerPage() {
                         } else {
                           finalStatus = "pending";
                         }
-                      }
-                      // Special case: If this is the first milestone and funds have been released, it should be approved
-                      else if (
+                      } else if (
                         index === 0 &&
                         escrowSummary[5] &&
                         Number(escrowSummary[5]) > 0
                       ) {
+                        // Special case: If this is the first milestone and funds have been released, it should be approved
                         finalStatus = "approved";
                       }
-                      // Otherwise use the parsed status
-                      else {
-                      }
+                    }
+
+                    // FINAL SAFETY CHECK: If status was 4, ensure finalStatus is "resolved" (never overwrite)
+                    if (status === 4 && finalStatus !== "resolved") {
+                      console.warn(
+                        `⚠️ WARNING: Milestone ${index} for escrow ${i} has status=4 but finalStatus was set to "${finalStatus}". Forcing to "resolved".`
+                      );
+                      finalStatus = "resolved";
                     }
 
                     // Track milestone states for submission prevention
@@ -471,7 +702,7 @@ export default function FreelancerPage() {
                     const resolutionReason =
                       finalStatus === "resolved" ? disputeReason : undefined;
 
-                    return {
+                    const milestoneResult = {
                       description,
                       amount,
                       status: finalStatus,
@@ -484,7 +715,18 @@ export default function FreelancerPage() {
                       winner,
                       resolutionReason,
                       rejectionReason,
+                      // freelancerAmount and clientAmount will be fetched separately for resolved milestones
                     };
+
+                    // Debug log for resolved milestones
+                    if (finalStatus === "resolved") {
+                      console.log(
+                        `✅ Returning milestone ${index} for escrow ${i} with status="resolved"`,
+                        milestoneResult
+                      );
+                    }
+
+                    return milestoneResult;
                   } catch (error) {
                     return {
                       description: `Milestone ${index + 1}`,
@@ -499,10 +741,94 @@ export default function FreelancerPage() {
                 milestoneCount: Number(escrowSummary[11]) || 0, // milestoneCount
               };
 
+              // Check if there are resolved milestones and update status accordingly
+              // This matches the dashboard page logic
+              // DEBUG: Log all milestone statuses before filtering
+              console.log(
+                `🔍 [Escrow ${escrow.id}] Checking milestones for resolved status:`,
+                escrow.milestones.map((m, idx) => ({
+                  index: idx,
+                  status: m.status,
+                  description: m.description?.substring(0, 30),
+                }))
+              );
+
+              const resolvedMilestones = escrow.milestones.filter(
+                (milestone) => milestone.status === "resolved"
+              );
+              const hasResolvedDispute = resolvedMilestones.length > 0;
+
+              console.log(
+                `🔍 [Escrow ${escrow.id}] Found ${resolvedMilestones.length} resolved milestone(s) out of ${escrow.milestones.length} total`
+              );
+
+              // Get base status from contract
+              const baseStatus = normalizedStatus;
+
+              // If there are resolved disputes, override status to "disputed"
+              // (which will be displayed as "Dispute Resolved" in the badge)
+              const finalStatus = hasResolvedDispute
+                ? "disputed" // We'll show this as "Dispute Resolved" in the badge
+                : baseStatus;
+
+              // Update the escrow status
+              escrow.status = finalStatus as
+                | "pending"
+                | "active"
+                | "completed"
+                | "disputed";
+
+              console.log(
+                `✅ Escrow ${escrow.id} has ${resolvedMilestones.length} resolved milestone(s), status set to: ${finalStatus} (baseStatus was: ${baseStatus})`
+              );
+
               freelancerEscrows.push(escrow);
             }
           } catch (error) {
             continue;
+          }
+        }
+      }
+
+      // Fetch dispute resolution amounts for resolved milestones
+      // IMPORTANT: Do this BEFORE setEscrows to ensure amounts are set
+      for (const escrow of freelancerEscrows) {
+        for (let idx = 0; idx < escrow.milestones.length; idx++) {
+          const milestone = escrow.milestones[idx];
+          console.log(
+            `🔍 Checking milestone ${idx} for escrow ${escrow.id}: status="${milestone.status}"`
+          );
+          if (milestone.status === "resolved") {
+            console.log(
+              `✅ Found resolved milestone ${idx} for escrow ${escrow.id}, fetching allocation...`
+            );
+            try {
+              const resolutionAmounts = await getDisputeResolutionAmounts(
+                contract,
+                Number(escrow.id),
+                idx
+              );
+              console.log(
+                `💰 Resolution amounts for escrow ${escrow.id}, milestone ${idx}:`,
+                resolutionAmounts
+              );
+              if (resolutionAmounts) {
+                milestone.freelancerAmount = resolutionAmounts.freelancerAmount;
+                milestone.clientAmount = resolutionAmounts.clientAmount;
+                console.log(
+                  `✅ Set amounts: freelancer=${milestone.freelancerAmount}, client=${milestone.clientAmount}`
+                );
+              } else {
+                console.error(
+                  `❌ No resolution amounts found for escrow ${escrow.id}, milestone ${idx}. Event query may have failed.`
+                );
+              }
+            } catch (error) {
+              console.error(
+                `❌ Error fetching resolution amounts for escrow ${escrow.id}, milestone ${idx}:`,
+                error
+              );
+            }
           }
         }
       }
@@ -799,14 +1125,22 @@ export default function FreelancerPage() {
 
       if (milestones && milestones.length > milestoneIndex) {
         const milestone = milestones[milestoneIndex];
+        const milestoneStatus =
+          milestone && milestone[2] ? Number(milestone[2]) : 0;
 
-        // Check if milestone has been submitted (status 1) or approved (status 2)
-        if (milestone && milestone[2] && Number(milestone[2]) > 0) {
+        // Check if milestone has been submitted (status 1), approved (status 2), disputed (status 3), resolved (status 4), or rejected (status 5)
+        if (milestoneStatus > 0) {
+          let statusMessage = "";
+          if (milestoneStatus === 1) statusMessage = "submitted";
+          else if (milestoneStatus === 2) statusMessage = "approved";
+          else if (milestoneStatus === 3) statusMessage = "disputed";
+          else if (milestoneStatus === 4) statusMessage = "resolved";
+          else if (milestoneStatus === 5) statusMessage = "rejected";
+          else statusMessage = "processed";
+
           toast({
             title: "Milestone already processed",
-            description: `This milestone has already been ${
-              Number(milestone[2]) === 2 ? "approved" : "submitted"
-            } and cannot be submitted again`,
+            description: `This milestone has already been ${statusMessage} and cannot be submitted again`,
             variant: "destructive",
           });
           return;
@@ -1428,22 +1762,56 @@ export default function FreelancerPage() {
                               <div className="flex items-center gap-2">
                                 <Badge
                                   className={getStatusColor(
-                                    escrow.milestones.some(
-                                      (m) =>
-                                        m.status === "disputed" ||
-                                        m.status === "rejected"
-                                    )
-                                      ? "terminated"
-                                      : escrow.status
+                                    (() => {
+                                      // Check if there are resolved disputes first (like dashboard does)
+                                      const hasResolvedDispute =
+                                        escrow.milestones.some(
+                                          (m) => m.status === "resolved"
+                                        );
+
+                                      // If there are resolved disputes, show as "Dispute Resolved"
+                                      if (hasResolvedDispute) {
+                                        return "disputed"; // Will be displayed as "Dispute Resolved"
+                                      }
+
+                                      // Check if there are disputed or rejected milestones (terminated)
+                                      const hasTerminatedMilestone =
+                                        escrow.milestones.some(
+                                          (m) =>
+                                            m.status === "disputed" ||
+                                            m.status === "rejected"
+                                        );
+
+                                      return hasTerminatedMilestone
+                                        ? "terminated"
+                                        : escrow.status;
+                                    })()
                                   )}
                                 >
-                                  {escrow.milestones.some(
-                                    (m) =>
-                                      m.status === "disputed" ||
-                                      m.status === "rejected"
-                                  )
-                                    ? "terminated"
-                                    : escrow.status}
+                                  {(() => {
+                                    // Check if there are resolved disputes first (like dashboard does)
+                                    const hasResolvedDispute =
+                                      escrow.milestones.some(
+                                        (m) => m.status === "resolved"
+                                      );
+
+                                    // If there are resolved disputes, show as "Dispute Resolved"
+                                    if (hasResolvedDispute) {
+                                      return "Dispute Resolved";
+                                    }
+
+                                    // Check if there are disputed or rejected milestones (terminated)
+                                    const hasTerminatedMilestone =
+                                      escrow.milestones.some(
+                                        (m) =>
+                                          m.status === "disputed" ||
+                                          m.status === "rejected"
+                                      );
+
+                                    return hasTerminatedMilestone
+                                      ? "terminated"
+                                      : escrow.status;
+                                  })()}
                                 </Badge>
                                 <Button
                                   variant="ghost"
@@ -1831,6 +2199,43 @@ export default function FreelancerPage() {
                                                           -4
                                                         )}`}
                                                   </p>
+                                                </div>
+                                              )}
+                                              {/* Fund Allocation */}
+                                              {(milestone.freelancerAmount !==
+                                                undefined ||
+                                                milestone.clientAmount !==
+                                                  undefined) && (
+                                                <div className="mb-2 p-2 bg-purple-100 dark:bg-purple-800/30 rounded border border-purple-200 dark:border-purple-700">
+                                                  <p className="text-xs font-medium text-purple-800 dark:text-purple-200 mb-2">
+                                                    Fund Allocation:
+                                                  </p>
+                                                  <div className="space-y-1">
+                                                    <div className="flex justify-between items-center">
+                                                      <span className="text-xs text-purple-700 dark:text-purple-300">
+                                                        Freelancer:
+                                                      </span>
+                                                      <span className="text-sm font-semibold text-purple-800 dark:text-purple-200">
+                                                        {(
+                                                          milestone.freelancerAmount ||
+                                                          0
+                                                        ).toFixed(2)}{" "}
+                                                        tokens
+                                                      </span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                      <span className="text-xs text-purple-700 dark:text-purple-300">
+                                                        Client:
+                                                      </span>
+                                                      <span className="text-sm font-semibold text-purple-800 dark:text-purple-200">
+                                                        {(
+                                                          milestone.clientAmount ||
+                                                          0
+                                                        ).toFixed(2)}{" "}
+                                                        tokens
+                                                      </span>
+                                                    </div>
+                                                  </div>
                                                 </div>
                                               )}
                                               <div className="mt-2 p-2 bg-purple-100 dark:bg-purple-800/30 rounded border border-purple-200 dark:border-purple-700">
